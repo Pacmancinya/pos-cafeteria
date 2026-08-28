@@ -1,0 +1,13 @@
+# Versiones del punto de venta
+
+> Una fila por versión publicada. **Nunca repetir el nombre ni el texto de
+> novedades** entre versiones: si dos dicen lo mismo, nadie las distingue.
+> Cómo publicar: [`docs/PUBLICAR-ACTUALIZACIONES.md`](docs/PUBLICAR-ACTUALIZACIONES.md).
+
+| Versión | Nombre | Fecha | Qué trae |
+|---|---|---|---|
+| 1.0 | Primera versión | 28-08-2026 | Caja táctil con dibujos por producto, buscador y categorías. Cierre de caja con cuadre de efectivo. Comprobante y cierre imprimibles en 80 mm. Respaldo automático de la base. Exportación a Excel para el contador. Descuentos y propinas. La carta alimenta las pantallas del local. Candado de red con PIN. Actualizaciones desde la misma caja. |
+| 1.1 | Arqueo de caja | 28-08-2026 | El cierre se cuenta por denominación con un conteo a ciegas: el cuadre aparece recién al final. Se guarda el detalle del conteo de apertura y de cierre. Se define el fondo que queda para mañana y el programa calcula el retiro. Lo cobrado con tarjeta ya no se cuenta a mano. El cierre impreso trae el arqueo, el fondo y el retiro. |
+| 1.2 | Usuarios y bodega | 28-08-2026 | Login por PIN con la cara de cada persona; queda quién abrió, quién cerró, quién cobró y quién estuvo en el turno. Permisos de dueño y cajero. Bodega con insumos, recetas, compras, mermas y conteo a ciegas; el stock se descuenta al vender y nunca bloquea el cobro. Libro de movimientos por insumo. Pantalla rehecha para táctil con teclado numérico propio. Se abre como aplicación de Windows (Kofe.exe), sin instalar Python. |
+| 1.3 | Traer la carta | 28-08-2026 | Importar la lista de productos desde un Excel, un CSV o pegándola. Lee los precios chilenos, detecta las secciones como categorías y adivina el dibujo. Previsualización obligatoria antes de escribir: se ve qué se agrega, a qué le cambia el precio y qué queda igual, y se puede corregir ahí. Nada se borra sin pedirlo. |
+| 1.4 | Cuadrar las tarjetas | 28-08-2026 | El cierre cuadra también lo que no es efectivo: se escribe el total del comprobante de Transbank y del banco y muestra la diferencia por medio de pago. Lo esperado incluye la propina, que es lo que cobró la máquina. Propinas separadas entre efectivo y tarjeta. El diálogo del cierre ya no se cierra por un toque al lado, y el conteo del cajón se recupera si se pierde. |

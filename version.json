@@ -1,0 +1,6 @@
+{
+  "version": "1.4",
+  "nombre": "Cuadrar las tarjetas",
+  "novedades": "El cierre ya no cuadra solo el efectivo. Ahora, después de contar el cajón, se escribe lo que dice el comprobante de cierre de Transbank y lo que muestra el banco, y la caja dice al tiro si cuadra o cuánto falta, medio por medio. Lo esperado incluye la propina, que es lo que la máquina le cobró de verdad al cliente. Las propinas quedan separadas entre las de efectivo, que ya están en el cajón, y las de tarjeta, que las depositó el banco y hay que pagar aparte. Y se arregló algo que costaba caro: tocar al lado del cierre ya no lo bota, y si igual se cierra, el conteo del cajón se recupera al volver a abrir.",
+  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
+}
