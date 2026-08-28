@@ -57,6 +57,13 @@ HORAS_DE_SESION = 20
 
 ITERACIONES = 180_000
 
+# Desde cuándo está corriendo ESTE proceso. Las galletas emitidas antes no
+# valen: si se cortó la luz o se cerró la aplicación, el programa no tiene cómo
+# saber si al volver está la misma persona frente a la pantalla. Volver a marcar
+# el PIN son dos toques y no se pierde nada — el turno, el pedido a medio armar
+# y el conteo del cajón siguen donde estaban. Ver docs/CONTRATO.md, decisión 9.
+ARRANQUE = ahora()
+
 
 # ---------------------------------------------------------------------------
 # El PIN
@@ -144,6 +151,8 @@ def _abrir(galleta: str) -> Optional[dict]:
         emitida = emitida.replace(tzinfo=timezone.utc)
     if ahora() - emitida > timedelta(hours=HORAS_DE_SESION):
         return None
+    if emitida < ARRANQUE:
+        return None          # se reinició el programa: hay que volver a entrar
     return carga
 
 

@@ -223,6 +223,22 @@ dirección que aparece en la ventana negra al arrancar. La primera vez pide un *
 Esto existe porque el wifi de invitados está en la misma red: sin el PIN, un cliente
 podría abrir la caja desde el celular.
 
+## Si se corta la luz o se cierra la app
+
+**No se pierde nada de la venta.** Al volver a abrir:
+
+- La **caja sigue abierta** si la habías abierto.
+- Las **ventas cobradas** están todas.
+- El **pedido que estabas armando** sigue ahí.
+- El **conteo del cajón**, si estabas cerrando, también.
+
+**Lo único que se pide de nuevo es el PIN.** Es a propósito: el programa no tiene cómo
+saber si quien está ahora frente a la pantalla es la misma persona de antes. Si la sesión
+siguiera abierta, cualquiera que prenda el computador quedaría vendiendo bajo el nombre del
+último cajero — y el turno diría que esa persona estuvo trabajando todo ese rato.
+
+Son dos toques y sigues exactamente donde estabas.
+
 ## Actualizaciones
 
 Arriba a la derecha, al lado de la hora, está el número de versión. Cuando hay

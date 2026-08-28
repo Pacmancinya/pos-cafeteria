@@ -200,3 +200,57 @@ def test_una_presencia_olvidada_no_queda_abierta_para_siempre(cliente, dueno):
     cliente.post("/api/v1/turnos/abrir", json={"cajero": "Ruperto"})
     t = cliente.get("/api/v1/turnos/actual").json()["turno"]
     assert len(t["estuvieron"]) == 1
+
+
+# ------------------------------------------------- corte de luz y continuidad
+def test_al_reiniciar_el_programa_hay_que_volver_a_marcar_el_pin(cliente, dueno):
+    """Si se cortó la luz, el programa no tiene cómo saber si al volver está la
+    misma persona frente a la pantalla. Son dos toques y no se pierde nada."""
+    from datetime import timedelta
+
+    from apps.pos import sesion
+    from core.config import ahora
+
+    assert cliente.get("/api/v1/sesion").json()["entrado"] is True
+    original = sesion.ARRANQUE
+    try:
+        sesion.ARRANQUE = ahora() + timedelta(seconds=1)   # como si acabara de arrancar
+        assert cliente.get("/api/v1/sesion").json()["entrado"] is False
+    finally:
+        sesion.ARRANQUE = original
+
+
+def test_el_turno_y_las_ventas_sobreviven_al_corte(cliente, dueno, carta):
+    """Lo que NO se puede perder: la caja abierta y lo ya cobrado."""
+    from datetime import timedelta
+
+    from apps.pos import sesion
+    from core.config import ahora
+
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Ruperto", "conteo": {"10000": 1}})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 2}]})
+
+    original = sesion.ARRANQUE
+    try:
+        sesion.ARRANQUE = ahora() + timedelta(seconds=1)
+        # /turnos/actual y la carta no piden sesión: la caja muestra su estado.
+        assert cliente.get("/api/v1/turnos/actual").json()["abierto"] is True
+        assert len(cliente.get("/api/v1/ventas").json()["ventas"]) == 1
+    finally:
+        sesion.ARRANQUE = original
+
+
+def test_una_presencia_que_quedo_abierta_se_cierra_como_corte(cliente, dueno):
+    """Sin esto, el turno diría que esa persona estuvo en la caja hasta que
+    alguien vuelva a entrar, que pueden ser días."""
+    from sqlmodel import Session, select
+
+    from apps.pos.db.models import Presencia
+    from apps.pos.db.session import engine
+    from apps.pos.sesion import cerrar_presencias_abiertas
+
+    with Session(engine) as s:
+        assert cerrar_presencias_abiertas(s, None, "corte") == 1
+        p = s.exec(select(Presencia)).first()
+        assert p.salio_at is not None and p.salida_por == "corte"

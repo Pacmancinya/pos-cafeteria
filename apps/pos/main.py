@@ -34,6 +34,19 @@ async def ciclo(app: FastAPI):
         respaldar("arranque")
     except Exception:
         pass          # un respaldo que falla no puede impedir que la caja abra
+
+    # Si el programa se cerró de golpe —corte de luz, alguien cerró la ventana—
+    # quedaron presencias abiertas. Sin esto, el turno diría que esa persona
+    # estuvo en la caja hasta que alguien vuelva a entrar, que pueden ser días.
+    try:
+        from sqlmodel import Session
+        from apps.pos.sesion import cerrar_presencias_abiertas
+        with Session(engine) as s:
+            cerradas = cerrar_presencias_abiertas(s, None, "corte")
+            if cerradas:
+                print(f"  Se cerraron {cerradas} sesiones que quedaron abiertas.")
+    except Exception:
+        pass
     yield
 
 

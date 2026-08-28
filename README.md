@@ -217,7 +217,7 @@ y cierre imprimibles en 80 mm, respaldo automático de la base, exportación a E
 contador, importación de la carta desde Excel/CSV con previsualización, candado de red con PIN,
 actualización desde la misma caja, aplicación de Windows
 propia (`Kofe.exe`, sin instalar Python) y el endpoint de carta que alimenta las pantallas
-del local. **172 tests en verde.**
+del local. **175 tests en verde.**
 
 **No hace (a propósito, ver CONTRATO sección 6):** boleta electrónica, cobro de tarjetas,
 proveedores y órdenes de compra, costeo promedio ponderado.

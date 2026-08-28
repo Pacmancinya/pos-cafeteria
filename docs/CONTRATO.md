@@ -47,6 +47,16 @@ alturas distintas sin que nadie lo decidiera. Los campos numéricos usan el tecl
 **7. El stock avisa, no bloquea.** Nunca, bajo ninguna configuración, la falta de stock
 puede impedir cobrar una venta. Ver la sección de inventario.
 
+**9. Reiniciar el programa pide el PIN de nuevo, pero no pierde nada.** Las galletas
+emitidas antes de que arrancara el proceso (`sesion.ARRANQUE`) no valen. Es la única
+respuesta honesta a un corte de luz: el programa no tiene cómo saber si al volver está la
+misma persona frente a la pantalla, y con la sesión viva, cualquiera que prenda el
+computador queda operando bajo el nombre del último cajero. Lo que sí sobrevive es todo lo
+demás — el turno abierto, las ventas, el pedido a medio armar y el conteo del cajón, que
+viven en la base o en el equipo. Al arrancar se cierran además las presencias que quedaron
+abiertas, con `salida_por="corte"`: si no, el turno diría que esa persona estuvo en la caja
+durante días.
+
 **8. Un diálogo donde se cuenta plata no se cierra solo.** Las capas con trabajo adentro
 (el arqueo de caja, el conteo de bodega) llevan `.capa--firme`: ni un toque en el fondo ni
 la tecla Escape las cierran. Además el conteo del cajón se guarda en el equipo mientras se
