@@ -47,6 +47,16 @@ async def ciclo(app: FastAPI):
                 print(f"  Se cerraron {cerradas} sesiones que quedaron abiertas.")
     except Exception:
         pass
+
+    # El icono en el escritorio. Va acá y no en Kofe.py porque Kofe.py es el
+    # guion congelado dentro del .exe y no viaja en las actualizaciones.
+    try:
+        from tools.acceso_directo import crear_si_falta
+        hecho = crear_si_falta()
+        if hecho:
+            print("  " + hecho)
+    except Exception:
+        pass
     yield
 
 

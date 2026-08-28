@@ -19,6 +19,14 @@ Por qué esa división, que es la decisión de fondo de todo este archivo:
 O sea: **el .exe es el motor, la carpeta es el programa.** Lo que cambia seguido
 va afuera; lo que no cambia nunca va adentro.
 
+⚠️ **ESTE ARCHIVO NO VIAJA EN LAS ACTUALIZACIONES.** Es el guion de entrada que
+PyInstaller compila DENTRO del .exe, así que el ejecutable siempre corre su copia
+congelada y el `Kofe.py` suelto que queda al lado no lo abre nadie. Cambiar algo
+acá obliga a reconstruir el .exe y a que el local baje los 29 MB otra vez. Si lo
+que quieres agregar puede vivir en `apps/` o en `tools/`, ponlo ahí: eso sí se
+actualiza. (El acceso directo del escritorio empezó acá y hubo que moverlo a
+`tools/acceso_directo.py` justamente por esto.)
+
 Se ejecuta igual sin congelar, para probar:
 
     .venv/Scripts/python Kofe.py
@@ -230,47 +238,6 @@ def relanzar() -> None:
     )
 
 
-def crear_acceso_directo() -> None:
-    """Deja el icono en el Escritorio la primera vez que se abre.
-
-    Se hace UNA sola vez y queda la marca: si el dueño después borra el acceso
-    directo, es porque no lo quiere, y volver a crearlo cada mañana sería pelear
-    con él.
-
-    Se arma con el propio Windows (WScript.Shell) en vez de una librería: un
-    .lnk es un formato binario y no vale la pena escribirlo a mano ni agregar
-    una dependencia para esto.
-    """
-    marca = os.path.join(CARPETA, ".acceso-directo")
-    if os.path.exists(marca) or not getattr(sys, "frozen", False):
-        return
-    try:
-        with open(marca, "w", encoding="utf-8") as f:
-            f.write("El acceso directo del Escritorio ya se creó una vez.\n"
-                    "Borra este archivo si quieres que se vuelva a crear.\n")
-    except OSError:
-        return
-
-    orden = (
-        "$e=[Environment]::GetFolderPath('Desktop');"
-        "$d=Join-Path $e 'Kofe - Punto de venta.lnk';"
-        "if(-not (Test-Path $d)){"
-        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($d);"
-        f"$s.TargetPath='{os.path.join(CARPETA, 'Kofe.exe')}';"
-        f"$s.WorkingDirectory='{CARPETA}';"
-        f"$s.IconLocation='{ICONO if os.path.exists(ICONO) else os.path.join(CARPETA, 'Kofe.exe')}';"
-        "$s.Description='Punto de venta de la cafeteria';"
-        "$s.Save()}"
-    )
-    try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", orden],
-            capture_output=True, timeout=20,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    except Exception:
-        pass          # un acceso directo que no se pudo crear no impide vender
-
-
 def marcar_identidad() -> None:
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(ID_EN_LA_BARRA)
@@ -280,7 +247,6 @@ def marcar_identidad() -> None:
 
 def main() -> int:
     marcar_identidad()
-    crear_acceso_directo()
     # Si venimos de una actualización, esperamos a que la copia vieja suelte el
     # cerrojo antes de intentar tomarlo nosotros.
     if "--esperar" in sys.argv:
