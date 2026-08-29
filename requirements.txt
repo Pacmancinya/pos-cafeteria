@@ -5,5 +5,8 @@ sqlmodel>=0.0.22
 pydantic>=2.7
 python-multipart>=0.0.9
 tzdata>=2024.1        # Windows no trae la base de zonas horarias; sin esto no arranca
+pywebview>=5.0        # la ventana propia de la aplicación. Hace falta por el camino
+                      # de INICIAR-POS.bat, que es el que sirve cuando el Control de
+                      # aplicaciones inteligente bloquea el .exe sin firmar.
 httpx>=0.27           # solo para los tests
 pytest>=8.0           # solo para los tests

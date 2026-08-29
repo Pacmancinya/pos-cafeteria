@@ -147,7 +147,8 @@ agrega solo a la base al arrancar.
 
 | Lo que ves | Qué hacer |
 |---|---|
-| “Windows protegió tu PC” | **Más información** → **Ejecutar de todas formas**. Pasa una sola vez. |
+| “Windows protegió tu PC” | **Más información** → **Ejecutar de todas formas**. Pasa una sola vez. Es SmartScreen, y **no** es lo mismo que lo de abajo. |
+| **“El Control de aplicaciones inteligente bloqueó el acceso”** | Es otra cosa y más dura: bloquea el programa **y sus librerías**, no tiene excepciones por aplicación, y no se arregla con "Ejecutar de todas formas". Hay que apagarlo: **Seguridad de Windows** → **Control de aplicaciones y explorador** → **Control de aplicaciones inteligente** → **Desactivado**. Desde abril de 2026 se puede volver a activar cuando quieras, sin reinstalar Windows. |
 | El antivirus lo borró o lo bloqueó | Agrégalo a las excepciones del antivirus (la carpeta completa). Pasa con programas nuevos que no tienen certificado. |
 | No abre nada al hacer doble clic | La carpeta quedó dentro del ZIP. Extráela de verdad (clic derecho → Extraer todo) y abre el `.exe` de ahí. |
 | “Hay otro programa ocupando el puerto 8090” | Ya está abierto en otra ventana, o quedó corriendo de antes. Ciérralo desde el Administrador de tareas y vuelve a abrir. |

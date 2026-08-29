@@ -76,7 +76,15 @@ echo [2/3] Instalando lo que falta...
 "%PYTHON%" -m pip install -r requirements.txt
 if errorlevel 1 goto sin_deps
 "%PYTHON%" -c "import fastapi, uvicorn, sqlmodel, tzdata" >nul 2>&1
-if errorlevel 1 goto sin_deps
+if not errorlevel 1 goto deps_ok
+REM Se instalo bien pero no carga. Casi siempre es el Control de aplicaciones
+REM inteligente de Windows: bloquea las librerias sin firmar, no solo los .exe.
+REM Decir "no hay internet" aca seria mentir y mandar a buscar donde no es.
+"%PYTHON%" -c "import fastapi" 2>&1 | find /I "control de aplicaciones" >nul
+if not errorlevel 1 goto bloqueado
+"%PYTHON%" -c "import fastapi" 2>&1 | find /I "application control" >nul
+if not errorlevel 1 goto bloqueado
+goto sin_deps
 :deps_ok
 
 REM --- 3. Carta de ejemplo la primera vez ---
@@ -87,7 +95,32 @@ echo [3/3] Cargando la carta de ejemplo...
 
 "%PYTHON%" -m tools.datos_de_red
 
-REM El navegador se abre SOLO cuando el servidor ya responde.
+REM --- 4. Abrir la caja ---
+REM Se abre con pythonw.exe, que viene firmado por la Python Software
+REM Foundation, y da exactamente la misma ventana que Kofe.exe.
+REM
+REM OJO: esto NO esquiva el "Control de aplicaciones inteligente". Se probo:
+REM ese control bloquea tambien las librerias compiladas que baja pip
+REM (_pydantic_core y compania), no solo los .exe. Si esta activo, no hay
+REM camino que sirva: hay que apagarlo. Ver el mensaje de :bloqueado.
+if not exist ".venv\Scripts\pythonw.exe" goto sin_ventana
+"%PYTHON%" -c "import webview" >nul 2>&1
+if errorlevel 1 goto sin_ventana
+
+:arrancar_ventana
+echo   Abriendo la caja...
+".venv\Scripts\pythonw.exe" Kofe.py
+if %errorlevel%==3 (
+    echo   Actualizando... el programa se vuelve a abrir solo.
+    timeout /t 2 >nul
+    goto arrancar_ventana
+)
+goto fin
+
+:sin_ventana
+REM Plan B: sin la ventana propia, la caja se abre en el navegador. Funciona
+REM igual; solo se ve la barra del navegador arriba.
+echo   (Se abrira en el navegador: falta la libreria de la ventana propia.)
 start "" powershell -NoProfile -WindowStyle Hidden -Command ^
   "for($i=0;$i -lt 60;$i++){try{Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8090/api/v1/salud -TimeoutSec 1 | Out-Null; Start-Process 'http://127.0.0.1:8090'; break}catch{Start-Sleep -Milliseconds 500}}"
 
@@ -143,9 +176,33 @@ echo.
 pause
 goto fin
 
+:bloqueado
+echo.
+echo   ============================================================
+echo    EL "CONTROL DE APLICACIONES INTELIGENTE" ESTA BLOQUEANDO ESTO
+echo   ============================================================
+echo.
+echo   No es un problema de internet ni del programa: se descargo e
+echo   instalo todo bien. Windows esta bloqueando las librerias porque
+echo   no estan firmadas con un certificado comercial.
+echo.
+echo   Ese control NO tiene excepciones por programa: es todo o nada.
+echo   Para usar la caja en este equipo hay que apagarlo:
+echo.
+echo     1. Menu Inicio - escribe "Seguridad de Windows"
+echo     2. Control de aplicaciones y explorador
+echo     3. Control de aplicaciones inteligente - Configuracion
+echo     4. Elige "Desactivado"
+echo.
+echo   Se puede volver a activar cuando quieras: desde abril de 2026
+echo   Windows permite prenderlo y apagarlo sin reinstalar nada.
+echo.
+pause
+goto fin
+
 :sin_deps
 echo.
-echo   Fallo la instalacion. Casi siempre es que no hay internet.
+echo   Fallo la descarga. Casi siempre es que no hay internet.
 echo   Conectate y vuelve a abrir este archivo.
 echo.
 pause

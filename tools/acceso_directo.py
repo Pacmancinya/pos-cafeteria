@@ -30,9 +30,15 @@ def crear_si_falta() -> str:
     """Devuelve lo que hizo, para poder mirarlo. Nunca lanza."""
     if sys.platform != "win32":
         return ""
-    ejecutable = os.path.join(RAIZ, "Kofe.exe")
+    # A qué apunta el acceso directo: al lanzador que se está usando de verdad.
+    # Si la caja se abrió con INICIAR-POS.bat es porque el .exe no sirve en ese
+    # equipo (Control de aplicaciones inteligente), y un icono que apunte al
+    # .exe bloqueado sería peor que no tener icono.
+    if getattr(sys, "frozen", False):
+        ejecutable = os.path.join(RAIZ, "Kofe.exe")
+    else:
+        ejecutable = os.path.join(RAIZ, "INICIAR-POS.bat")
     if not os.path.exists(ejecutable):
-        # Corriendo desde el código, sin empaquetar: no hay a qué apuntar.
         return ""
     if os.path.exists(MARCA):
         return ""
