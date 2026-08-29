@@ -1,6 +1,6 @@
 {
-  "version": "1.5",
-  "nombre": "Se actualiza sola",
-  "novedades": "Ya existe el canal de actualizaciones: de ahora en adelante, cuando haya una versión nueva el número de la barra se pone verde y se instala desde la misma caja, sin bajar nada a mano. El acceso directo aparece solo en el escritorio la primera vez que se abre. Y se decidió qué pasa si se corta la luz: la caja abierta, las ventas, el pedido a medio armar y el conteo del cajón siguen exactamente donde estaban, pero se pide el PIN de nuevo, porque el programa no puede saber quién quedó frente a la pantalla. Las sesiones que quedaron colgadas se cierran solas al volver a arrancar. Además está la guía paso a paso para conectar la boleta electrónica del SII.",
+  "version": "1.6",
+  "nombre": "Nada se pierde",
+  "novedades": "Ninguna ventana se cierra sola: ni tocando al lado ni con Escape. Todas tienen su X. El PIN ahora se puede marcar con el teclado del computador, no solo tocando. Los diálogos crecen con la pantalla, así que ya no se pierde de vista el botón de confirmar. Al cerrar caja aparece el resumen completo del turno: cuántas ventas y cuánto entró por cada forma de pago, con las propinas aparte. Cada cierre queda escrito solo en un archivo que se abre con Excel. Se puede ver el detalle de cualquier cierre pasado y el acumulado de descuadres. Hay una pestaña de Ayuda con diez guías, incluida la que explica dónde poner los pasteles que uno compra hechos. Y la biblioteca de dibujos pasó de 18 a 68, elegidos viéndolos.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }

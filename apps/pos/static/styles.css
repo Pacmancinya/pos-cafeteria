@@ -214,14 +214,24 @@ button{font-family:inherit;cursor:pointer}
 .btn--peligro:hover{background:#FBECEA}
 
 /* ---------- diálogos ---------- */
+/* El que hace scroll es la CAPA, no el diálogo.
+   Antes el diálogo se centraba con place-items:center y se le ponía tope de
+   alto: cuando el contenido no cabía, un elemento centrado que desborda se
+   corta ARRIBA y abajo por igual, y no hay forma de llegar al pie. Así se
+   perdía de vista el botón de confirmar en el cobro.
+   Con la capa desplazable y margin:auto en el diálogo, uno solo se centra
+   cuando cabe y crece hacia abajo cuando no. */
 .capa{
-  position:fixed;inset:0;z-index:20;display:none;place-items:center;
+  position:fixed;inset:0;z-index:20;display:none;overflow-y:auto;
   background:rgba(42,21,11,.42);padding:20px;
+  overscroll-behavior:contain;
 }
-.capa.is-on{display:grid}
+.capa.is-on{display:flex;justify-content:center}
 .dialogo{
   background:var(--tarjeta);border-radius:16px;padding:22px 24px;width:min(460px,100%);
-  box-shadow:0 24px 60px rgba(42,21,11,.3);max-height:92vh;overflow:auto;
+  box-shadow:0 24px 60px rgba(42,21,11,.3);
+  margin:auto;                 /* centrado si cabe, pegado arriba si no */
+  height:fit-content;
 }
 .dialogo h2{font-size:21px;margin-bottom:16px}
 .dialogo__pie{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
@@ -446,8 +456,7 @@ button{font-family:inherit;cursor:pointer}
 
 /* Con el teclado abierto el diálogo sube y se achica: si tapa el campo que
    estás llenando —o el botón Confirmar venta— el teclado no sirve de nada. */
-.capa.con-teclado{align-items:start;padding-bottom:calc(var(--alto-teclado) + 16px)}
-.capa.con-teclado .dialogo{max-height:calc(100vh - var(--alto-teclado) - 52px)}
+.capa.con-teclado{align-items:flex-start;padding-bottom:calc(var(--alto-teclado) + 20px)}
 
 
 /* ==========================================================
@@ -552,11 +561,11 @@ button{font-family:inherit;cursor:pointer}
 
 /* --- 6. scroll, inercia y doble tap --- */
 html,body{overscroll-behavior:none}
-.grilla,.lineas,.rail,.dialogo,.tabla-wrap,.novedades,
+.grilla,.lineas,.rail,.capa,.tabla-wrap,.novedades,
 .vista[data-vista="dia"],.vista[data-vista="carta"],.vista[data-vista="inventario"]{
   overscroll-behavior:contain;scroll-behavior:smooth;
 }
-.grilla,.lineas,.dialogo,.rail{touch-action:pan-y}
+.grilla,.lineas,.capa,.rail{touch-action:pan-y}
 .tabla-wrap{touch-action:pan-x pan-y}
 ::-webkit-scrollbar{width:12px;height:12px}
 ::-webkit-scrollbar-thumb{background:#DCCDB8;border-radius:99px;border:3px solid var(--tarjeta)}
@@ -696,3 +705,98 @@ html,body{overscroll-behavior:none}
   .tarjetas__fila{grid-template-columns:1fr 120px;grid-auto-rows:auto}
   .tarjetas__esperado{text-align:left}
 }
+
+/* ---------- resumen del turno, en el cierre ---------- */
+.resumen-turno{
+  border:1px solid var(--linea);border-radius:12px;overflow:hidden;
+  margin-bottom:14px;background:var(--tarjeta);
+}
+.resumen-turno__tit{
+  font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);padding:12px 14px 0;
+}
+.resumen-turno .tabla{font-size:14.5px}
+.resumen-turno .tabla th{padding:8px 14px}
+.resumen-turno .tabla td{padding:9px 14px}
+.resumen-turno__total td{border-top:1.5px solid var(--linea);background:var(--papel)}
+.resumen-turno__pie{
+  padding:10px 14px 12px;font-size:13.5px;color:var(--suave);
+  border-top:1px solid #F1E7DA;
+}
+.resumen-turno__pie b{color:var(--tinta);font-variant-numeric:tabular-nums}
+
+/* ---------- ayuda ---------- */
+.panel--ayuda{max-width:1180px}
+.ayuda-cabecera{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;margin-bottom:18px}
+.ayuda-cuerpo{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+.ayuda-lista{display:flex;flex-direction:column;gap:8px}
+.ayuda-item{
+  text-align:left;border:1px solid var(--linea);background:var(--tarjeta);
+  border-radius:12px;padding:12px 14px;min-height:var(--toque-alto);
+  display:flex;flex-direction:column;gap:3px;touch-action:manipulation;
+}
+.ayuda-item b{font-size:15px;color:var(--tinta)}
+.ayuda-item small{font-size:12.5px;color:var(--suave);line-height:1.45}
+.ayuda-item:active{transform:scale(.99);background:#F6EFE4}
+.ayuda-item.is-on{border-color:var(--clay);background:#FBF1E7}
+.ayuda-item.is-on b{color:var(--clay-osc)}
+.ayuda-texto{
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;
+  padding:24px 28px;box-shadow:var(--sombra);line-height:1.7;font-size:15.5px;
+  max-height:calc(100vh - 190px);overflow:auto;
+}
+.ayuda-texto h2{font-size:23px;margin-bottom:14px}
+.ayuda-texto h3{font-size:17px;margin:22px 0 8px}
+.ayuda-texto p{margin-bottom:12px}
+.ayuda-texto ol,.ayuda-texto ul{margin:0 0 14px 22px}
+.ayuda-texto li{margin-bottom:7px}
+.ayuda-texto b{color:var(--tinta)}
+.ayuda-texto .ayuda{
+  background:var(--papel);border-left:4px solid var(--clay);border-radius:0 10px 10px 0;
+  padding:12px 16px;margin:0 0 14px;font-size:14.5px;
+}
+.version-fila{padding:12px 0;border-bottom:1px solid #F1E7DA}
+.version-fila:last-child{border-bottom:0}
+.version-fila__tit{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.version-fila__tit span{font-size:12.5px;color:var(--suave);white-space:nowrap}
+.version-fila p{font-size:14px;color:var(--suave);line-height:1.6;margin-top:4px}
+.version-fila.es-la-tuya{background:#EAF6EF;border-radius:10px;padding:12px 14px;
+  border-bottom:0;margin:4px 0}
+.version-fila.es-la-tuya .version-fila__tit span{color:#14603A;font-weight:700}
+@media (max-width:900px){.ayuda-cuerpo{grid-template-columns:1fr}}
+
+/* ---------- elegir el dibujo viéndolo ---------- */
+.dibujos{
+  border:1px solid var(--linea);border-radius:12px;background:var(--papel);
+  padding:10px 12px;max-height:300px;overflow:auto;overscroll-behavior:contain;
+}
+.dibujos__grupo{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);margin:10px 0 6px;
+}
+.dibujos__grupo:first-child{margin-top:0}
+.dibujos__fila{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
+.dibujo-op{
+  border:1.5px solid var(--linea);background:var(--tarjeta);border-radius:11px;
+  padding:6px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.dibujo-op svg{width:100%;height:48px;display:block}
+.dibujo-op small{font-size:10.5px;line-height:1.2;color:var(--suave);text-align:center}
+.dibujo-op:active{transform:scale(.95)}
+.dibujo-op.is-on{border-color:var(--clay);background:#FBF1E7}
+.dibujo-op.is-on small{color:var(--clay-osc);font-weight:700}
+
+/* ---------- el atajo de bodega en la ficha del producto ---------- */
+.tal-cual{
+  border:1px solid var(--linea);border-radius:12px;background:var(--papel);
+  padding:14px 16px;margin:16px 0 4px;
+}
+.tal-cual__tit{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);margin-bottom:6px;
+}
+.tal-cual__campos{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.tal-cual__campos .campo{margin-bottom:10px}
+@media (max-width:640px){.tal-cual__campos{grid-template-columns:1fr}}

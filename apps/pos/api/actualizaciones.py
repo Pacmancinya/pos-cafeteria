@@ -36,6 +36,39 @@ def version():
     return {"version": APP_VERSION, "nombre": APP_NOMBRE}
 
 
+@router.get("/novedades")
+def novedades():
+    """El historial de versiones, leído de VERSIONES.md.
+
+    Se lee del archivo y no de una lista en el código para que no haya dos
+    lugares donde decir lo mismo: VERSIONES.md ya es la fuente de verdad y se
+    actualiza al publicar.
+    """
+    import os
+    import re
+
+    from core.config import RAIZ
+    ruta = os.path.join(RAIZ, "VERSIONES.md")
+    filas = []
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            for linea in f:
+                # Las filas de la tabla: | 1.4 | Nombre | fecha | qué trae |
+                if not linea.startswith("|"):
+                    continue
+                partes = [c.strip() for c in linea.strip().strip("|").split("|")]
+                if len(partes) < 4 or partes[0] in ("Versión", "---"):
+                    continue
+                if not re.match(r"^\d", partes[0]):
+                    continue
+                filas.append({"version": partes[0], "nombre": partes[1],
+                              "fecha": partes[2], "novedades": partes[3]})
+    except OSError:
+        pass
+    filas.reverse()          # lo más nuevo primero, que es lo que se quiere ver
+    return {"actual": APP_VERSION, "versiones": filas}
+
+
 @router.get("/actualizacion")
 def revisar():
     return actualizar.revisar()

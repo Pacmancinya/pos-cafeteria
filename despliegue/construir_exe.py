@@ -41,6 +41,8 @@ import sys
 import zipfile
 from datetime import datetime
 
+from core.config import APP_VERSION
+
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, "despliegue")
 TRABAJO = os.path.join(SALIDA, "_construccion")
@@ -63,7 +65,7 @@ CARPETAS = ["core", "apps", "tools", "docs"]
 ARCHIVOS = ["LEEME.md", "README.md", "requirements.txt", "conftest.py",
             "INICIAR-POS.bat", "Kofe.py"]
 IGNORAR_DIR = {"__pycache__", ".pytest_cache", ".venv", "respaldos",
-               "despliegue", "datos-ventana"}
+               "registros", "despliegue", "datos-ventana"}
 IGNORAR_ARCH = {".pyc", ".pyo", ".db", ".log"}
 
 
@@ -136,7 +138,7 @@ def pesar(carpeta: str) -> float:
 
 
 def comprimir() -> str:
-    destino = os.path.join(SALIDA, "Kofe-instalar.zip")
+    destino = os.path.join(SALIDA, f"Kofe-instalar-v{APP_VERSION}.zip")
     with zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
         for raiz, _, nombres in os.walk(DESTINO):
             for n in nombres:

@@ -65,19 +65,23 @@ pos-cafeteria/
 │   │   └── impresion.py   ← comprobante y cierre imprimibles (80 mm)
 │   ├── static/            ← la pantalla del cajero (HTML+JS plano, sin build)
 │   │   ├── dibujos.js     ← los mismos dibujos de las pantallas del local
-│   │   └── teclado.js     ← teclado numérico en pantalla (táctil)
+│   │   ├── teclado.js     ← teclado numérico en pantalla (táctil)
+│   │   └── guias.js       ← las guías que se leen dentro de la caja
 │   └── tests/
 │
 ├── Kofe.py                ← el lanzador: abre la ventana y levanta el servidor
 ├── despliegue/
 │   ├── construir_exe.py   ← arma Kofe.exe + la carpeta que se entrega (~56 MB)
-│   ├── empaquetar.py      ← arma el ZIP de ACTUALIZACIÓN (~120 KB)
+│   ├── empaquetar.py      ← arma el ZIP de ACTUALIZACIÓN (~170 KB)
+│   ├── ordenar_carpeta.py ← arma D:\Kofe, todo ordenado para una persona
 │   └── icono/             ← kofe.svg y el .ico que usa el ejecutable
 ├── tools/
 │   ├── demo/seed.py       ← carta de ejemplo (la misma de las pantallas)
 │   ├── demo/ventas.py     ← ventas de ejemplo para mostrar los informes
 │   ├── buscar_actualizacion.py  ← el mismo actualizador, desde la ventana negra
 │   ├── respaldo.py        ← copias de la base (arranque, cierre de caja, botón)
+│   ├── registro.py        ← una fila por cierre en un CSV, sin apretar nada
+│   ├── acceso_directo.py  ← el icono en el escritorio (NO va en Kofe.py: mira por qué)
 │   └── datos_de_red.py    ← imprime la IP y el PIN al arrancar
 ├── respaldos/             ← copias de pos.db. No va a git.
 └── docs/CONTRATO.md       ← modelo de datos + API

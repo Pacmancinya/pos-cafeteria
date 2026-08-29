@@ -214,7 +214,23 @@
     eco.textContent = cfg.eco(estado.buf);
   });
 
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") cerrar(); });
+  /* El teclado FÍSICO también escribe acá.
+     Hace falta porque el campo del PIN está oculto: nunca toma el foco, así que
+     el navegador no le manda las teclas y sin esto el dueño no podía entrar
+     desde el notebook. Vale para los tres modos, no solo el PIN. */
+  document.addEventListener("keydown", (e) => {
+    if (!estado) return;
+    if (e.key === "Escape") return cerrar();
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    // Si el foco está en el propio campo, escribe el navegador y el oyente de
+    // "input" sincroniza el eco: meter mano acá duplicaría cada tecla.
+    if (document.activeElement === estado.campo) return;
+
+    if (/^[0-9]$/.test(e.key)) { e.preventDefault(); return pulsar(e.key); }
+    if (e.key === "Backspace") { e.preventDefault(); return pulsar("borrar"); }
+    if (e.key === "Delete")    { e.preventDefault(); return pulsar("limpiar"); }
+    if (e.key === "Enter")     { e.preventDefault(); return pulsar("ok"); }
+  });
   window.addEventListener("resize", () => { if (estado) acomodar(); });
 
   if (document.body) construir();

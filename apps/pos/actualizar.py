@@ -31,7 +31,8 @@ PROTEGIDOS = {"pos.db", "pos.db-wal", "pos.db-shm", ".env",
               # La llave que firma las sesiones es de ESTA caja: si se
               # reemplazara, todos tendrían que marcar su PIN de nuevo.
               ".secreto"}
-CARPETAS_PROTEGIDAS = ("respaldos", ".venv", "__pycache__", ".git", "despliegue",
+CARPETAS_PROTEGIDAS = ("respaldos", "registros", ".venv", "__pycache__", ".git",
+                       "despliegue",
                        # datos de la ventana (sesión del navegador incrustado)
                        "datos-ventana", "_internal")
 EXTENSIONES = (".py", ".html", ".css", ".js", ".bat", ".md", ".txt", ".json")

@@ -356,6 +356,7 @@ async function cargarDia() {
             : ""}</td>
       </tr>`).join("") : `<tr><td colspan="5" style="color:var(--suave)">Todavía no hay ventas hoy.</td></tr>`}`;
 
+  TURNOS_A_LA_VISTA = turnos;
   $("#tablaTurnos").innerHTML = `
     <tr><th>Día</th><th>Abrió / cerró</th><th>Quiénes estuvieron</th>
         <th class="num">Esperado</th><th class="num">Contado</th><th class="num">Dif.</th><th></th></tr>
@@ -375,7 +376,9 @@ async function cargarDia() {
         <td class="num">${clp(t.efectivo_esperado)}</td>
         <td class="num">${t.efectivo_contado == null ? "—" : clp(t.efectivo_contado)}</td>
         <td class="num">${marca}</td>
-        <td><button class="btn btn--chico" data-cierre="${t.id}">Imprimir</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn--chico" data-ver-cierre="${t.id}">Ver</button>
+          <button class="btn btn--chico" data-cierre="${t.id}">Imprimir</button></td>
       </tr>`;
     }).join("") : `<tr><td colspan="6" style="color:var(--suave)">Sin cierres en este período.</td></tr>`}`;
 
@@ -397,26 +400,77 @@ async function anular(id) {
 }
 
 /* ---------------- editor de la carta ---------------- */
-const DIBUJOS = {
-  "taza": "Taza chica (espresso)",
-  "taza-cortado": "Taza chica con leche",
-  "mug": "Taza grande",
-  "mug-espuma": "Taza grande con espuma",
-  "mug-arte": "Taza grande con arte",
-  "mug-crema": "Taza grande con crema",
-  "vaso": "Vaso frío oscuro",
-  "vaso-leche": "Vaso frío con leche",
-  "vaso-limon": "Vaso frío con limón",
-  "vaso-verde": "Vaso frío verde",
-  "vaso-menta": "Vaso frío con menta",
-  "frappe": "Frappé con crema",
-  "croissant": "Croissant",
-  "croissant-almendras": "Croissant de almendras",
-  "torta": "Trozo de torta",
-  "torta-manzana": "Trozo de kuchen",
-  "brownie": "Brownie",
-  "alfajor": "Alfajor",
-};
+/* Los nombres de la biblioteca, agrupados para poder buscarlos. Las claves
+   salen de dibujos.js: acá solo se les pone un nombre legible y un grupo.
+   Lo que no esté nombrado igual aparece, con su clave: mejor un nombre feo que
+   un dibujo escondido. */
+const GRUPOS_DIBUJO = [
+  ["Café y calientes", {
+    "taza": "Espresso", "taza-cortado": "Cortado", "mug": "Café grande",
+    "mug-espuma": "Capuchino", "mug-arte": "Latte con arte", "mug-crema": "Con crema",
+    "para-llevar": "Para llevar", "para-llevar-te": "Té para llevar",
+    "tetera": "Tetera", "tetera-verde": "Tetera verde",
+  }],
+  ["Fríos", {
+    "vaso": "Vaso con hielo", "vaso-leche": "Con leche", "vaso-limon": "Con limón",
+    "vaso-verde": "Verde", "vaso-menta": "Con menta", "frappe": "Frappé",
+    "para-llevar-frio": "Frío para llevar",
+  }],
+  ["Envases", {
+    "botella-agua": "Botella de agua", "botella-bebida": "Bebida",
+    "botella-jugo": "Jugo en botella", "botella-vidrio": "Botella de vidrio",
+    "lata": "Lata", "lata-verde": "Lata verde", "lata-naranja": "Lata naranja",
+    "jugo-caja": "Jugo en caja", "jugo-caja-verde": "Jugo en caja verde",
+  }],
+  ["Panadería", {
+    "pan-marraqueta": "Marraqueta", "pan-hallulla": "Hallulla",
+    "pan-amasado": "Pan amasado", "pan-baguette": "Baguette",
+    "pan-integral": "Pan integral", "croissant": "Croissant",
+    "croissant-almendras": "Croissant de almendras",
+    "empanada": "Empanada", "empanada-queso": "Empanada de queso",
+    "empanada-cruda": "Empanada cruda",
+  }],
+  ["Sándwiches y comida", {
+    "sandwich": "Sándwich", "sandwich-queso": "Sándwich de queso",
+    "churrasco": "Churrasco", "wrap": "Wrap", "pizza": "Pizza",
+    "sopa": "Sopa", "ensalada": "Ensalada", "yogurt": "Yogurt con granola",
+    "plato": "Plato caliente", "plato-frio": "Plato frío",
+  }],
+  ["Dulces", {
+    "torta": "Torta", "torta-chocolate": "Torta de chocolate",
+    "torta-limon": "Torta de limón", "torta-manzana": "Kuchen",
+    "cheesecake": "Cheesecake", "kuchen": "Kuchen en porción",
+    "pie-limon": "Pie de limón", "brownie": "Brownie", "alfajor": "Alfajor",
+    "galleta": "Galleta", "galleta-avena": "Galleta de avena",
+    "dona": "Dona", "dona-chocolate": "Dona de chocolate",
+    "dona-chispas": "Dona con chispas", "muffin": "Muffin",
+    "muffin-chips": "Muffin con chips", "cupcake": "Cupcake",
+    "helado": "Helado", "helado-chocolate": "Helado de chocolate",
+  }],
+  ["Promociones", { "combo": "Combo", "desayuno": "Desayuno" }],
+];
+
+const DIBUJOS = Object.assign({}, ...GRUPOS_DIBUJO.map(([, m]) => m));
+
+/* Elegir el dibujo VIÉNDOLO. Con 68 opciones, una lista de nombres es
+   inservible: nadie sabe qué es "vaso-menta" hasta que lo ve. */
+function selectorDeDibujo(elegido) {
+  return `
+    <div class="campo"><span>Dibujo en la pantalla</span>
+      <input type="hidden" id="fDibujo" value="${esc(elegido || "mug")}">
+      <div class="dibujos">
+        ${GRUPOS_DIBUJO.map(([grupo, mapa]) => `
+          <div class="dibujos__grupo">${esc(grupo)}</div>
+          <div class="dibujos__fila">
+            ${Object.entries(mapa).map(([k, nombre]) => `
+              <button type="button" class="dibujo-op ${k === elegido ? "is-on" : ""}"
+                      data-dibujo="${k}" title="${esc(nombre)}">
+                ${dibujo({ k })}<small>${esc(nombre)}</small>
+              </button>`).join("")}
+          </div>`).join("")}
+      </div>
+    </div>`;
+}
 
 function pintarEditorCarta() {
   $("#editorCarta").innerHTML = CATEGORIAS.map((c) => `
@@ -443,12 +497,11 @@ function pintarEditorCarta() {
 function abrirFichaProducto(id) {
   const cat = CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
   const p = cat.productos.find((x) => x.id === id);
-  const dibujos = Object.entries(DIBUJOS)
-    .map(([k, v]) => `<option value="${k}"${k === p.dibujo ? " selected" : ""}>${v}</option>`).join("");
   const cats = CATEGORIAS
     .map((c) => `<option value="${c.id}"${c.id === cat.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("");
 
   $("#dialogoProducto").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>${esc(p.nombre)}</h2>
     <div class="fila2">
       <label class="campo"><span>Nombre</span><input id="fNombre" type="text" value="${esc(p.nombre)}"></label>
@@ -456,10 +509,8 @@ function abrirFichaProducto(id) {
     </div>
     <label class="campo"><span>Descripción (se ve en la pantalla del menú)</span>
       <input id="fDesc" type="text" value="${esc(p.descripcion)}"></label>
-    <div class="fila2">
-      <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
-      <label class="campo"><span>Dibujo en la pantalla</span><select id="fDibujo">${dibujos}</select></label>
-    </div>
+    <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
+    ${selectorDeDibujo(p.dibujo)}
     <div class="fila2">
       <label class="campo"><span>Etiqueta (opcional)</span>
         <input id="fEtiqueta" type="text" value="${esc(p.etiqueta)}" placeholder="Nuevo, Sin lactosa..."></label>
@@ -472,12 +523,16 @@ function abrirFichaProducto(id) {
     <label class="campo"><span>Texto del recuadro grande</span>
       <input id="fBadge" type="text" value="${esc(p.badge)}" placeholder="Recomendado de hoy"></label>
     <label class="marca"><input type="checkbox" id="fActivo" ${p.activo ? "checked" : ""}> A la venta</label>
+
+    <div class="tal-cual" id="zonaTalCual" data-producto="${p.id}"></div>
+
     <div class="dialogo__pie">
       <button class="btn btn--peligro" id="fBorrar">Sacar de la carta</button>
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" id="fGuardar" style="width:auto">Guardar</button>
     </div>`;
   $("#capaProducto").classList.add("is-on");
+  pintarTalCual(p);
 
   $("#fGuardar").onclick = async () => {
     const antes = soloNumeros($("#fAntes").value);
@@ -609,6 +664,7 @@ function dialogoVersion() {
       : `<p class="ayuda">Estás al día con la <b>v${esc(i.actual)}</b>${i.actual_nombre ? " · " + esc(i.actual_nombre) : ""}.</p>`;
 
   $("#dialogoVersion").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>${hay ? "Hay una versión nueva" : "Versión del programa"}</h2>
     ${cuerpo}
     <div class="dialogo__pie">
@@ -626,6 +682,7 @@ function dialogoVersion() {
       if (!r.ok) throw new Error(r.error || "no se pudo actualizar");
       if (r.sin_cambios) { avisar(r.aviso); $("#capaVersion").classList.remove("is-on"); b.disabled = false; return; }
       $("#dialogoVersion").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
         <h2>Listo</h2>
         <p class="ayuda">Se actualizaron ${r.archivos.length} archivos.
           La caja se está reiniciando: la página se recarga sola en unos segundos.</p>`;
@@ -649,6 +706,7 @@ async function esperarQueVuelva(intentos = 40) {
     } catch (e) { }
   }
   $("#dialogoVersion").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Casi listo</h2>
     <p class="ayuda">La actualización quedó instalada, pero la caja no volvió sola.
       Cierra la ventana negra y vuelve a abrir <b>INICIAR-POS.bat</b>.</p>`;
@@ -773,6 +831,7 @@ async function dialogoTurno() {
 function pintarAbrirCaja() {
   $("#dialogoTurno").className = "dialogo dialogo--ancho";
   $("#dialogoTurno").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Abrir caja</h2>
     <label class="campo"><span>¿Quién atiende?</span>
       <input id="tCajero" type="text" placeholder="Nombre" autocomplete="off"></label>
@@ -796,6 +855,7 @@ function pintarCerrarCaja(tu) {
 
   $("#dialogoTurno").className = "dialogo dialogo--ancho";
   $("#dialogoTurno").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Cerrar caja</h2>
     <p class="ayuda" style="margin-bottom:8px">Cuenta la plata del cajón, billete por billete.
       Cuando termines te muestro si cuadra.</p>
@@ -824,6 +884,7 @@ function mostrarCuadre(tu) {
   const fondoPrevio = zona.querySelector("#tFondo") ? soloNumeros($("#tFondo").value) : tu.monto_inicial;
 
   zona.innerHTML = `
+    ${resumenDelTurno(tu)}
     <div class="cuadre ${ok ? "cuadre--ok" : "cuadre--mal"}">
       <div class="cuadre__linea"><span>Fondo con el que abrió</span><span>${clp(tu.monto_inicial)}</span></div>
       <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(tu.ventas_efectivo)}</span></div>
@@ -1381,6 +1442,44 @@ async function aplicarImportacion() {
 }
 
 
+
+/* ---- lo que se vendió en el turno, entero ----
+   Va ARRIBA del cuadre del efectivo a propósito: la primera pregunta al cerrar
+   es "¿cuánto vendimos hoy?", y antes había que sacarla sumando de cabeza entre
+   tres recuadros distintos. */
+function resumenDelTurno(tu) {
+  const medios = Object.entries(tu.por_medio || {});
+  if (!medios.length) return "";
+  const vendido = medios.reduce((n, [, d]) => n + d.ventas, 0);
+  const cobrado = medios.reduce((n, [, d]) => n + d.cobrado, 0);
+  const cuantas = medios.reduce((n, [, d]) => n + d.cantidad, 0);
+
+  return `
+    <div class="resumen-turno">
+      <div class="resumen-turno__tit">Lo que se vendió en este turno</div>
+      <table class="tabla">
+        <tr><th>Forma de pago</th><th class="num">Ventas</th>
+            <th class="num">Vendido</th><th class="num">Propina</th></tr>
+        ${medios.map(([m, d]) => `
+          <tr>
+            <td>${esc(NOMBRE_MEDIO[m] || m)}</td>
+            <td class="num">${d.cantidad}</td>
+            <td class="num">${clp(d.ventas)}</td>
+            <td class="num">${d.propinas ? clp(d.propinas) : "—"}</td>
+          </tr>`).join("")}
+        <tr class="resumen-turno__total">
+          <td><b>Total</b></td>
+          <td class="num"><b>${cuantas}</b></td>
+          <td class="num"><b>${clp(vendido)}</b></td>
+          <td class="num"><b>${clp(cobrado - vendido)}</b></td>
+        </tr>
+      </table>
+      <div class="resumen-turno__pie">
+        Entró en total <b>${clp(cobrado)}</b>, contando las propinas.
+      </div>
+    </div>`;
+}
+
 /* ---- lo que no es efectivo ----
    El efectivo se CUENTA; esto se COPIA del comprobante de cierre de la máquina
    y de la app del banco. Va después del arqueo y no antes porque contar el
@@ -1458,6 +1557,197 @@ function bloquePropinas(tu) {
     </div>`;
 }
 
+/* ---------------- ayuda ----------------
+   Las guías viven en guias.js, aparte, porque son texto y no programa: así se
+   corrigen sin tocar el código de la caja y viajan en una actualización como
+   cualquier otro archivo. */
+let guiaAbierta = null;
+
+function pintarGuias(id) {
+  const guias = window.GUIAS || [];
+  if (!guias.length) {
+    $("#textoGuia").innerHTML = "<p class='ayuda'>Todavía no hay guías cargadas.</p>";
+    return;
+  }
+  guiaAbierta = id || guiaAbierta || guias[0].id;
+  const actual = guias.find((g) => g.id === guiaAbierta) || guias[0];
+
+  $("#listaGuias").innerHTML = guias.map((g) => `
+    <button class="ayuda-item ${g.id === actual.id ? "is-on" : ""}" data-guia="${g.id}">
+      <b>${esc(g.titulo)}</b>
+      <small>${esc(g.resumen)}</small>
+    </button>`).join("");
+
+  $("#textoGuia").innerHTML = `<h2>${esc(actual.titulo)}</h2>${actual.html}`;
+  $("#textoGuia").scrollTop = 0;
+}
+
+async function pintarVersionAyuda() {
+  try {
+    const r = await api("/novedades");
+    $("#versionAyuda").textContent = "v" + r.actual;
+    $("#versionAyuda").dataset.listo = "1";
+  } catch (e) { }
+}
+
+/* El historial completo de versiones, para saber qué trae la que uno tiene. */
+async function dialogoNovedades() {
+  const r = await api("/novedades");
+  $("#dialogoVersion").className = "dialogo dialogo--ancho";
+  $("#dialogoVersion").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>Qué trae cada versión</h2>
+    <p class="ayuda">Tienes la <b>v${esc(r.actual)}</b>. Acá está todo lo que fue
+      cambiando, de lo más nuevo a lo más viejo.</p>
+    <div class="novedades" style="max-height:56vh">
+      ${r.versiones.map((v) => `
+        <div class="version-fila ${v.version === r.actual ? "es-la-tuya" : ""}">
+          <div class="version-fila__tit">
+            <b>v${esc(v.version)} · ${esc(v.nombre)}</b>
+            <span>${esc(v.fecha)}${v.version === r.actual ? " · la que tienes" : ""}</span>
+          </div>
+          <p>${esc(v.novedades)}</p>
+        </div>`).join("")}
+    </div>
+    <div class="dialogo__pie">
+      <button class="btn" data-cerrar-capa>Cerrar</button>
+    </div>`;
+  $("#capaVersion").classList.add("is-on");
+}
+
+/* ---------------- el descuadre, mirado de cerca ----------------
+   Guardar la diferencia no sirve de nada si después no hay dónde mirarla. Esto
+   contesta las dos preguntas que se hacen de verdad: "¿cuánto llevamos
+   descuadrado?" y "¿en qué falló ESE día?". */
+let TURNOS_A_LA_VISTA = [];
+
+function resumenDeDescuadres(turnos) {
+  const cerrados = turnos.filter((t) => t.diferencia !== null);
+  if (!cerrados.length) return "";
+  const suma = cerrados.reduce((n, t) => n + t.diferencia, 0);
+  const malos = cerrados.filter((t) => t.diferencia !== 0);
+  return `
+    <tr class="resumen-turno__total">
+      <td colspan="5"><b>${cerrados.length} cierre${cerrados.length === 1 ? "" : "s"}</b>
+        · ${malos.length ? `${malos.length} no cuadró${malos.length === 1 ? "" : "n"}`
+                         : "todos cuadraron"}</td>
+      <td class="num"><b class="${suma === 0 ? "ok" : "mal"}">${suma === 0 ? "cuadra" : clp(suma)}</b></td>
+      <td></td>
+    </tr>`;
+}
+
+function dialogoCierre(turnoId) {
+  const t = TURNOS_A_LA_VISTA.find((x) => x.id === turnoId);
+  if (!t) return;
+  const d = t.diferencia;
+  const conteo = t.conteo_cierre || {};
+  const hayConteo = Object.keys(conteo).length > 0;
+
+  $("#dialogoBodega").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>Cierre del ${new Date(t.abierto_at).toLocaleDateString("es-CL",
+        { day: "2-digit", month: "long" })}</h2>
+    <p class="ayuda">Abrió ${esc(t.abrio || t.cajero || "—")}${
+      t.cerro ? ` · cerró ${esc(t.cerro)}` : ""}.
+      ${(t.estuvieron || []).length
+        ? "Estuvieron: " + t.estuvieron.map((g) => `${esc(g.nombre)} (${horasYminutos(g.minutos)})`).join(", ")
+        : ""}</p>
+
+    ${resumenDelTurno(t)}
+
+    <div class="cuadre ${d === 0 ? "cuadre--ok" : "cuadre--mal"}">
+      <div class="cuadre__linea"><span>Fondo con el que abrió</span><span>${clp(t.monto_inicial)}</span></div>
+      <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(t.ventas_efectivo)}</span></div>
+      <div class="cuadre__linea"><span>Debería haber</span><span>${clp(t.efectivo_esperado)}</span></div>
+      <div class="cuadre__linea"><span>Contó</span><span>${clp(t.efectivo_contado || 0)}</span></div>
+      <div class="cuadre__linea cuadre__dif">
+        <span>${d === 0 ? "Cuadró exacto" : d > 0 ? "Sobró" : "Faltó"}</span>
+        <span>${d === 0 ? "✓" : clp(Math.abs(d))}</span>
+      </div>
+    </div>
+
+    ${hayConteo ? `
+      <div class="tarjetas">
+        <div class="tarjetas__tit">Cómo estaba el cajón</div>
+        <p class="ayuda" style="margin:0">${DENOMINACIONES.filter((v) => conteo[v])
+          .map((v) => `${clp(v)} × ${conteo[v]}`).join(" · ")}</p>
+      </div>` : ""}
+
+    ${(t.medios || []).some((m) => m.declarado != null) ? `
+      <div class="tarjetas">
+        <div class="tarjetas__tit">Contra el banco</div>
+        ${t.medios.filter((m) => m.declarado != null).map((m) => `
+          <div class="cuadre__linea" style="padding:6px 0">
+            <span>${esc(m.nombre)} · deberían ser ${clp(m.esperado)}</span>
+            <span class="${m.diferencia === 0 ? "ok" : "mal"}">${clp(m.declarado)}${
+              m.diferencia ? ` (${m.diferencia > 0 ? "+" : ""}${clp(m.diferencia)})` : " ✓"}</span>
+          </div>`).join("")}
+      </div>` : ""}
+
+    ${t.nota ? `<p class="ayuda"><b>Nota:</b> ${esc(t.nota)}</p>` : ""}
+
+    <div class="dialogo__pie">
+      <button class="btn" data-cierre="${t.id}">Imprimir</button>
+      <button class="btn btn--cobrar" data-cerrar-capa style="width:auto">Cerrar</button>
+    </div>`;
+  $("#capaBodega").classList.add("is-on");
+}
+
+/* ---- "se vende tal cual" ----
+   El atajo para lo que se compra hecho y se vende igual: un pastel, un alfajor,
+   una botella. Sin esto había que entender la palabra "insumo" y crear uno a
+   mano, que es exactamente donde la gente se pierde. */
+async function pintarTalCual(p) {
+  const zona = $("#zonaTalCual");
+  if (!zona) return;
+  let receta = null;
+  try { receta = await api(`/productos/${p.id}/receta`); } catch (e) { return; }
+
+  if (receta.lineas.length) {
+    const l = receta.lineas[0];
+    const simple = receta.lineas.length === 1 && l.nombre === p.nombre;
+    zona.innerHTML = `
+      <div class="tal-cual__tit">Bodega</div>
+      <p class="ayuda" style="margin:0 0 8px">
+        ${simple
+          ? `Se descuenta de <b>${esc(l.nombre)}</b>. Quedan <b>${esc(l.stock_muestra)}</b>.`
+          : `Lleva ${receta.lineas.length} ingredientes. Cuesta
+             <b>${clp(receta.costo_total)}</b> y deja <b>${clp(receta.margen)}</b>
+             de margen.`}
+        ${receta.alcanza_para != null
+          ? ` Con lo que hay alcanza para <b>${receta.alcanza_para}</b>.` : ""}
+      </div>`;
+    return;
+  }
+
+  zona.innerHTML = `
+    <div class="tal-cual__tit">Bodega</div>
+    <p class="ayuda" style="margin:0 0 10px">Este producto todavía no descuenta
+      nada al venderse. Si es algo que compras hecho y vendes tal cual —un
+      pastel, una botella, un alfajor— acá se resuelve de un toque.</p>
+    <div class="tal-cual__campos">
+      <label class="campo"><span>¿Cuántos tienes?</span>
+        <input id="tcStock" type="text" inputmode="numeric" placeholder="0"></label>
+      <label class="campo"><span>¿Cuánto te cuesta cada uno?</span>
+        <input id="tcCosto" type="text" inputmode="numeric" placeholder="0"></label>
+      <label class="campo"><span>Avísame bajo</span>
+        <input id="tcMinimo" type="text" inputmode="numeric" placeholder="0"></label>
+    </div>
+    <button class="btn" data-tal-cual="${p.id}">Se vende tal cual</button>`;
+}
+
+async function marcarTalCual(id) {
+  try {
+    await api(`/productos/${id}/receta/tal-cual`, { method: "POST", body: JSON.stringify({
+      stock_inicial: soloNumeros(($("#tcStock") || {}).value || 0),
+      compra_costo: soloNumeros(($("#tcCosto") || {}).value || 0),
+      minimo: soloNumeros(($("#tcMinimo") || {}).value || 0) })});
+    const cat = CATEGORIAS.find((c) => c.productos.some((x) => x.id === id));
+    await pintarTalCual(cat.productos.find((x) => x.id === id));
+    avisar("Listo: ahora se descuenta solo al venderlo");
+  } catch (e) { avisar(e.message, true); }
+}
+
 /* ---------------- arranque y eventos ---------------- */
 function reloj() {
   $("#reloj").textContent = new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -1465,7 +1755,7 @@ function reloj() {
 
 /* Ruteo por hash: refrescar la página no devuelve al cajero a la caja sin
    avisar, y se puede dejar "El día" abierto en otra pestaña. */
-const VISTAS = ["caja", "dia", "carta", "inventario"];
+const VISTAS = ["caja", "dia", "carta", "inventario", "guias"];
 
 function verVista(nombre, empujarHash = true) {
   if (!VISTAS.includes(nombre)) nombre = "caja";
@@ -1474,6 +1764,7 @@ function verVista(nombre, empujarHash = true) {
   if (empujarHash) location.hash = "#/" + nombre;
   if (nombre === "dia") cargarDia();
   if (nombre === "inventario") cargarBodega();
+  if (nombre === "guias") pintarGuias();
 }
 
 function vistaDelHash() {
@@ -1502,6 +1793,7 @@ document.addEventListener("click", (e) => {
   if (cerca("data-menos")) return cambiarCantidad(+cerca("data-menos").dataset.menos, -1);
   if (cerca("data-anular")) return anular(+cerca("data-anular").dataset.anular);
   if (cerca("data-imprimir")) return imprimir(`/comprobante/${cerca("data-imprimir").dataset.imprimir}`);
+  if (cerca("data-ver-cierre")) return dialogoCierre(+cerca("data-ver-cierre").dataset.verCierre);
   if (cerca("data-cierre")) return imprimir(`/cierre/${cerca("data-cierre").dataset.cierre}`);
   if (cerca("data-periodo")) {
     periodo = cerca("data-periodo").dataset.periodo;
@@ -1595,6 +1887,15 @@ document.addEventListener("click", (e) => {
       .catch((err) => avisar(err.message, true));
   }
   if (cerca("data-motivo")) { $("#mMotivo").value = cerca("data-motivo").dataset.motivo; return; }
+  if (cerca("data-tal-cual")) return marcarTalCual(+cerca("data-tal-cual").dataset.talCual);
+  if (cerca("data-dibujo")) {
+    const b = cerca("data-dibujo");
+    $("#fDibujo").value = b.dataset.dibujo;
+    $$(".dibujo-op").forEach((x) => x.classList.toggle("is-on", x === b));
+    return;
+  }
+  if (cerca("data-guia")) return pintarGuias(cerca("data-guia").dataset.guia);
+  if (t.id === "versionAyuda") return dialogoNovedades();
   if (t.id === "btnNuevoInsumo") return dialogoInsumo(0);
   if (t.id === "btnCompra") return dialogoCompra();
   if (t.id === "btnMerma") return dialogoMerma();
@@ -1624,11 +1925,10 @@ document.addEventListener("click", (e) => {
   if (t.id === "leerCarta") return leerTexto();
   if (t.id === "aplicarCarta") return aplicarImportacion();
 
-  // Tocar el fondo cierra el diálogo... salvo los que tienen trabajo adentro.
-  // Perder un arqueo a medio contar por rozar la pantalla es carísimo: hay que
-  // volver a contar el cajón entero. Pasó de verdad.
-  if (t.classList.contains("capa") && !t.classList.contains("capa--firme"))
-    t.classList.remove("is-on");
+  // Tocar el fondo NO cierra nada. En una pantalla táctil el dedo roza el borde
+  // todo el rato, y cada roce costaba volver a hacer el trabajo entero: contar
+  // el cajón de nuevo, rearmar el cobro, reescribir la ficha del producto.
+  // Los diálogos se cierran con su botón o con la X, que están para eso.
 });
 
 function actualizarCobro() {
@@ -1650,8 +1950,9 @@ $("#propina").addEventListener("input", actualizarCobro);
 $("#descuento").addEventListener("input", actualizarCobro);
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape")
-    return $$(".capa:not(.capa--firme)").forEach((c) => c.classList.remove("is-on"));
+  // Escape tampoco: es demasiado fácil apretarlo sin querer y perder el trabajo.
+  // Para cerrar están la X y el botón Cancelar de cada diálogo.
+  if (e.key === "Escape") return Teclado.cerrar();
   if (e.target.tagName === "INPUT") {
     if (e.key === "Enter" && $("#capaCobro").classList.contains("is-on")) confirmarVenta();
     return;
@@ -1684,6 +1985,7 @@ document.addEventListener("keydown", (e) => {
   await cargarCarta();
   await cargarTurno();
   cargarVersion();
+  pintarVersionAyuda();
   pintarCarrito();
   verVista(vistaDelHash(), false);
 })();

@@ -16,6 +16,7 @@ pos.db-shm
 
 # Copias de esa misma base.
 respaldos/
+registros/
 _version_anterior/
 
 # El perfil del navegador incrustado. Guarda cookies de sesión y el pedido a

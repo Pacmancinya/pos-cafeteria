@@ -255,10 +255,20 @@ def cerrar(datos: CerrarTurnoIn, s: Session = Depends(get_session),
     s.add(t)
     s.commit()
     s.refresh(t)
+    salida = _turno_dict(s, t)
+
     # Cerrar la caja es el otro momento natural para respaldar: el día ya está completo.
     try:
         from tools.respaldo import respaldar
         respaldar("cierre de caja")
     except Exception:
         pass
-    return _turno_dict(s, t)
+
+    # Y queda por escrito en un CSV que se abre con doble clic, sin depender de
+    # que alguien se acuerde de exportar.
+    try:
+        from tools.registro import anotar_cierre
+        salida["registro"] = anotar_cierre(salida)
+    except Exception:
+        pass
+    return salida

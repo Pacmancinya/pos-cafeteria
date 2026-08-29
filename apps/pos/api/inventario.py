@@ -377,6 +377,9 @@ def _receta_dict(s: Session, producto: Producto) -> dict:
             "muestra": mostrar_cantidad(r.cantidad, i.unidad),
             "costo": costo,
             "stock": i.stock,
+            # Lo que QUEDA en bodega, no lo que lleva la receta: son dos números
+            # distintos y confundirlos hace que la ficha mienta.
+            "stock_muestra": mostrar_cantidad(i.stock, i.unidad),
         })
         # Con lo que hay en bodega, ¿para cuántos alcanza?
         posibles = i.stock // r.cantidad if r.cantidad > 0 else 0

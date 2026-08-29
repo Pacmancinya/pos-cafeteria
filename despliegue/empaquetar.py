@@ -26,9 +26,11 @@ import sys
 import zipfile
 from datetime import datetime
 
+from core.config import APP_VERSION
+
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, "despliegue")
-NOMBRE = "Kofe-actualizacion"
+NOMBRE = f"Kofe-actualizacion-v{APP_VERSION}"
 
 INCLUIR = [
     "Kofe.py",              # el lanzador de la aplicación: también se actualiza
@@ -41,7 +43,7 @@ INCLUIR = [
 ]
 CARPETAS = ["core", "apps", "tools", "docs"]
 IGNORAR_DIR = {"__pycache__", ".pytest_cache", ".venv", "respaldos",
-               "despliegue", "datos-ventana"}
+               "registros", "despliegue", "datos-ventana"}
 IGNORAR_ARCH = {".pyc", ".pyo", ".db", ".log"}
 
 
