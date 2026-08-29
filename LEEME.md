@@ -64,7 +64,9 @@ alcanzado a vender nada.
 
 | | Dueño | Cajero |
 |---|:--:|:--:|
-| Vender, anular, abrir y cerrar la caja | ✅ | ✅ |
+| Vender, anular, abrir la caja | ✅ | ✅ |
+| Cerrar la caja que abrió él mismo | ✅ | ✅ |
+| Cerrar una caja que abrió otra persona | ✅ | — |
 | Mirar la bodega, anotar compras y pérdidas | ✅ | ✅ |
 | Cambiar precios y productos | ✅ | — |
 | Informes, respaldos, crear usuarios | ✅ | — |
@@ -217,7 +219,8 @@ En **El día**:
 ## Si alguien entra desde otro equipo
 
 La caja se puede abrir desde un tablet o desde otro computador del local, escribiendo la
-dirección que aparece en la ventana negra al arrancar. La primera vez pide un **PIN**
+dirección que sale en la pestaña **Carta**, en el recuadro «Conectar las pantallas del
+local», que tiene botón de copiar. La primera vez pide un **PIN**
 (viene `2468`). Desde el computador de la caja no pide nada.
 
 Esto existe porque el wifi de invitados está en la misma red: sin el PIN, un cliente

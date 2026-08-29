@@ -78,7 +78,7 @@ pos-cafeteria/
 ├── tools/
 │   ├── demo/seed.py       ← carta de ejemplo (la misma de las pantallas)
 │   ├── demo/ventas.py     ← ventas de ejemplo para mostrar los informes
-│   ├── buscar_actualizacion.py  ← el mismo actualizador, desde la ventana negra
+│   ├── buscar_actualizacion.py  ← el mismo actualizador, desde la terminal
 │   ├── respaldo.py        ← copias de la base (arranque, cierre de caja, botón)
 │   ├── registro.py        ← una fila por cierre en un CSV, sin apretar nada
 │   ├── acceso_directo.py  ← el icono en el escritorio (NO va en Kofe.py: mira por qué)
@@ -109,7 +109,10 @@ lo tomó sola.
 La caja se actualiza sola desde el número de versión de la barra, o con
 `BUSCAR-ACTUALIZACIONES.bat`. Reemplaza el código y **nunca** toca `pos.db`,
 `respaldos/` ni `.venv/`; guarda lo que pisa en `_version_anterior/` y se
-reinicia sola (sale con código 3 y el `.bat` la vuelve a levantar).
+reinicia sola: `Kofe.py` le pasa al actualizador su propia función `relanzar`, que lanza
+la copia nueva desprendida antes de morir. En el plan B del navegador —donde se corre
+uvicorn sin pasar por `Kofe.py`— el que la levanta de nuevo es el bucle de
+`INICIAR-POS.bat`, que mira el código de salida 3.
 
 Cómo publicar una versión: [`docs/PUBLICAR-ACTUALIZACIONES.md`](docs/PUBLICAR-ACTUALIZACIONES.md).
 Historial: [`VERSIONES.md`](VERSIONES.md).
@@ -189,9 +192,11 @@ versión.
    de Santiago ya es el día siguiente en UTC. Por eso las consultas del día pasan por
    `rango_utc_del_dia()` y no por un `date()` pelado.
 7. **La consola de Windows llega en cp1252 y revienta con acentos.** Cualquier script que
-   imprima texto en la ventana negra tiene que hacer
+   imprima texto en una consola tiene que hacer
    `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` primero. Ya mordió en
-   `tools/datos_de_red.py`.
+   `tools/datos_de_red.py`. Desde la 2.0 el arranque normal ya no deja consola abierta
+   (el lanzador suelta la caja y se va), así que esto aplica a los scripts de desarrollo
+   y al plan B del navegador, que sí la conserva.
 8. **Escuchar en `0.0.0.0` sin candado sería un agujero.** El wifi de invitados del local
    está en la misma red que la caja. Por eso existe `apps/pos/acceso.py`: local entra
    directo, la red pide PIN, y la carta queda libre. Hay 8 tests que lo cuidan.

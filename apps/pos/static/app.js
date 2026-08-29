@@ -724,7 +724,8 @@ async function esperarQueVuelva(intentos = 40) {
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Casi listo</h2>
     <p class="ayuda">La actualización quedó instalada, pero la caja no volvió sola.
-      Cierra la ventana negra y vuelve a abrir <b>INICIAR-POS.bat</b>.</p>`;
+      Cierra esta ventana y vuelve a abrirla con el icono
+      <b>«${esc(NOMBRE_DEL_LOCAL)} - Punto de venta»</b> del escritorio.</p>`;
 }
 
 /* ---------------- turno ---------------- */
@@ -736,6 +737,11 @@ async function cargarTurno() {
     ? `Caja abierta${t.turno.cajero ? " · " + t.turno.cajero : ""}`
     : "Caja cerrada";
   chip.dataset.abierto = t.abierto ? "1" : "0";
+  // De quién es la caja, al pasar el mouse. No se apaga el chip: el MISMO chip
+  // sirve para ABRIR caja, que sí puede cualquiera.
+  chip.title = t.abierto && esDeOtro(t.turno) && !puedo("turno_cerrar_ajeno")
+    ? `La abrió ${t.turno.abrio}: la cierra ${t.turno.abrio} o el dueño`
+    : "";
   return t;
 }
 
@@ -862,6 +868,31 @@ function pintarAbrirCaja() {
   setTimeout(() => $("#tCajero").focus(), 60);
 }
 
+/* ¿La abrió otra persona? Un turno SIN dueño (abierto_por_id nulo) no es de
+   otro: es de nadie. Están así todos los turnos anteriores a los usuarios, los
+   que se abrieron en modo provisorio y los de la carta de ejemplo. Tratarlos
+   como ajenos dejaría cajas viejas imposibles de cerrar. */
+const esDeOtro = (tu) => !!(tu.abierto_por_id && SESION.id && tu.abierto_por_id !== SESION.id);
+
+/* La pantalla del cajero que no puede cerrar. Explica el porqué y ofrece la
+   salida —cambiar de usuario—, porque un "no puedes" sin salida, con el local
+   cerrando, no le resuelve el problema a nadie. */
+function pintarCajaAjena(tu) {
+  $("#dialogoTurno").className = "dialogo";
+  $("#dialogoTurno").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>Esta caja no es tuya</h2>
+    <p class="ayuda">La abrió <b>${esc(tu.abrio || "otra persona")}</b>, con el fondo
+      que contó esa mañana. El cierre es de ${esc(tu.abrio || "esa persona")}, o del dueño.</p>
+    <p class="ayuda" style="margin-bottom:0">No es desconfianza: si cierra otro, el
+      descuadre queda sin dueño. No habría a quién preguntarle qué pasó a las once,
+      y la diferencia se la come alguien que no contó ese fondo.</p>
+    <div class="dialogo__pie">
+      <button class="btn btn--fantasma" data-cerrar-capa>Entendido</button>
+      <button class="btn btn--cobrar" id="cambiarParaCerrar" style="width:auto">Cambiar de usuario</button>
+    </div>`;
+}
+
 /* ---- cerrar: el cajón a ciegas, todo lo demás a la vista ----
    Dos columnas: a la izquierda se cuenta, a la derecha está lo que hay que
    MIRAR mientras se cuenta —lo vendido y el comprobante de la máquina—. Antes
@@ -874,10 +905,19 @@ function pintarAbrirCaja() {
    Lo pagado con tarjeta no está en el cajón, así que mostrarlo desde el
    principio no ensucia nada. Ver docs/CONTRATO.md. */
 function pintarCerrarCaja(tu) {
+  // ANTES de dibujar un solo billete. Si la caja es de otro y no la puedo
+  // cerrar, se dice acá y no después: descubrirlo con el cajón ya contado
+  // significa haber contado la plata entera para nada, a las diez de la noche.
+  const ajena = esDeOtro(tu);
+  if (ajena && !puedo("turno_cerrar_ajeno")) return pintarCajaAjena(tu);
+
   $("#dialogoTurno").className = "dialogo dialogo--cierre";
   $("#dialogoTurno").innerHTML = `
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Cerrar caja</h2>
+    ${ajena ? `<div class="aviso-ajena">Esta caja la abrió <b>${esc(tu.abrio)}</b>.
+      La estás cerrando tú, y así va a quedar escrito en el cierre y en el
+      registro del mes.</div>` : ""}
     <div class="cierre">
       <div class="cierre__col">
         <div class="cierre__paso"><b>1</b> Cuenta la plata del cajón</div>
@@ -1231,6 +1271,13 @@ function reiniciarInactividad() {
 
 ["pointerdown", "keydown"].forEach((evt) =>
   document.addEventListener(evt, reiniciarInactividad, true));
+
+// El margen escrito a mano. Va como oyente global y no colgado del campo porque
+// el recuadro se rehace cada vez que cambia el costo.
+document.addEventListener("input", (e) => {
+  const campo = e.target.closest && e.target.closest("[data-margen-libre]");
+  if (campo) elegirMargen(soloNumeros(campo.value));
+});
 
 /* ---------------- bodega ----------------
    Lo que hay guardado y el libro de lo que entró y salió. El stock se descuenta
@@ -1881,6 +1928,112 @@ function dialogoCierre(turnoId) {
    El atajo para lo que se compra hecho y se vende igual: un pastel, un alfajor,
    una botella. Sin esto había que entender la palabra "insumo" y crear uno a
    mano, que es exactamente donde la gente se pierde. */
+/* ---------------- cuánto cobrar ----------------
+   Hasta acá el precio se ponía a ojo y el margen se veía DESPUÉS, cuando ya
+   estaba decidido. Esto lo da vuelta: escribes lo que te cuesta y la pantalla
+   propone un precio, que se toma o se pisa.
+
+   El margen es SOBRE LA VENTA, no sobre el costo. Es la trampa clásica de poner
+   precios —un 50% de margen es cobrar el doble; "50% sobre el costo" sería
+   cobrar 1,5 veces y se gana bastante menos—, así que la pantalla escribe las
+   dos formas al lado y no obliga a nadie a saberse la diferencia.
+
+   La cuenta vive SOLO acá y no también en el servidor a propósito: es una
+   sugerencia que se recalcula con cada tecla, nunca un dato que se guarde.
+   Lo que sí guarda el servidor es el margen elegido (tabla Ajuste). */
+let AJUSTES = { margen_sugerido: 50, redondeo_precio: 50 };
+
+async function cargarAjustes() {
+  try { AJUSTES = { ...AJUSTES, ...(await api("/ajustes")) }; }
+  catch (e) { }        // con los valores por defecto la caja funciona igual
+}
+
+function precioSugerido(costo, margenPct) {
+  costo = Math.max(0, Math.round(costo) || 0);
+  if (!costo) return 0;
+  // 100% de margen es precio infinito: el tope lo pone el servidor, pero acá
+  // también, porque el campo lo escribe una persona.
+  const m = Math.min(Math.max(Math.round(margenPct) || 0, 0), 95);
+  const bruto = costo * 100 / (100 - m);
+  const paso = AJUSTES.redondeo_precio || 1;
+  // Hacia ARRIBA: el margen pedido es un piso, no algo que el redondeo se coma.
+  return Math.ceil(bruto / paso) * paso;
+}
+
+/* El recuadro del sugerido. `destino` es el id del campo de precio que se pisa
+   al aceptar; sin costo escrito no se dibuja nada. */
+function bloqueSugerido(costo, destino) {
+  if (!costo) return "";
+  return `
+    <div class="sugerido" data-costo="${costo}" data-destino="${destino}">
+      <div class="sugerido__tit">Qué cobrar</div>
+      <div class="sugerido__cifra">
+        <b data-sug-precio></b>
+        <button class="btn btn--chico" data-usar-sugerido>Usar este precio</button>
+      </div>
+      <p class="sugerido__cuenta" data-sug-cuenta></p>
+      <div class="sugerido__margenes">
+        <span>Margen</span>
+        ${[40, 50, 60, 70, 75].map((c) => `<button class="chip"
+          data-margen="${c}">${c}%</button>`).join("")}
+        <input type="text" inputmode="numeric" data-margen-libre
+               aria-label="Otro margen"><span>%</span>
+      </div>
+    </div>`;
+}
+
+/* Recalcula los números SIN rehacer el recuadro: si se rehiciera, el campo del
+   margen perdería el foco a media escritura. */
+function refrescarSugerido() {
+  const caja = $(".sugerido");
+  if (!caja) return;
+  const costo = +caja.dataset.costo || 0;
+  const m = AJUSTES.margen_sugerido;
+  const precio = precioSugerido(costo, m);
+  const veces = costo ? (precio / costo).toFixed(1).replace(".", ",") : "0";
+
+  caja.querySelector("[data-sug-precio]").textContent = clp(precio);
+  caja.querySelector("[data-sug-cuenta]").innerHTML =
+    `Te quedan <b>${clp(precio - costo)}</b> de cada venta · es <b>${veces} veces</b> `
+    + `lo que te costó. El IVA ya va incluido en ese precio.`;
+  caja.querySelectorAll("[data-margen]").forEach((b) =>
+    b.classList.toggle("is-on", +b.dataset.margen === m));
+  const libre = caja.querySelector("[data-margen-libre]");
+  if (document.activeElement !== libre) libre.value = m;
+}
+
+function repintarSugerido(costo) {
+  const caja = $(".sugerido");
+  if (!caja) {
+    const zona = $("#zonaSugerido");
+    if (zona) { zona.innerHTML = bloqueSugerido(costo, "fPrecio"); refrescarSugerido(); }
+    return;
+  }
+  if (!costo) return caja.remove();
+  caja.dataset.costo = costo;
+  refrescarSugerido();
+}
+
+/* Guardar el margen es del dueño: es cuánto gana el local, no una preferencia
+   de pantalla. Si no puede guardarlo, igual se le mueve el sugerido en su
+   pantalla — negarle la cuenta no protege nada. */
+let relojMargen = null;
+
+function elegirMargen(pct) {
+  AJUSTES.margen_sugerido = Math.min(Math.max(Math.round(pct) || 0, 0), 95);
+  refrescarSugerido();               // el número se mueve al toque
+  if (!puedo("config")) return;      // el cajero lo mueve en su pantalla y ya
+
+  // El guardado espera: escribir "60" a mano son dos teclas, y sin esto serían
+  // dos escrituras a la base, la primera con un 6 que nadie quiso guardar.
+  clearTimeout(relojMargen);
+  relojMargen = setTimeout(() => {
+    api("/ajustes", { method: "PUT",
+      body: JSON.stringify({ margen_sugerido: AJUSTES.margen_sugerido }) })
+      .catch(() => { });             // no poder guardarlo no invalida la cuenta
+  }, 700);
+}
+
 async function pintarTalCual(p) {
   const zona = $("#zonaTalCual");
   if (!zona) return;
@@ -1895,12 +2048,16 @@ async function pintarTalCual(p) {
       <p class="ayuda" style="margin:0 0 8px">
         ${simple
           ? `Se descuenta de <b>${esc(l.nombre)}</b>. Quedan <b>${esc(l.stock_muestra)}</b>.`
-          : `Lleva ${receta.lineas.length} ingredientes. Cuesta
-             <b>${clp(receta.costo_total)}</b> y deja <b>${clp(receta.margen)}</b>
-             de margen.`}
+          : `Lleva ${receta.lineas.length} ingredientes.`}
         ${receta.alcanza_para != null
           ? ` Con lo que hay alcanza para <b>${receta.alcanza_para}</b>.` : ""}
-      </div>`;
+      </p>
+      ${receta.costo_total ? `
+        <p class="ayuda" style="margin:0 0 10px">Te cuesta
+          <b>${clp(receta.costo_total)}</b> y lo vendes a <b>${clp(p.precio)}</b>:
+          te quedan <b>${clp(receta.margen)}</b> (${receta.margen_pct}%).</p>
+        ${bloqueSugerido(receta.costo_total, "fPrecio")}` : ""}`;
+    refrescarSugerido();
     return;
   }
 
@@ -1917,7 +2074,12 @@ async function pintarTalCual(p) {
       <label class="campo"><span>Avísame bajo</span>
         <input id="tcMinimo" type="text" inputmode="numeric" placeholder="0"></label>
     </div>
+    <div id="zonaSugerido"></div>
     <button class="btn" data-tal-cual="${p.id}">Se vende tal cual</button>`;
+
+  // El sugerido aparece en cuanto hay un costo escrito, y se recalcula solo.
+  const costo = $("#tcCosto");
+  costo.addEventListener("input", () => repintarSugerido(soloNumeros(costo.value)));
 }
 
 async function marcarTalCual(id) {
@@ -2057,6 +2219,22 @@ document.addEventListener("click", (e) => {
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
   if (t.id === "crearPrimero") return crearPrimerUsuario();
   if (t.id === "quienEsta" || t.closest("#quienEsta")) return salirDeLaCaja("cambio");
+  if (t.id === "cambiarParaCerrar" || t.closest("#cambiarParaCerrar")) {
+    $("#capaTurno").classList.remove("is-on");
+    return salirDeLaCaja("cambio");
+  }
+
+  // ---- cuanto cobrar ----
+  if (cerca("data-usar-sugerido")) {
+    const caja = cerca("data-usar-sugerido").closest(".sugerido");
+    const campo = $("#" + caja.dataset.destino);
+    if (!campo) return avisar("No encuentro el campo del precio", true);
+    campo.value = precioSugerido(+caja.dataset.costo, AJUSTES.margen_sugerido);
+    campo.dispatchEvent(new Event("input", { bubbles: true }));
+    // No se guarda solo: el precio se escribe cuando la persona toca Guardar.
+    return avisar("Precio puesto. Puedes cambiarlo antes de guardar.");
+  }
+  if (cerca("data-margen")) return elegirMargen(+cerca("data-margen").dataset.margen);
 
   // ---- el equipo ----
   if (t.closest("#verEquipo")) return dialogoEquipo();
@@ -2190,6 +2368,7 @@ document.addEventListener("keydown", (e) => {
   if (!SESION.entrado) await mostrarCandado();
   else reiniciarInactividad();
 
+  await cargarAjustes();
   await cargarCarta();
   await cargarTurno();
   cargarVersion();

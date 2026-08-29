@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 # La versión tiene que coincidir con la de version.json cuando se publica.
 # Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
 # novedades entre versiones, o nadie distingue una de otra.
-APP_VERSION = "1.9"
-APP_NOMBRE = "Todo a la vista"
+APP_VERSION = "2.0"
+APP_NOMBRE = "La caja tiene dueño"
 VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
 
 # De dónde se enteran las cajas de que hay una versión nueva.
@@ -80,13 +80,20 @@ NOMBRE_ROL = {"dueno": "Dueño", "cajero": "Cajero"}
 PERMISOS = {
     "dueno": (
         "vender", "anular", "anular_pasado",
-        "turno_abrir", "turno_cerrar",
+        "turno_abrir", "turno_cerrar", "turno_cerrar_ajeno",
         "ver_dia", "ver_informes", "editar_carta",
         "inventario", "inventario_ajustar",
         "usuarios", "config",
     ),
     # El cajero vende y cuadra su caja. No edita precios ni corrige el pasado:
     # no es desconfianza, es que un error suyo ahí no lo puede deshacer nadie.
+    #
+    # OJO con "turno_cerrar": lo tienen los dos, pero NO alcanza solo. Cerrar es
+    # firmar que el cajón que se contó en la mañana cuadra en la noche, así que
+    # además se compara Turno.abierto_por_id con quien pide el cierre (ver
+    # apps/pos/api/turnos.py). El que pasa por encima de esa comparación es
+    # "turno_cerrar_ajeno", que tiene solo el dueño. Si lees esta tupla sin leer
+    # esto, vas a creer que el cajero cierra cualquier caja, y no es así.
     "cajero": (
         "vender", "anular",
         "turno_abrir", "turno_cerrar",
@@ -161,6 +168,21 @@ def total_del_conteo(conteo: dict) -> int:
         if v in DENOMINACIONES and c > 0:
             total += v * c
     return total
+
+# ---------------------------------------------------------------------------
+# Cuánto cobrar
+# ---------------------------------------------------------------------------
+# El margen es SOBRE LA VENTA, no sobre el costo, y es la trampa clásica de
+# poner precios: un 50% de margen es cobrar el DOBLE del costo; "50% sobre el
+# costo" sería cobrar 1,5 veces y se gana mucho menos. Se usa sobre la venta
+# porque es la misma cuenta que ya muestra `margen_pct` de la receta, y dos
+# definiciones distintas del mismo número en la misma pantalla confunden más
+# que no tener ninguna. La pantalla muestra las dos formas escritas al lado.
+MARGEN_SUGERIDO = 50            # % de la venta que se queda el local
+
+# Nadie cobra $2.437. El sugerido sube al múltiplo de $50 de arriba: así el
+# margen pedido es un PISO y no algo que el redondeo se come.
+REDONDEO_PRECIO = 50
 
 NOMBRE_LOCAL = os.getenv("POS_LOCAL", "Kofe")
 AVISOS = [

@@ -59,7 +59,9 @@ Qué hay en cada carpeta
 
   1 - Instalar en un local
       El ZIP que se le pasa a un local nuevo, y la guía de instalación.
-      Se extrae y se abre Kofe.exe. No necesita instalar nada más.
+      Se extrae y se abre Kofe.exe (o INICIAR-POS.bat si Windows bloquea
+      el .exe). Queda un icono en el escritorio y de ahí en adelante se
+      abre con ese icono, sin ventana negra al lado.
 
   2 - Guías
       Cómo se usa la caja, cómo conectar la boleta del SII, y cómo publico

@@ -17,7 +17,8 @@ from apps.pos import sesion
 from apps.pos.db.models import Presencia, Turno, Usuario, Venta
 from apps.pos.db.session import get_session
 from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_MEDIO, a_local, ahora,
-                         como_utc, hoy_local, rango_utc_del_dia, total_del_conteo)
+                         como_utc, hoy_local, puede, rango_utc_del_dia,
+                         total_del_conteo)
 from core.schemas import AbrirTurnoIn, CerrarTurnoIn
 
 router = APIRouter(prefix="/api/v1/turnos", tags=["turnos"])
@@ -136,6 +137,10 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         "nota": t.nota,
         "abrio": _nombre(s, t.abierto_por_id) or t.cajero,
         "cerro": _nombre(s, t.cerrado_por_id),
+        # El ID y no solo el nombre: dos personas distintas pueden llamarse
+        # igual (el chequeo de nombre repetido solo mira a los ACTIVOS, así que
+        # un "Javi" que sacaron y un "Javi" nuevo conviven sin problema).
+        "abierto_por_id": t.abierto_por_id,
         # Quiénes pasaron por la caja durante el turno. Es la respuesta a
         # "¿quién estuvo?", que no es lo mismo que "¿quién vendió?".
         "estuvieron": _estuvieron(s, t),
@@ -147,6 +152,46 @@ def _nombre(s: Session, usuario_id: int | None) -> str:
         return ""
     u = s.get(Usuario, usuario_id)
     return u.nombre if u else ""
+
+
+def _quien_la_abrio(s: Session, t: Turno) -> tuple[int | None, str]:
+    """(id, nombre) de quien abrió esta caja, o (None, "") si no la reclamó nadie.
+
+    Devolver None NO es un detalle: es lo que hace que la regla no trabe cajas
+    que ya existían. Hay tres formas legítimas de que un turno no tenga dueño:
+
+      · se abrió antes de que existieran los usuarios (todos los turnos de la
+        base del local están así, incluido el que está abierto ahora mismo);
+      · se abrió en modo provisorio, cuando todavía no había nadie creado;
+      · lo creó la carta de ejemplo.
+
+    Y una cuarta, ilegítima pero posible: que la fila del usuario ya no exista
+    porque alguien la borró a mano en SQLite. También cuenta como "sin dueño":
+    una caja que nadie puede nombrar no puede ser una caja que nadie puede
+    cerrar.
+    """
+    if not t.abierto_por_id:
+        return None, ""
+    u = s.get(Usuario, t.abierto_por_id)
+    if not u:
+        return None, ""
+    return u.id, u.nombre
+
+
+def _no_es_tuya(s: Session, t: Turno) -> str:
+    """El 403 tiene que decirle al cajero QUÉ HACER, no solo que no puede.
+
+    Un "no tienes permiso" a las diez de la noche, con el cajón contado y el
+    local cerrando, no resuelve nada.
+    """
+    _, nombre = _quien_la_abrio(s, t)
+    quien_abrio = nombre or t.cajero or "otra persona"
+    u = s.get(Usuario, t.abierto_por_id) if t.abierto_por_id else None
+    if u and not u.activo:
+        return (f"Esta caja la abrió {quien_abrio}, que ya no entra a la caja. "
+                "La tiene que cerrar el dueño.")
+    return (f"Esta caja la abrió {quien_abrio}: la cierra {quien_abrio} o el dueño. "
+            "Es para que el descuadre tenga a quién preguntarle.")
 
 
 def _estuvieron(s: Session, t: Turno) -> list[dict]:
@@ -234,6 +279,10 @@ def cerrar(datos: CerrarTurnoIn, s: Session = Depends(get_session),
     t = turno_abierto(s)
     if not t:
         raise HTTPException(409, "No hay ningún turno abierto")
+
+    dueno_del_turno, _ = _quien_la_abrio(s, t)
+    if dueno_del_turno and dueno_del_turno != quien.get("id")             and not puede(quien.get("rol", ""), "turno_cerrar_ajeno"):
+        raise HTTPException(403, _no_es_tuya(s, t))
 
     esperado = t.monto_inicial + _efectivo_del_turno(s, t)
     contado = total_del_conteo(datos.conteo) if datos.conteo else datos.efectivo_contado

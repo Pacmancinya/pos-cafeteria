@@ -23,7 +23,11 @@ from core.config import NOMBRE_MEDIO, RAIZ, a_local
 CARPETA = os.path.join(RAIZ, "registros")
 
 CABECERA = [
-    "Fecha", "Abrió", "Cerró", "Quiénes estuvieron",
+    # "Cerró otra persona" es una columna aparte y no un detalle que se saque
+    # comparando "Abrió" y "Cerró" a ojo: es la excepción a la regla de que la
+    # caja la cierra quien la abrió, y en un Excel de 30 filas una columna que
+    # dice SÍ se filtra en un clic. Dos columnas que hay que comparar, no.
+    "Fecha", "Abrió", "Cerró", "Cerró otra persona", "Quiénes estuvieron",
     "Fondo inicial", "Ventas en efectivo", "Efectivo esperado",
     "Efectivo contado", "Diferencia",
     "Queda de fondo", "Se retira",
@@ -66,7 +70,10 @@ def anotar_cierre(turno: dict) -> str:
 
         fila = [
             cerrado[:16].replace("T", " "),
-            turno.get("abrio", ""), turno.get("cerro", ""), estuvieron,
+            turno.get("abrio", ""), turno.get("cerro", ""),
+            "SÍ" if (turno.get("cerro") and turno.get("abrio")
+                     and turno["cerro"] != turno["abrio"]) else "",
+            estuvieron,
             turno.get("monto_inicial", 0), turno.get("ventas_efectivo", 0),
             turno.get("efectivo_esperado", 0), turno.get("efectivo_contado", 0),
             turno.get("diferencia", 0),

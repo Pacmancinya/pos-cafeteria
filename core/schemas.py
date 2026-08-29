@@ -5,7 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from core.config import MEDIOS_PAGO, ROLES, UNIDADES
+from core.config import MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES, UNIDADES
 
 
 class LineaIn(BaseModel):
@@ -214,3 +214,11 @@ class AplicarImportacionIn(BaseModel):
     # Saca de la venta lo que la caja tenía y el archivo no trae. Va aparte y
     # en falso por defecto: un archivo incompleto no puede borrar una carta.
     sacar_lo_que_no_vino: bool = False
+
+
+class AjustesIn(BaseModel):
+    """Las preferencias del local. Solo lo que hoy se puede cambiar."""
+    # 100% de margen es un precio infinito, y sobre 95 el sugerido se dispara
+    # tanto que deja de ser una sugerencia. El tope es para que la pantalla no
+    # muestre un disparate, no para decirle al dueño cuánto ganar.
+    margen_sugerido: int = Field(default=MARGEN_SUGERIDO, ge=0, le=95)

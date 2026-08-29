@@ -91,8 +91,13 @@ Guárdala.
 
 ### Que se abra con un clic desde el Escritorio
 
-Clic derecho en `Kofe.exe` → **Mostrar más opciones** → **Enviar a** →
-**Escritorio (crear acceso directo)**.
+**No hay que hacer nada.** La primera vez que arranca, la caja deja sola un icono
+«Kofe - Punto de venta» en el escritorio, apuntando al lanzador que de verdad sirve en
+ese equipo. Si el dueño lo borra, no se vuelve a crear: se entiende que no lo quiere.
+
+No lo crees a mano con **Enviar a → Escritorio**: eso apunta al archivo sobre el que
+hiciste clic derecho, y en un equipo donde el `.exe` está bloqueado ese icono no abre
+nada. El que crea el programa ya eligió bien.
 
 Para dejarlo en la barra de tareas: abre el programa, clic derecho en su icono de la barra
 → **Anclar a la barra de tareas**.
@@ -100,7 +105,8 @@ Para dejarlo en la barra de tareas: abre el programa, clic derecho en su icono d
 ### Que se abra solo al prender el computador
 
 1. Tecla **Windows + R**, escribe `shell:startup` y Enter.
-2. Se abre una carpeta. Arrastra ahí el acceso directo que creaste.
+2. Se abre una carpeta. Copia ahí el icono «Kofe - Punto de venta» del escritorio
+   (cópialo, no lo arrastres: arrastrar lo MUEVE y desaparece del escritorio).
 
 ### Que no se apague la pantalla
 

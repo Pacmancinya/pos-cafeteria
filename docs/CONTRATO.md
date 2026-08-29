@@ -47,7 +47,7 @@ alturas distintas sin que nadie lo decidiera. Los campos numéricos usan el tecl
 **7. El stock avisa, no bloquea.** Nunca, bajo ninguna configuración, la falta de stock
 puede impedir cobrar una venta. Ver la sección de inventario.
 
-**9. Reiniciar el programa pide el PIN de nuevo, pero no pierde nada.** Las galletas
+**8. Reiniciar el programa pide el PIN de nuevo, pero no pierde nada.** Las galletas
 emitidas antes de que arrancara el proceso (`sesion.ARRANQUE`) no valen. Es la única
 respuesta honesta a un corte de luz: el programa no tiene cómo saber si al volver está la
 misma persona frente a la pantalla, y con la sesión viva, cualquiera que prenda el
@@ -57,11 +57,39 @@ viven en la base o en el equipo. Al arrancar se cierran además las presencias q
 abiertas, con `salida_por="corte"`: si no, el turno diría que esa persona estuvo en la caja
 durante días.
 
-**8. Un diálogo donde se cuenta plata no se cierra solo.** Las capas con trabajo adentro
+**9. Un diálogo donde se cuenta plata no se cierra solo.** Las capas con trabajo adentro
 (el arqueo de caja, el conteo de bodega) llevan `.capa--firme`: ni un toque en el fondo ni
 la tecla Escape las cierran. Además el conteo del cajón se guarda en el equipo mientras se
 cuenta y se recupera al reabrir. Perder un arqueo a medio contar obliga a contar el cajón
 entero de nuevo, y pasó de verdad.
+
+**10. La caja la cierra quien la abrió, o el dueño.** El cierre no es un trámite: es la
+firma de que el cajón que se contó en la mañana cuadra en la noche. Quien abrió es el único
+que sabe con cuánto partió el cajón y qué pasó durante el día, así que si cierra otro, el
+descuadre queda sin dueño — no hay a quién preguntarle dónde estuvo el error, y la
+diferencia se le carga a alguien que no contó ese fondo. Por eso el permiso `turno_cerrar`
+**no alcanza solo**: además se compara `Turno.abierto_por_id` con quien pide el cierre. El
+dueño pasa por encima siempre (`turno_cerrar_ajeno`), y no es un privilegio decorativo: el
+caso real es el cajero que se fue a las 19:00 sin cerrar, y una caja abierta hasta el día
+siguiente parte el arqueo en dos jornadas.
+
+> **Un turno sin `abierto_por_id` es de NADIE, no de otro.** Están así todos los turnos
+> anteriores a que existieran los usuarios —los nueve de la base del local, incluido el que
+> estaba abierto cuando se escribió esto—, los abiertos en modo provisorio y los de la carta
+> de ejemplo. Una guarda escrita como `abierto_por_id != mi_id` los deja imposibles de
+> cerrar. Tiene que ser `is not None and != mi_id`. Lo mismo si la fila del usuario ya no
+> existe: una caja que nadie puede nombrar no puede ser una caja que nadie puede cerrar.
+
+**11. El precio guardado es el que paga el cliente; el margen es sobre la venta.** Nadie
+le suma IVA a nada: `Producto.precio` es bruto (decisión 1) y el neto sale por diferencia
+en el informe. Sobre el margen sugerido, la definición es **sobre la venta** —
+`(precio − costo) / precio` — y no sobre el costo. Es la misma cuenta que `margen_pct` de
+la receta ya mostraba, y usar dos definiciones distintas del mismo número en la misma
+pantalla confunde más que no tener ninguna. Como la confusión cuesta plata de verdad (un
+"50% sobre el costo" gana la mitad que un 50% de margen), la pantalla escribe siempre las
+dos formas al lado: cuánto queda y cuántas veces el costo es el precio. El sugerido
+redondea SIEMPRE hacia arriba, para que el margen pedido sea un piso y no algo que el
+redondeo se come.
 
 ---
 
@@ -329,7 +357,9 @@ exactamente una cosa — todos marcan su PIN una vez más.
 
 | Permiso | Dueño | Cajero |
 |---|:--:|:--:|
-| vender, anular, abrir y cerrar caja, ver el día | ✅ | ✅ |
+| vender, anular, abrir caja, ver el día | ✅ | ✅ |
+| cerrar la caja que abrió esa misma persona | ✅ | ✅ |
+| cerrar una caja que abrió otro (`turno_cerrar_ajeno`) | ✅ | — |
 | ver la bodega y anotar compras y mermas | ✅ | ✅ |
 | editar la carta, informes, respaldos | ✅ | — |
 | ajustar stock (conteo físico), crear usuarios | ✅ | — |
@@ -339,6 +369,13 @@ exactamente una cosa — todos marcan su PIN una vez más.
 > lo es: a las 8 de la mañana el dueño no está, y el cajero terminaría dejando la venta
 > mala adentro — que descuadra la caja al cierre. El control es que toda anulación queda
 > con autor y motivo, no que no se pueda hacer.
+
+> El cajero **no** cierra la caja de otro, y ahí sí se le corta el paso. No es el mismo
+> caso que la anulación: una venta mala que queda adentro descuadra la caja, o sea que
+> impedirla causa el daño. Un cierre firmado por quien no contó el fondo no arregla nada —
+> el cajón ya está contado o no lo está— y en cambio borra al único testigo del descuadre.
+> La pantalla avisa ANTES de que se cuente un solo billete, con el nombre de quien la
+> abrió: enterarse después de contar sería hacerle contar la plata entera para nada.
 
 ### Inventario `[IMPL]`
 ```

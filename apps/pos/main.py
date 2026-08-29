@@ -15,8 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from apps.pos import acceso
-from apps.pos.api import (actualizaciones, catalogo, datos, impresion, importar,
-                          inventario, turnos, usuarios, ventas)
+from apps.pos.api import (actualizaciones, ajustes, catalogo, datos, impresion,
+                          importar, inventario, turnos, usuarios, ventas)
 from apps.pos.db.models import Turno
 from apps.pos.db.session import crear_tablas, engine
 from core.config import HOST, NOMBRE_LOCAL, PIN, PUERTO, VERSION, ip_en_la_red
@@ -83,6 +83,7 @@ app.include_router(actualizaciones.router)
 app.include_router(usuarios.router)
 app.include_router(inventario.router)
 app.include_router(importar.router)
+app.include_router(ajustes.router)
 
 
 @app.get("/api/v1/salud")

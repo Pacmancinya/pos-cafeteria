@@ -873,3 +873,42 @@ html,body{overscroll-behavior:none}
 .equipo__quien b{display:block;font-size:15.5px}
 .equipo__quien small{color:var(--suave);font-size:12.5px}
 .equipo__ir{color:var(--clay);font-size:13.5px;font-weight:700}
+
+/* ---------- qué cobrar: el precio sugerido ---------- */
+.sugerido{
+  border:1px solid #CBE0D2;background:#F2F9F4;border-radius:12px;
+  padding:13px 15px;margin:2px 0 14px;
+}
+.sugerido__tit{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:#3F7355;margin-bottom:6px;
+}
+.sugerido__cifra{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sugerido__cifra b{font-size:30px;font-variant-numeric:tabular-nums;color:#14603A}
+.sugerido__cuenta{font-size:13.5px;color:var(--suave);line-height:1.55;margin:6px 0 10px}
+.sugerido__cuenta b{color:var(--tinta)}
+.sugerido__margenes{
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  border-top:1px solid #DCEBE1;padding-top:10px;
+}
+.sugerido__margenes>span{font-size:12.5px;color:var(--suave);font-weight:600}
+.sugerido__margenes input{
+  width:62px;height:var(--toque);text-align:right;padding:0 8px;
+  border:1px solid var(--linea);border-radius:9px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:15px;font-variant-numeric:tabular-nums;
+}
+.sugerido__margenes input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.chip{
+  min-height:var(--toque);padding:0 14px;border-radius:9px;font-size:14.5px;
+  font-weight:600;border:1px solid var(--linea);background:var(--tarjeta);
+  color:var(--suave);font-variant-numeric:tabular-nums;touch-action:manipulation;
+}
+.chip:hover{background:#F1E4D2;color:var(--tinta)}
+.chip.is-on{background:#14603A;border-color:#14603A;color:#fff}
+
+/* ---------- la caja la abrió otra persona ---------- */
+.aviso-ajena{
+  background:#FFF6E9;border:1px solid #EBD7B4;border-radius:11px;
+  padding:11px 14px;margin-bottom:16px;font-size:14px;line-height:1.55;
+  color:var(--tinta);
+}

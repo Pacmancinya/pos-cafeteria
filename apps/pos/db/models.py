@@ -181,6 +181,21 @@ class Insumo(SQLModel, table=True):
     compra_costo: int = 0                 # CLP enteros que cuesta ese formato
 
 
+class Ajuste(SQLModel, table=True):
+    """Las preferencias del local. Una fila por decisión, en texto.
+
+    Existe por el margen sugerido, y por qué no vive en el navegador: cuánto le
+    gana el local a lo que vende es una decisión del NEGOCIO, no de este
+    computador. Si viviera en el localStorage, se perdería al reinstalar y
+    sería distinta abriendo la caja desde un tablet.
+
+    El valor va como texto a propósito: así una preferencia nueva no obliga a
+    una migración. Quien lee sabe qué esperaba y convierte.
+    """
+    clave: str = Field(primary_key=True)
+    valor: str = ""
+
+
 class Receta(SQLModel, table=True):
     """Una fila = un ingrediente de un producto.
 

@@ -93,8 +93,6 @@ echo [3/3] Cargando la carta de ejemplo...
 "%PYTHON%" -m tools.demo.seed
 :carta_ok
 
-"%PYTHON%" -m tools.datos_de_red
-
 REM --- 4. Abrir la caja ---
 REM Se abre con pythonw.exe, que viene firmado por la Python Software
 REM Foundation, y da exactamente la misma ventana que Kofe.exe.
@@ -107,20 +105,39 @@ if not exist ".venv\Scripts\pythonw.exe" goto sin_ventana
 "%PYTHON%" -c "import webview" >nul 2>&1
 if errorlevel 1 goto sin_ventana
 
-:arrancar_ventana
-echo   Abriendo la caja...
-".venv\Scripts\pythonw.exe" Kofe.py
-if %errorlevel%==3 (
-    echo   Actualizando... el programa se vuelve a abrir solo.
-    timeout /t 2 >nul
-    goto arrancar_ventana
-)
+REM Con "start" el lanzador SUELTA la caja y se va, y esta ventana negra se
+REM cierra sola. Antes la llamada era directa y cmd se quedaba esperando a que
+REM el programa muriera: o sea, la ventana negra abierta toda la jornada, al
+REM lado de la caja, invitando a cerrarla. Y cerrarla mataba la caja de golpe,
+REM sin el apagado limpio, dejando presencias abiertas.
+REM
+REM pythonw.exe es de subsistema GUI: no crea consola propia, y lanzado con
+REM "start" tampoco queda pegado a esta. Por eso sobrevive a que esta ventana
+REM se cierre.
+REM
+REM Se pierde el "%errorlevel%" del programa, y con el, el bucle que lo volvia
+REM a levantar tras una actualizacion. No hace falta ACA: Kofe.py le pasa al
+REM actualizador su propia funcion "relanzar" (Kofe.py, seccion 4), que lanza
+REM la copia nueva desprendida antes de morir. Ojo que en la rama de mas abajo
+REM (:sin_ventana) eso NO pasa, y por eso alla el bucle se queda.
+start "" ".venv\Scripts\pythonw.exe" Kofe.py
 goto fin
 
 :sin_ventana
 REM Plan B: sin la ventana propia, la caja se abre en el navegador. Funciona
 REM igual; solo se ve la barra del navegador arriba.
+REM
+REM ESTA rama SI conserva la ventana negra, y a proposito por dos razones:
+REM   1. Es la unica que vuelve a levantar la caja despues de una
+REM      actualizacion. Aca se corre uvicorn directo, sin pasar por Kofe.py,
+REM      asi que "actualizaciones.reiniciador" queda en None y el unico que
+REM      mira el codigo de salida 3 es el bucle de mas abajo. Con "start" el
+REM      %errorlevel% se pierde y la caja no vuelve nunca mas.
+REM   2. Cerrar la pestana del navegador no apaga el servidor. Sin esta
+REM      ventana no quedaria ninguna forma de apagarlo salvo el administrador
+REM      de tareas.
 echo   (Se abrira en el navegador: falta la libreria de la ventana propia.)
+"%PYTHON%" -m tools.datos_de_red
 start "" powershell -NoProfile -WindowStyle Hidden -Command ^
   "for($i=0;$i -lt 60;$i++){try{Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8090/api/v1/salud -TimeoutSec 1 | Out-Null; Start-Process 'http://127.0.0.1:8090'; break}catch{Start-Sleep -Milliseconds 500}}"
 

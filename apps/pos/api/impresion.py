@@ -23,6 +23,19 @@ from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_LOCAL, NOMBRE_MEDIO
 
 router = APIRouter(tags=["impresión"])
 
+
+def _quien(s, usuario_id) -> str:
+    """El nombre de un usuario, aunque lo hayan sacado de la caja.
+
+    A propósito NO filtra por `activo`: el papel de un cierre de marzo tiene que
+    seguir diciendo quién lo firmó, aunque esa persona ya no trabaje ahí.
+    """
+    if not usuario_id:
+        return ""
+    from apps.pos.db.models import Usuario
+    u = s.get(Usuario, usuario_id)
+    return u.nombre if u else ""
+
 PLANTILLA = """<!doctype html>
 <html lang="es-CL"><head><meta charset="utf-8">
 <title>__TITULO__</title>
@@ -206,6 +219,15 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
 
     abre = a_local(t.abierto_at)
     cierra = a_local(t.cerrado_at) if t.cerrado_at else None
+
+    # Quién abrió y quién cerró, con NOMBRE. Normalmente es la misma persona
+    # —la caja la cierra quien la abrió— y por eso se imprime en una sola línea.
+    # Cuando NO lo es, es porque el dueño pasó por encima de la regla, y esa
+    # excepción tiene que verse en el papel que se pega en el cuaderno: si solo
+    # vive en la base, en el mostrador no existe.
+    quien_abrio = _quien(s, t.abierto_por_id) or t.cajero
+    quien_cerro = _quien(s, t.cerrado_por_id)
+    otro_cerro = bool(quien_cerro and quien_abrio and quien_cerro != quien_abrio)
     cuerpo = f"""
     <div class="centro">
       <div class="local">{NOMBRE_LOCAL}</div>
@@ -218,6 +240,8 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
       <tr><td>Abrió</td><td class="num">{abre.strftime('%H:%M')}</td></tr>
       <tr><td>Cerró</td><td class="num">{cierra.strftime('%H:%M') if cierra else '—'}</td></tr>
       <tr><td>Ventas</td><td class="num">{len(ventas)}</td></tr>
+      {f'<tr><td>La abrió</td><td class="num">{quien_abrio}</td></tr>' if quien_abrio else ''}
+      {f'<tr><td><b>La cerró</b></td><td class="num"><b>{quien_cerro}</b></td></tr>' if otro_cerro else ''}
     </table>
     <div class="raya"></div>
     <table>{filas_medio}

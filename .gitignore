@@ -7,6 +7,11 @@
 # La llave que firma las sesiones de una caja. Quien la tenga puede fabricarse
 # una galleta de dueño sin saber ningún PIN.
 .secreto
+# Libreta de a qué apunta el acceso directo de ESTE computador: lleva rutas
+# locales (el escritorio de una persona). Estuvo versionada hasta la 2.0 y no
+# debía: en un clon nuevo aparecía la libreta de otra máquina. El actualizador
+# nunca la tocó porque descarta los archivos que empiezan con punto.
+.acceso-directo
 .env
 
 # La base del local: ventas, usuarios, precios reales.

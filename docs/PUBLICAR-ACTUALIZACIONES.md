@@ -73,8 +73,10 @@ Antes de pisar cada archivo, guarda el anterior en `_version_anterior/`.
 | `respaldos/` | Las copias de esa base |
 | `.venv/` | El motor instalado en ese computador |
 
-Después de instalar, la caja **se reinicia sola** (sale con código 3 y
-`INICIAR-POS.bat` la vuelve a levantar) y la pantalla se recarga cuando el
+Después de instalar, la caja **se reinicia sola**: `Kofe.py` le pasa al
+actualizador su función `relanzar`, que lanza la copia nueva desprendida y
+recién ahí sale con código 3. (En el plan B del navegador, donde no pasa por
+`Kofe.py`, el que la vuelve a levantar es el bucle de `INICIAR-POS.bat`) y la pantalla se recarga cuando el
 servidor responde de nuevo. El dueño no tiene que hacer nada.
 
 ---

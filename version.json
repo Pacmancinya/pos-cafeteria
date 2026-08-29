@@ -1,6 +1,6 @@
 {
-  "version": "1.9",
-  "nombre": "Todo a la vista",
-  "novedades": "Al cerrar caja ya no hay que apretar nada para ver el turno: la pantalla se abre partida en dos, con el conteo del cajón a la izquierda y a la derecha lo vendido por cada forma de pago y los campos para escribir el comprobante de Transbank. Antes eso aparecía recién después de «Ver si cuadra». Lo único que sigue tapado es el efectivo, que se destapa al terminar de contar. Si corriges el conteo, lo que ya escribiste se queda: antes la nota y los totales de la máquina se borraban con cada tecla. Y el «cuadra ✓» de las tarjetas nunca había funcionado — el campo chocaba con los botones del cobro. Nuevo botón Equipo arriba a la derecha: crear cajeros, cambiarles el PIN o el rol y sacarlos de la caja. Hasta ahora solo se podía crear la primera cuenta.",
+  "version": "2.0",
+  "nombre": "La caja tiene dueño",
+  "novedades": "Se acabó la ventana negra: el lanzador abre la caja y se va, así que ya no queda una consola al lado invitando a cerrarla —y cerrarla mataba la caja de golpe, sin apagado limpio. El icono del escritorio se corrige solo para apuntar al lugar correcto. La caja ahora la cierra quien la abrió: a otro cajero la pantalla le dice de quién es ANTES de que cuente un solo billete, y el dueño puede cerrar cualquiera, pero queda escrito en el papel del cierre y en el registro del mes. Y al poner precios ya no hay que hacer la cuenta de cabeza: escribes lo que te cuesta un producto y la caja propone cuánto cobrar, con el margen que elijas, redondeado a algo que se pueda cobrar. Te muestra cuánta plata te queda y cuántas veces el costo es el precio, para que no se confunda el margen sobre la venta con el margen sobre el costo.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }

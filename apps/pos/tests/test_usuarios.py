@@ -254,3 +254,119 @@ def test_una_presencia_que_quedo_abierta_se_cierra_como_corte(cliente, dueno):
         assert cerrar_presencias_abiertas(s, None, "corte") == 1
         p = s.exec(select(Presencia)).first()
         assert p.salio_at is not None and p.salida_por == "corte"
+
+
+# ------------------------------------------- la caja la cierra quien la abrió
+def test_otro_cajero_no_puede_cerrar_la_caja_que_abrio_alguien(cliente, dueno):
+    """El cierre es la firma de que el cajón cuadra. Si lo firma alguien que no
+    contó el fondo de la mañana, el descuadre queda sin dueño."""
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    ana = cliente.post("/api/v1/usuarios",
+                       json={"nombre": "Ana", "pin": "5678", "rol": "cajero"}).json()
+
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": ana["id"], "pin": "5678"})
+    r = cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 10000})
+    assert r.status_code == 403
+    # El mensaje tiene que decir QUÉ HACER, no solo que no se puede: a las diez
+    # de la noche un "no tienes permiso" pelado no resuelve nada.
+    assert "Javi" in r.json()["detail"]
+    assert "dueño" in r.json()["detail"]
+
+
+def test_el_que_la_abrio_si_la_cierra(cliente, dueno):
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi"})
+    r = cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 0})
+    assert r.status_code == 200
+    assert r.json()["abrio"] == "Javi" and r.json()["cerro"] == "Javi"
+
+
+def test_el_dueno_pasa_por_encima_y_queda_escrito(cliente, dueno):
+    """El caso real: el cajero se fue a las 19:00 sin cerrar. Una caja abierta
+    hasta el día siguiente parte el arqueo en dos jornadas."""
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi"})
+
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": dueno["id"], "pin": "1234"})
+    r = cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 0})
+    assert r.status_code == 200
+    # La excepción no puede ser invisible: tiene que quedar quién cerró.
+    assert r.json()["abrio"] == "Javi"
+    assert r.json()["cerro"] == "Ruperto"
+
+
+def test_una_caja_sin_dueno_la_cierra_cualquiera(cliente, dueno):
+    """El caso que casi rompe el local: TODOS los turnos de la base real tienen
+    `abierto_por_id` NULL —son anteriores a que existieran los usuarios—,
+    incluido el que estaba abierto. Una guarda escrita como `!= mi_id` los
+    dejaba imposibles de cerrar. NULL significa "no la reclamó nadie".
+    """
+    from sqlmodel import Session, select
+
+    from apps.pos.db.models import Turno
+    from apps.pos.db.session import engine
+
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Ruperto"})
+    with Session(engine) as s:
+        t = s.exec(select(Turno)).first()
+        t.abierto_por_id = None          # como los turnos viejos de la base real
+        s.add(t)
+        s.commit()
+
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    assert cliente.post("/api/v1/turnos/cerrar",
+                        json={"efectivo_contado": 0}).status_code == 200
+
+
+def test_si_sacaron_al_que_abrio_la_cierra_el_dueno(cliente, dueno):
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi"})
+
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": dueno["id"], "pin": "1234"})
+    cliente.delete(f"/api/v1/usuarios/{javi['id']}")
+    r = cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 0})
+    assert r.status_code == 200
+
+
+def test_el_turno_dice_de_quien_es_para_avisar_antes_de_contar(cliente, dueno):
+    """La pantalla necesita el ID, no el nombre: dos personas distintas pueden
+    llamarse igual si a una la sacaron de la caja."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Ruperto"})
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    assert t["abierto_por_id"] == dueno["id"]
+
+
+def test_el_papel_del_cierre_dice_si_lo_cerro_otra_persona(cliente, dueno):
+    """La excepción tiene que verse en el papel que se pega en el cuaderno. Si
+    solo vive en la base, en el mostrador no existe."""
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi"})
+
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": dueno["id"], "pin": "1234"})
+    t = cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 0}).json()
+
+    papel = cliente.get(f"/cierre/{t['id']}").text
+    assert "La abrió" in papel and "Javi" in papel
+    assert "La cerró" in papel and "Ruperto" in papel
+
+
+def test_el_papel_no_repite_el_nombre_cuando_cierra_el_mismo(cliente, dueno):
+    """Lo normal es que sea la misma persona: ahí una fila 'La cerró' sobra y
+    solo hace más largo un papel de 80 mm."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Ruperto"})
+    t = cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 0}).json()
+    assert "La cerró" not in cliente.get(f"/cierre/{t['id']}").text

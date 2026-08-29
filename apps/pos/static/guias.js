@@ -178,6 +178,17 @@ window.GUIAS = [
        Cuenta el fondo del cajón billete por billete; el total lo suma el
        programa. Si no hay fondo, deja todo en cero.</p>
 
+    <div class="ayuda"><b>La caja la cierra quien la abrió.</b> Si la abrió la
+      Javiera en la mañana, el cierre es de ella: a otro cajero la pantalla le
+      dice de quién es y no lo deja contar. Tú, como dueño, puedes cerrar
+      cualquiera.</div>
+
+    <p>Es porque el fondo del cajón lo contó ella. Si cierra otro, el descuadre
+       queda sin dueño: no hay a quién preguntarle qué pasó a las once, y la
+       diferencia se la come alguien que no contó ese fondo. Y si se fue sin
+       cerrar, la cierras tú — queda escrito que la cerraste tú, en el papel del
+       cierre y en el registro del mes, y eso también sirve.</p>
+
     <h3>En la noche</h3>
     <p>La pantalla se abre partida en dos. A la <b>izquierda</b> cuentas; a la
        <b>derecha</b> está todo lo que necesitas mirar mientras cuentas, desde
@@ -259,8 +270,9 @@ window.GUIAS = [
     <ul>
       <li><b>Dueño:</b> todo. Precios, informes, usuarios, ajustar el stock,
           anular ventas de cajas ya cerradas.</li>
-      <li><b>Cajero:</b> vende, anula lo del turno en curso, abre y cierra su
-          caja, mira la bodega y anota compras y pérdidas.</li>
+      <li><b>Cajero:</b> vende, anula lo del turno en curso, abre la caja y
+          cierra <b>la que abrió él</b>, mira la bodega y anota compras y
+          pérdidas.</li>
     </ul>
     <p>El cajero <b>sí</b> puede anular una venta del turno en curso. Prohibirlo
        suena prudente y no lo es: a las 8 de la mañana no estás, y el cajero
@@ -339,6 +351,52 @@ window.GUIAS = [
        las pantallas siguen andando aunque muevas el notebook.</p>
     <div class="ayuda">Un divisor de HDMI <b>no sirve</b> para esto: manda la
       misma imagen a los dos televisores, y acá cada uno muestra algo distinto.</div>`,
+},
+{
+  id: "cuanto-cobrar",
+  titulo: "¿Cuánto cobro? El IVA y la ganancia",
+  resumen: "Quién pone el IVA y cómo sale el precio.",
+  html: `
+    <h3>El IVA ya va adentro</h3>
+    <p>El precio que escribes es el que paga el cliente. Si pones <b>$2.500</b>,
+       el cliente paga $2.500 — la caja no le suma un 19% encima. Es como
+       cualquier vitrina en Chile.</p>
+    <p>Lo que hace el programa es al revés: <b>separa</b> ese precio cuando hace
+       falta. En la boleta y en el archivo del contador, esos $2.500 aparecen
+       como $2.101 de neto más $399 de IVA. Suman exactamente $2.500: no se
+       pierde ni se gana un peso por redondeo.</p>
+    <div class="ayuda">O sea: <b>nunca</b> escribas el precio sin IVA pensando
+      que la caja se lo agrega. Escribe lo que quieres cobrar.</div>
+
+    <h3>Cuánto cobrar por algo que compraste</h3>
+    <p>Abre el producto y anda a la parte de abajo, donde dice <b>Bodega</b>.
+       Escribe cuánto te cuesta cada uno y aparece un recuadro verde con el
+       precio sugerido.</p>
+    <ul>
+      <li>El botón <b>Usar este precio</b> lo copia arriba. De ahí lo puedes
+          cambiar: es una sugerencia, no una orden.</li>
+      <li>Los botones de <b>margen</b> mueven el sugerido. Ese porcentaje queda
+          guardado para la próxima vez.</li>
+      <li>El sugerido siempre <b>sube</b> al múltiplo de $50 más cercano hacia
+          arriba: nadie cobra $2.437.</li>
+    </ul>
+
+    <h3>Ojo con qué significa el porcentaje</h3>
+    <p>Acá el margen es <b>sobre lo que vendes</b>, no sobre lo que te costó.
+       Es la confusión clásica y cuesta plata de verdad:</p>
+    <ul>
+      <li>Un pastel te cuesta <b>$1.200</b>.</li>
+      <li>Con <b>50% de margen</b> lo cobras <b>$2.400</b>: la mitad de cada
+          venta es tuya. Es cobrar el <b>doble</b> del costo.</li>
+      <li>Si alguien dice "le pongo un 50% al costo" está cobrando $1.800, y se
+          queda con $600 — la mitad de lo anterior.</li>
+    </ul>
+    <p>Por eso el recuadro te escribe siempre las dos formas: cuánta plata te
+       queda, y cuántas veces el costo es el precio. No tienes que acordarte de
+       la diferencia.</p>
+    <div class="ayuda">El margen que elijas es del local, no de este computador:
+      si abres la caja desde otro lado, es el mismo. Cambiarlo es cosa del
+      dueño.</div>`,
 },
 {
   id: "respaldos",

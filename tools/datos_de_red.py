@@ -1,7 +1,10 @@
-"""Muestra en la ventana negra los datos que hacen falta para conectar todo.
+"""Muestra en la consola los datos para conectar el resto del local.
 
-Se corre desde INICIAR-POS.bat justo antes de levantar el servidor, para que el
-dueño no tenga que buscar la IP del computador en ningún lado.
+Ojo dónde se usa: **solo en el plan B**, cuando falta la librería de la ventana
+propia y la caja se abre en el navegador. Ese es el único camino que todavía
+deja una consola abierta. En el arranque normal no se corre, porque el lanzador
+suelta la caja y su ventana se cierra sola — y porque la misma información, con
+botón de copiar, está dentro de la app, en la pestaña Carta.
 
 Ojo: la consola de Windows llega en cp1252 y revienta con acentos. Por eso lo
 primero que hace este archivo es forzar UTF-8 en la salida.
@@ -25,9 +28,10 @@ print(f"""
   Desde otro equipo del local ... http://{ip}:{PUERTO}
   PIN para otros equipos ........ {PIN}
 
-  Para las pantallas del menú, pegar esta dirección:
-      http://{ip}:{PUERTO}/api/v1/carta
+  Para las pantallas del menú, abrir en cada TV:
+      http://{ip}:{PUERTO}/pantallas?p=1     (vitrina)
+      http://{ip}:{PUERTO}/pantallas?p=2     (carta con precios)
 
-  Para cerrar la caja: cierra esta ventana negra.
+  Para cerrar la caja: cierra la ventana del navegador Y esta ventana negra.
 {raya}
 """)
