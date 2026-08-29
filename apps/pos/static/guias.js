@@ -329,6 +329,22 @@ window.GUIAS = [
     <div class="ayuda">La carta le llega sola, desde esta caja. Cada precio que
       cambies acá se ve allá en la siguiente revisión, sin tocar el televisor.</div>
 
+    <h3>Si el televisor la muestra en blanco y sin colores</h3>
+    <p>Se ve fondo blanco, letras negras chicas a la izquierda y botones grises:
+       no es que esté mal la carta, es que <b>el navegador que trae ese televisor
+       es muy viejo</b> y no entiende cómo está hecha la pantalla bonita.</p>
+    <p>Usa la última dirección de la pestaña <b>Carta</b>, la que termina en
+       <b>/simple</b>. Es la misma carta, más sobria —letras grandes, precios a
+       la derecha, sin dibujos— y anda en cualquier televisor. La normal se
+       cambia sola a esa cuando se da cuenta de que el TV no da, pero si no lo
+       hizo, escíbela a mano.</p>
+    <div class="ayuda">Para saber qué tan viejo es ese navegador, agrégale
+      <b>?diag=1</b> al final de la dirección simple. Sale en grande lo que el
+      televisor entiende y lo que no. Sirve para pedir ayuda con datos.</div>
+    <p>Si quieres la pantalla bonita en ese televisor, la salida es un aparatito
+       barato conectado al TV —Chromecast, Fire Stick o una caja Android— y abrir
+       la dirección desde ahí. Esos traen un navegador de verdad.</p>
+
     <h3>Si se ve cortada por los bordes</h3>
     <p>Casi todos los televisores <b>recortan entre 3% y 5%</b> de cada borde
        cuando reciben por HDMI. No es la pantalla, es el TV.</p>

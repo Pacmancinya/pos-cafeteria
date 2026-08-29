@@ -138,3 +138,25 @@ def pantallas():
         http://<ip-de-la-caja>:8090/pantallas?p=2   → la carta con precios
     """
     return FileResponse(os.path.join(ESTATICOS, "pantallas.html"))
+
+
+@app.get("/pantallas/simple")
+def pantallas_simple():
+    """La misma carta, para el navegador que trae el televisor.
+
+    Existe porque el navegador de un smart TV no es un navegador. En el
+    televisor del local, `pantallas.html` se vio SIN NINGUN ESTILO: fondo
+    blanco, texto negro y los botones grises del sistema.
+
+    Esta versión no usa nada que un navegador de 2015 pueda no entender: ni
+    variables CSS, ni Grid, ni fuentes incrustadas, y el JavaScript es de los
+    de `var` y `XMLHttpRequest`. Se ve más sobria y funciona en cualquier cosa
+    que tenga pantalla.
+
+    `pantallas.html` manda para acá SOLA cuando detecta que el navegador no da,
+    así que el dueño puede seguir pegando la dirección de siempre.
+
+        http://<ip-de-la-caja>:8090/pantallas/simple
+        http://<ip-de-la-caja>:8090/pantallas/simple?diag=1   → qué entiende el TV
+    """
+    return FileResponse(os.path.join(ESTATICOS, "pantallas-simple.html"))

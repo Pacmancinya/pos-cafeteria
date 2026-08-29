@@ -912,3 +912,10 @@ html,body{overscroll-behavior:none}
   padding:11px 14px;margin-bottom:16px;font-size:14px;line-height:1.55;
   color:var(--tinta);
 }
+
+/* La dirección de respaldo para televisores viejos: se separa de las tres
+   normales para que no parezca una cuarta pantalla que haya que conectar. */
+.conectar__url--simple{
+  margin-top:12px;padding-top:12px;border-top:1px dashed var(--linea);
+}
+.conectar__url--simple .conectar__cual{color:var(--clay)}

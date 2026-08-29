@@ -79,3 +79,43 @@ def test_las_pantallas_se_abren_sin_pin_desde_la_red(cliente):
 def test_las_pantallas_traen_su_direccion_en_salud(cliente):
     s = cliente.get("/api/v1/salud").json()
     assert s["pantallas_url"].endswith("/pantallas")
+
+
+def test_la_pantalla_para_tv_viejo_tambien_se_abre_sin_pin(cliente):
+    """Es la que se usa JUSTO cuando algo no funciona: pedirle un PIN a un
+    televisor que ya se vio en blanco sería el peor momento posible."""
+    with remoto() as r:
+        resp = r.get("/pantallas/simple")
+        assert resp.status_code == 200
+        assert "/api/v1/carta" in resp.text
+
+
+def test_la_pantalla_para_tv_viejo_no_usa_nada_moderno(cliente):
+    """El navegador de un smart TV puede ser de 2015. Si alguien "moderniza"
+    este archivo, deja de servir para lo único que existe.
+
+    No es un test de estilo: cada cosa de esta lista es un motivo real por el
+    que la página se vería en blanco en el televisor del local.
+    """
+    import re
+
+    pagina = cliente.get("/pantallas/simple").text
+    # Los comentarios se sacan primero: el archivo EXPLICA que no usa nada de
+    # esto, y ese texto haría fallar el test por decir la verdad.
+    pagina = re.sub(r"<!--.*?-->", "", pagina, flags=re.S)
+    pagina = re.sub(r"/\*.*?\*/", "", pagina, flags=re.S)
+    pagina = re.sub(r"(?m)^\s*//.*$", "", pagina)
+
+    prohibido = {
+        "var(--": "variables CSS",
+        "display:grid": "CSS Grid",
+        "display: grid": "CSS Grid",
+        "@font-face": "fuentes incrustadas",
+        "=>": "funciones flecha",
+        "`": "template literals",
+        "fetch(": "fetch()",
+        "const ": "declaraciones const",
+        "let ": "declaraciones let",
+    }
+    encontrados = [q for c, q in prohibido.items() if c in pagina]
+    assert not encontrados, f"la pantalla simple usa: {sorted(set(encontrados))}"

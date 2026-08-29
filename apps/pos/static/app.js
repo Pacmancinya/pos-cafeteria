@@ -635,10 +635,21 @@ function pintarConectar(salud) {
       <code>${base}?tv=1</code>
       <button class="btn btn--chico" data-copiar="${base}?tv=1">Copiar</button>
     </div>
+    <div class="conectar__url conectar__url--simple">
+      <span class="conectar__cual">Si el TV se ve mal</span>
+      <code>${base}/simple</code>
+      <button class="btn btn--chico" data-copiar="${base}/simple">Copiar</button>
+    </div>
     <p style="margin:10px 0 0;font-size:13px;line-height:1.6">
       En el televisor: mueve el mouse o toca la pantalla y aparece una barra abajo
       para <b>girar</b> la pantalla, <b>ajustarla</b> si el TV recorta los bordes,
       y <b>configurar</b>.
+    </p>
+    <p style="margin:8px 0 0;font-size:13px;line-height:1.6">
+      El navegador que traen algunos televisores es muy viejo y no entiende la
+      pantalla bonita: se ve en blanco, con letras negras. Si te pasa eso, usa la
+      última dirección — es la misma carta, más sobria, y funciona en cualquier
+      televisor. La pantalla normal se cambia sola cuando detecta que el TV no da.
     </p>`;
 }
 

@@ -34,6 +34,8 @@ PLAN = [
         ("docs/SII.md", "Conectar la boleta del SII.md"),
         ("docs/PUBLICAR-ACTUALIZACIONES.md", "Cómo publico una versión nueva.md"),
         ("apps/pos/static/pantallas.html", "Pantallas del local (respaldo).html"),
+        ("apps/pos/static/pantallas-simple.html",
+         "Pantallas del local (para TV viejo).html"),
     ]),
     ("3 - Actualizaciones", [
         (f"despliegue/Kofe-actualizacion-v{APP_VERSION}.zip", None),

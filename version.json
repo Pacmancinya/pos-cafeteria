@@ -1,6 +1,6 @@
 {
-  "version": "2.0",
-  "nombre": "La caja tiene dueño",
-  "novedades": "Se acabó la ventana negra: el lanzador abre la caja y se va, así que ya no queda una consola al lado invitando a cerrarla —y cerrarla mataba la caja de golpe, sin apagado limpio. El icono del escritorio se corrige solo para apuntar al lugar correcto. La caja ahora la cierra quien la abrió: a otro cajero la pantalla le dice de quién es ANTES de que cuente un solo billete, y el dueño puede cerrar cualquiera, pero queda escrito en el papel del cierre y en el registro del mes. Y al poner precios ya no hay que hacer la cuenta de cabeza: escribes lo que te cuesta un producto y la caja propone cuánto cobrar, con el margen que elijas, redondeado a algo que se pueda cobrar. Te muestra cuánta plata te queda y cuántas veces el costo es el precio, para que no se confunda el margen sobre la venta con el margen sobre el costo.",
+  "version": "2.1",
+  "nombre": "Para cualquier televisor",
+  "novedades": "Los televisores viejos ya no muestran la carta en blanco. El navegador que traen muchos smart TV es un Chromium congelado de 2014 o 2015 y no entiende cómo está hecha la pantalla bonita: por eso se veía fondo blanco, letras negras y botones grises. Ahora la pantalla se da cuenta sola y se cambia a una versión sobria —letras grandes, precios a la derecha— que funciona en cualquier televisor. También se puede escribir a mano, terminando en /simple, y agregándole ?diag=1 dice en grande qué entiende ese televisor y qué no. De paso se arreglaron dos defectos del archivo de las pantallas: el título estaba escrito dos veces y las dos hojas de estilo estaban fuera del encabezado, con 65 KB de tipografías antes de la primera regla de diseño.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }
