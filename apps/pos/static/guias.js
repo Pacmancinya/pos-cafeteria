@@ -179,20 +179,30 @@ window.GUIAS = [
        programa. Si no hay fondo, deja todo en cero.</p>
 
     <h3>En la noche</h3>
+    <p>La pantalla se abre partida en dos. A la <b>izquierda</b> cuentas; a la
+       <b>derecha</b> está todo lo que necesitas mirar mientras cuentas, desde
+       el primer segundo.</p>
     <ol>
       <li><b>Cuenta el cajón</b>, por denominación. Con <b>+</b> y <b>−</b> o
           escribiendo la cantidad.</li>
-      <li>Aprieta <b>Ver si cuadra</b>. Ahí recién aparece cuánto debería haber
-          y si falta o sobra.</li>
-      <li>Más abajo, en <b>¿cuánto dice la máquina?</b>, escribe el total del
-          comprobante de cierre de Transbank y lo que muestre el banco. Te dice
-          al tiro si cuadra.</li>
+      <li>Mientras cuentas, en la columna de la derecha, en
+          <b>¿cuánto dice la máquina?</b>, escribe el total del comprobante de
+          cierre de Transbank y lo que muestre el banco. Te dice al tiro si
+          cuadra, en verde o en rojo.</li>
+      <li>Aprieta <b>Ver si cuadra</b>. Ahí aparece cuánto debería haber en
+          efectivo y si falta o sobra.</li>
       <li>Elige cuánto fondo dejas para mañana. El resto es lo que te llevas.</li>
     </ol>
+    <p>Puedes corregir el conteo después de apretar <b>Ver si cuadra</b>: lo que
+       ya escribiste —los totales de la máquina, el fondo, la nota— se queda
+       donde está.</p>
 
-    <div class="ayuda"><b>El conteo va a ciegas a propósito.</b> El número
-      esperado aparece recién al final. Si lo vieras antes, es humano acomodar
-      el conteo para que calce — y ahí el arqueo deja de servir.</div>
+    <div class="ayuda"><b>Lo único tapado es el efectivo</b>, y dice
+      «al contar» hasta que termines. Es a propósito: si el número que debería
+      haber estuviera en pantalla, es humano contar hasta llegar a esa cifra y
+      parar ahí — y el arqueo dejaría de servir. Lo de tarjeta se ve desde el
+      principio porque no está en el cajón: eso se compara con el comprobante,
+      que es papel aparte.</div>
 
     <div class="ayuda"><b>Lo esperado de la tarjeta incluye la propina</b>,
       porque la máquina le cobró al cliente el total con la propina adentro.
@@ -256,6 +266,21 @@ window.GUIAS = [
        suena prudente y no lo es: a las 8 de la mañana no estás, y el cajero
        terminaría dejando la venta mala adentro — que descuadra la caja igual.
        El control es que toda anulación queda con autor y motivo.</p>
+
+    <h3>Agregar a alguien</h3>
+    <p>Arriba a la derecha, el botón <b>Equipo</b>. Ahí sale la lista de quiénes
+       entran a la caja y el botón <b>Agregar a alguien</b>: nombre, un PIN de 4
+       números que no empiece en 0, y si es cajero o dueño. Listo, ya le aparece
+       la cara en la pantalla de entrada.</p>
+    <p>Para cambiarle el nombre, el PIN o el rol a alguien, tócalo en esa misma
+       lista. Si dejas el PIN vacío le queda el que tenía.</p>
+    <p><b>Sacar a alguien</b> no lo borra: deja de aparecer en la pantalla de
+       entrada, pero sus ventas y sus turnos se conservan enteros — si se
+       borraran, los cierres de esos días dejarían de cuadrar. Si se equivocaron
+       y hay que devolverlo, aparece en gris al final de la lista con el botón
+       <b>Dejarlo entrar de nuevo</b>.</p>
+    <p>El botón <b>Equipo</b> solo lo usa el dueño. Al cajero le aparece
+       apagado: se ve, para que sepa que existe, pero no lo puede abrir.</p>
 
     <h3>Cambiar de persona</h3>
     <p>Toca el nombre de arriba a la derecha. No hay que cerrar nada ni salir

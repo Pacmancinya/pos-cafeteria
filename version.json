@@ -1,6 +1,6 @@
 {
-  "version": "1.8",
-  "nombre": "Las pantallas adentro",
-  "novedades": "Las pantallas del menú ahora las sirve la misma caja. Cada televisor abre una dirección de la red y listo: no hay que copiar ningún archivo, ni escribir la dirección de la carta, ni configurar nada — la carta le llega del mismo lugar. En la pestaña Carta salen las tres direcciones, una por TV, con su botón de copiar. Además, en el televisor basta mover el mouse o tocar la pantalla para que aparezca una barra abajo con Girar, Ajustar al TV y Configurar: antes, si la pantalla arrancaba en modo kiosco, no había forma de volver. Y el ajuste al TV compensa el recorte de los bordes que hacen casi todos los televisores por HDMI.",
+  "version": "1.9",
+  "nombre": "Todo a la vista",
+  "novedades": "Al cerrar caja ya no hay que apretar nada para ver el turno: la pantalla se abre partida en dos, con el conteo del cajón a la izquierda y a la derecha lo vendido por cada forma de pago y los campos para escribir el comprobante de Transbank. Antes eso aparecía recién después de «Ver si cuadra». Lo único que sigue tapado es el efectivo, que se destapa al terminar de contar. Si corriges el conteo, lo que ya escribiste se queda: antes la nota y los totales de la máquina se borraban con cada tecla. Y el «cuadra ✓» de las tarjetas nunca había funcionado — el campo chocaba con los botones del cobro. Nuevo botón Equipo arriba a la derecha: crear cajeros, cambiarles el PIN o el rol y sacarlos de la caja. Hasta ahora solo se podía crear la primera cuenta.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }

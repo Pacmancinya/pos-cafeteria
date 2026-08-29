@@ -862,27 +862,44 @@ function pintarAbrirCaja() {
   setTimeout(() => $("#tCajero").focus(), 60);
 }
 
-/* ---- cerrar: arqueo a ciegas y recién después el cuadre ---- */
-function pintarCerrarCaja(tu) {
-  const medios = Object.entries(tu.por_medio || {})
-    .filter(([m]) => m !== "efectivo")
-    .map(([m, d]) => `${NOMBRE_MEDIO[m] || m} <b>${clp(d.total)}</b>`).join(" · ");
+/* ---- cerrar: el cajón a ciegas, todo lo demás a la vista ----
+   Dos columnas: a la izquierda se cuenta, a la derecha está lo que hay que
+   MIRAR mientras se cuenta —lo vendido y el comprobante de la máquina—. Antes
+   la columna de la derecha aparecía recién después de apretar "Ver si cuadra",
+   así que el cajero escribía el total de Transbank sin haberlo visto venir.
 
-  $("#dialogoTurno").className = "dialogo dialogo--ancho";
+   Lo único tapado hasta el final es el efectivo, y no es un capricho: si el
+   número que "debería haber" está en pantalla, el conteo deja de ser un conteo
+   y pasa a ser una confirmación —uno suma hasta llegar a esa cifra y ahí para—.
+   Lo pagado con tarjeta no está en el cajón, así que mostrarlo desde el
+   principio no ensucia nada. Ver docs/CONTRATO.md. */
+function pintarCerrarCaja(tu) {
+  $("#dialogoTurno").className = "dialogo dialogo--cierre";
   $("#dialogoTurno").innerHTML = `
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Cerrar caja</h2>
-    <p class="ayuda" style="margin-bottom:8px">Cuenta la plata del cajón, billete por billete.
-      Cuando termines te muestro si cuadra.</p>
-    ${medios ? `<div class="medios-turno">Lo pagado con tarjeta o transferencia no se cuenta:
-      el programa ya lo sabe.<br>${medios}</div>` : ""}
-    ${arqueoHTML()}
+    <div class="cierre">
+      <div class="cierre__col">
+        <div class="cierre__paso"><b>1</b> Cuenta la plata del cajón</div>
+        <p class="ayuda" style="margin:0 0 12px">Billete por billete y moneda por
+          moneda. Cuando termines te muestro si cuadra.</p>
+        ${arqueoHTML()}
+      </div>
+      <div class="cierre__col">
+        <div class="cierre__paso"><b>2</b> Lo que no está en el cajón</div>
+        <p class="ayuda" style="margin:0 0 12px">Esto no se cuenta: el programa ya
+          lo sabe. Compáralo con el comprobante de la máquina.</p>
+        <div id="resumenTurno">${resumenDelTurno(tu, true)}</div>
+        ${bloqueTarjetas(tu)}
+      </div>
+    </div>
     <div id="zonaCuadre"></div>
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" id="verCuadre" style="width:auto">Ver si cuadra</button>
     </div>`;
   pintarArqueo();
+  conectarTarjetas(tu);
   // Si vuelven a tocar el conteo después de ver el cuadre, se rehace.
   conectarArqueo(() => { if ($("#zonaCuadre").dataset.visto) mostrarCuadre(tu); });
 
@@ -896,29 +913,40 @@ function mostrarCuadre(tu) {
   const zona = $("#zonaCuadre");
   zona.dataset.visto = "1";
 
-  const fondoPrevio = zona.querySelector("#tFondo") ? soloNumeros($("#tFondo").value) : tu.monto_inicial;
+  // Esto se vuelve a dibujar con CADA corrección del conteo, así que lo que la
+  // persona ya escribió se rescata antes de rehacerlo. La nota se perdía en
+  // cada tecla del arqueo.
+  const fondoPrevio = $("#tFondo") ? soloNumeros($("#tFondo").value) : tu.monto_inicial;
+  const notaPrevia = $("#tNota") ? $("#tNota").value : "";
+
+  // Ya contó: destapar el efectivo ya no arruina nada.
+  $("#resumenTurno").innerHTML = resumenDelTurno(tu);
 
   zona.innerHTML = `
-    ${resumenDelTurno(tu)}
-    <div class="cuadre ${ok ? "cuadre--ok" : "cuadre--mal"}">
-      <div class="cuadre__linea"><span>Fondo con el que abrió</span><span>${clp(tu.monto_inicial)}</span></div>
-      <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(tu.ventas_efectivo)}</span></div>
-      <div class="cuadre__linea"><span>Debería haber</span><span>${clp(tu.efectivo_esperado)}</span></div>
-      <div class="cuadre__linea"><span>Contaste</span><span>${clp(contado)}</span></div>
-      <div class="cuadre__linea cuadre__dif">
-        <span>${ok ? "Cuadra exacto" : dif > 0 ? "Sobra" : "Falta"}</span>
-        <span>${ok ? "✓" : clp(Math.abs(dif))}</span>
+    <div class="cierre__paso"><b>3</b> Cómo quedó la caja</div>
+    <div class="cierre">
+      <div class="cierre__col">
+        <div class="cuadre ${ok ? "cuadre--ok" : "cuadre--mal"}">
+          <div class="cuadre__linea"><span>Fondo con el que abrió</span><span>${clp(tu.monto_inicial)}</span></div>
+          <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(tu.ventas_efectivo)}</span></div>
+          <div class="cuadre__linea"><span>Debería haber</span><span>${clp(tu.efectivo_esperado)}</span></div>
+          <div class="cuadre__linea"><span>Contaste</span><span>${clp(contado)}</span></div>
+          <div class="cuadre__linea cuadre__dif">
+            <span>${ok ? "Cuadra exacto" : dif > 0 ? "Sobra" : "Falta"}</span>
+            <span>${ok ? "✓" : clp(Math.abs(dif))}</span>
+          </div>
+        </div>
+        ${bloquePropinas(tu)}
       </div>
-    </div>
-    <label class="campo"><span>¿Cuánto dejas de fondo para mañana?</span>
-      <input id="tFondo" type="text" inputmode="numeric" value="${fondoPrevio || ""}" placeholder="0"></label>
-    <div class="medios-turno" id="tRetiro"></div>
-
-    ${bloqueTarjetas(tu)}
-    ${bloquePropinas(tu)}
-
-    <label class="campo"><span>Nota (opcional)</span>
-      <input id="tNota" type="text" placeholder="Ej: le di vuelto de más a un cliente"></label>`;
+      <div class="cierre__col">
+        <label class="campo"><span>¿Cuánto dejas de fondo para mañana?</span>
+          <input id="tFondo" type="text" inputmode="numeric" value="${fondoPrevio || ""}" placeholder="0"></label>
+        <div class="medios-turno" id="tRetiro"></div>
+        <label class="campo"><span>Nota (opcional)</span>
+          <input id="tNota" type="text" value="${esc(notaPrevia)}"
+                 placeholder="Ej: le di vuelto de más a un cliente"></label>
+      </div>
+    </div>`;
 
   const pintarRetiro = () => {
     const fondo = Math.min(soloNumeros($("#tFondo").value), contado);
@@ -926,7 +954,6 @@ function mostrarCuadre(tu) {
   };
   $("#tFondo").addEventListener("input", pintarRetiro);
   pintarRetiro();
-  conectarTarjetas(tu);
 
   const pie = document.querySelector("#dialogoTurno .dialogo__pie");
   pie.innerHTML = `
@@ -961,6 +988,10 @@ async function cargarSesion() {
 
 function pintarQuien() {
   const chip = $("#quienEsta");
+  const equipo = $("#verEquipo");
+  // Sin nadie registrado no hay equipo que administrar, y el candado tapa todo
+  // igual. Va ANTES del return de abajo para que no quede prendido de adorno.
+  if (equipo) equipo.hidden = SESION.provisorio || !SESION.nombre;
   if (SESION.provisorio || !SESION.nombre) { chip.hidden = true; return; }
   chip.hidden = false;
   $("#quienNombre").textContent = SESION.nombre;
@@ -1049,6 +1080,127 @@ async function crearPrimerUsuario() {
     const u = await api("/usuarios", { method: "POST",
       body: JSON.stringify({ nombre, pin, rol: "dueno" }) });
     await entrarComo(u.id, pin);
+  } catch (e) { avisar(e.message, true); }
+}
+
+/* ---------------- el equipo ----------------
+   La API de usuarios existe desde la 1.2 (crear, editar, sacar), pero la
+   pantalla para usarla nunca se construyó: el dueño podía crearse a sí mismo en
+   el primer arranque y a nadie más. En el local quedó una sola cuenta.
+
+   Sacar a alguien NO lo borra: sus ventas y sus turnos tienen que seguir
+   cuadrando. Queda inactivo y desaparece del candado. */
+let EQUIPO = [];
+
+async function dialogoEquipo() {
+  try { EQUIPO = await api("/usuarios"); }
+  catch (e) { return avisar(e.message, true); }
+
+  $("#dialogoEquipo").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>Quiénes entran a la caja</h2>
+    <p class="ayuda" style="margin-bottom:14px">El <b>dueño</b> puede todo. El
+      <b>cajero</b> vende, cobra y cuadra su caja, pero no cambia precios ni
+      corrige ventas de días pasados.</p>
+    <div class="equipo">
+      ${EQUIPO.map((u) => `
+        <button class="equipo__fila ${u.activo ? "" : "es-baja"}" data-editar-usuario="${u.id}">
+          <span class="equipo__ini" style="--c:${u.color || "#C9552B"}">${esc((u.nombre[0] || "?").toUpperCase())}</span>
+          <span class="equipo__quien">
+            <b>${esc(u.nombre)}</b>
+            <small>${u.activo ? esc(u.rol_nombre) : "ya no entra a la caja"}</small>
+          </span>
+          <span class="equipo__ir">Editar</span>
+        </button>`).join("")}
+    </div>
+    <div class="dialogo__pie">
+      <button class="btn btn--fantasma" data-cerrar-capa>Cerrar</button>
+      <button class="btn btn--cobrar" data-editar-usuario="nuevo" style="width:auto">Agregar a alguien</button>
+    </div>`;
+  $("#capaEquipo").classList.add("is-on");
+}
+
+function formUsuario(id) {
+  const u = EQUIPO.find((x) => x.id === id) || { nombre: "", rol: "cajero", activo: true };
+  const nuevo = !u.id;
+
+  $("#dialogoEquipo").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>${nuevo ? "Agregar a alguien" : esc(u.nombre)}</h2>
+    <label class="campo"><span>Nombre</span>
+      <input id="uNombre" type="text" value="${esc(u.nombre)}"
+             placeholder="Cómo se llama" autocomplete="off"></label>
+    <label class="campo"><span>${nuevo ? "Invéntale un PIN de 4 números (que no empiece en 0)"
+      : "PIN nuevo (déjalo vacío y le queda el que tenía)"}</span>
+      <input id="uPin" type="password" inputmode="numeric" data-teclado="entero"
+             placeholder="••••" autocomplete="off"></label>
+    <div class="campo"><span>¿Qué puede hacer?</span>
+      <div class="medios" id="uRol">
+        <button class="medio ${u.rol === "cajero" ? "is-on" : ""}" data-rol="cajero">Cajero</button>
+        <button class="medio ${u.rol === "dueno" ? "is-on" : ""}" data-rol="dueno">Dueño</button>
+      </div>
+    </div>
+    ${nuevo ? "" : `<p class="ayuda">${u.activo
+      ? "Si lo sacas de la caja deja de aparecer en la pantalla de entrada, pero sus ventas y sus turnos se conservan."
+      : "Ahora mismo no aparece en la pantalla de entrada."}</p>`}
+    <div class="dialogo__pie">
+      <button class="btn btn--fantasma" data-equipo-volver>Volver</button>
+      ${nuevo ? "" : (u.activo
+        ? `<button class="btn btn--fantasma" data-sacar-usuario="${u.id}">Sacar de la caja</button>`
+        : `<button class="btn btn--fantasma" data-revivir-usuario="${u.id}">Dejarlo entrar de nuevo</button>`)}
+      <button class="btn btn--cobrar" data-guardar-usuario="${u.id || 0}" style="width:auto">Guardar</button>
+    </div>`;
+  setTimeout(() => $("#uNombre").focus(), 60);
+}
+
+async function guardarUsuario(id) {
+  const nombre = ($("#uNombre").value || "").trim();
+  const pin = ($("#uPin").value || "").replace(/\D/g, "");
+  const elegido = $("#uRol .is-on");
+  const previo = EQUIPO.find((x) => x.id === id);
+
+  if (!nombre) return avisar("Escribe el nombre", true);
+  if (!id && pin.length < 4) return avisar("Ponle un PIN de 4 números", true);
+  if (pin && pin.length < 4) return avisar("El PIN son 4 números", true);
+
+  const cuerpo = {
+    nombre,
+    rol: elegido ? elegido.dataset.rol : "cajero",
+    // Guardar no puede revivir a alguien que sacaron: para eso está su botón.
+    activo: previo ? previo.activo : true,
+    color: previo ? previo.color : "",
+    orden: previo ? previo.orden : 0,
+  };
+  if (pin) cuerpo.pin = pin;
+
+  try {
+    await api(id ? `/usuarios/${id}` : "/usuarios",
+      { method: id ? "PUT" : "POST", body: JSON.stringify(cuerpo) });
+    avisar(id ? "Guardado" : `${nombre} ya puede entrar a la caja`);
+    dialogoEquipo();
+  } catch (e) { avisar(e.message, true); }
+}
+
+async function sacarUsuario(id) {
+  const u = EQUIPO.find((x) => x.id === id);
+  if (!confirm(`¿Sacar a ${u ? u.nombre : "esta persona"} de la caja? `
+             + "Deja de aparecer en la pantalla de entrada, pero sus ventas y "
+             + "sus turnos se conservan.")) return;
+  try {
+    const r = await api(`/usuarios/${id}`, { method: "DELETE" });
+    avisar(r.aviso || "Listo");
+    dialogoEquipo();
+  } catch (e) { avisar(e.message, true); }
+}
+
+async function revivirUsuario(id) {
+  const u = EQUIPO.find((x) => x.id === id);
+  if (!u) return;
+  try {
+    await api(`/usuarios/${id}`, { method: "PUT", body: JSON.stringify({
+      nombre: u.nombre, rol: u.rol, activo: true, color: u.color || "", orden: u.orden || 0 }) });
+    avisar(`${u.nombre} vuelve a entrar a la caja`);
+    dialogoEquipo();
   } catch (e) { avisar(e.message, true); }
 }
 
@@ -1459,15 +1611,23 @@ async function aplicarImportacion() {
 
 
 /* ---- lo que se vendió en el turno, entero ----
-   Va ARRIBA del cuadre del efectivo a propósito: la primera pregunta al cerrar
-   es "¿cuánto vendimos hoy?", y antes había que sacarla sumando de cabeza entre
-   tres recuadros distintos. */
-function resumenDelTurno(tu) {
+   Va desde que se abre el cierre, no después del cuadre: la primera pregunta al
+   cerrar es "¿cuánto vendimos hoy?", y antes había que sacarla sumando de cabeza
+   entre tres recuadros distintos.
+
+   `ciego` tapa SOLO el efectivo. Es lo que está dentro del cajón —incluidas sus
+   propinas— y verlo antes de contar convertiría el arqueo en una confirmación.
+   Todo lo demás se muestra igual, porque se cuadra contra papeles de afuera. */
+function resumenDelTurno(tu, ciego) {
   const medios = Object.entries(tu.por_medio || {});
   if (!medios.length) return "";
   const vendido = medios.reduce((n, [, d]) => n + d.ventas, 0);
   const cobrado = medios.reduce((n, [, d]) => n + d.cobrado, 0);
   const cuantas = medios.reduce((n, [, d]) => n + d.cantidad, 0);
+
+  // Si el turno no tuvo efectivo no hay nada que tapar, y el aviso sobraría.
+  const tapar = !!ciego && medios.some(([m]) => m === "efectivo");
+  const tapa = '<span class="tapado">al contar</span>';
 
   return `
     <div class="resumen-turno">
@@ -1475,22 +1635,27 @@ function resumenDelTurno(tu) {
       <table class="tabla">
         <tr><th>Forma de pago</th><th class="num">Ventas</th>
             <th class="num">Vendido</th><th class="num">Propina</th></tr>
-        ${medios.map(([m, d]) => `
-          <tr>
+        ${medios.map(([m, d]) => {
+          const oculto = tapar && m === "efectivo";
+          return `
+          <tr${oculto ? ' class="es-tapado"' : ""}>
             <td>${esc(NOMBRE_MEDIO[m] || m)}</td>
             <td class="num">${d.cantidad}</td>
-            <td class="num">${clp(d.ventas)}</td>
-            <td class="num">${d.propinas ? clp(d.propinas) : "—"}</td>
-          </tr>`).join("")}
+            <td class="num">${oculto ? tapa : clp(d.ventas)}</td>
+            <td class="num">${oculto ? tapa : (d.propinas ? clp(d.propinas) : "—")}</td>
+          </tr>`;
+        }).join("")}
         <tr class="resumen-turno__total">
           <td><b>Total</b></td>
           <td class="num"><b>${cuantas}</b></td>
-          <td class="num"><b>${clp(vendido)}</b></td>
-          <td class="num"><b>${clp(cobrado - vendido)}</b></td>
+          <td class="num">${tapar ? tapa : `<b>${clp(vendido)}</b>`}</td>
+          <td class="num">${tapar ? tapa : `<b>${clp(cobrado - vendido)}</b>`}</td>
         </tr>
       </table>
       <div class="resumen-turno__pie">
-        Entró en total <b>${clp(cobrado)}</b>, contando las propinas.
+        ${tapar
+          ? "El efectivo se destapa cuando termines de contar: si lo vieras antes, contarías hasta llegar a ese número y el arqueo no serviría de nada."
+          : `Entró en total <b>${clp(cobrado)}</b>, contando las propinas.`}
       </div>
     </div>`;
 }
@@ -1520,16 +1685,20 @@ function bloqueTarjetas(tu) {
               · ${clp(m.ventas)}${m.propinas ? ` + ${clp(m.propinas)} de propina` : ""}</div>
           </div>
           <div class="tarjetas__esperado">deberían ser<b>${clp(m.esperado)}</b></div>
-          <input type="text" inputmode="numeric" data-medio="${m.medio}"
+          <input type="text" inputmode="numeric" data-dice="${m.medio}"
                  value="${m.declarado != null ? m.declarado : ""}" placeholder="0">
           <div class="tarjetas__dif" data-dif="${m.medio}"></div>
         </div>`).join("")}
     </div>`;
 }
 
+/* Los campos se marcan `data-dice`, NO `data-medio`: los botones de medio de
+   pago del diálogo de cobro ya usan `data-medio` y viven en index.html desde que
+   carga la página, así que `querySelector` encontraba el botón en vez del campo
+   y el "cuadra ✓" no aparecía nunca. */
 function conectarTarjetas(tu) {
   (tu.medios || []).forEach((m) => {
-    const campo = document.querySelector(`[data-medio="${m.medio}"]`);
+    const campo = document.querySelector(`[data-dice="${m.medio}"]`);
     if (!campo) return;
     const pintar = () => {
       const caja = document.querySelector(`[data-dif="${m.medio}"]`);
@@ -1547,9 +1716,9 @@ function conectarTarjetas(tu) {
 
 function mediosDeclarados() {
   const salida = {};
-  $$("[data-medio]").forEach((c) => {
+  $$("[data-dice]").forEach((c) => {
     const v = (c.value || "").trim();
-    if (v) salida[c.dataset.medio] = soloNumeros(v);
+    if (v) salida[c.dataset.dice] = soloNumeros(v);
   });
   return salida;
 }
@@ -1888,6 +2057,24 @@ document.addEventListener("click", (e) => {
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
   if (t.id === "crearPrimero") return crearPrimerUsuario();
   if (t.id === "quienEsta" || t.closest("#quienEsta")) return salirDeLaCaja("cambio");
+
+  // ---- el equipo ----
+  if (t.closest("#verEquipo")) return dialogoEquipo();
+  if (cerca("data-editar-usuario")) {
+    const v = cerca("data-editar-usuario").dataset.editarUsuario;
+    return formUsuario(v === "nuevo" ? 0 : +v);
+  }
+  if (cerca("data-equipo-volver")) return dialogoEquipo();
+  if (cerca("data-rol")) {
+    const b = cerca("data-rol");
+    return $$("#uRol .medio").forEach((o) => o.classList.toggle("is-on", o === b));
+  }
+  if (cerca("data-guardar-usuario"))
+    return guardarUsuario(+cerca("data-guardar-usuario").dataset.guardarUsuario);
+  if (cerca("data-sacar-usuario"))
+    return sacarUsuario(+cerca("data-sacar-usuario").dataset.sacarUsuario);
+  if (cerca("data-revivir-usuario"))
+    return revivirUsuario(+cerca("data-revivir-usuario").dataset.revivirUsuario);
 
   // ---- bodega ----
   if (cerca("data-libro")) return verLibro(+cerca("data-libro").dataset.libro);

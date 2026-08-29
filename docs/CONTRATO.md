@@ -268,6 +268,14 @@ que ya lo mande, pero si viene `conteo`, manda el conteo.
 resto y lo calcula el servidor, nunca se pide escrito. No se puede dejar de fondo más de
 lo que se contó.
 
+**A ciegas es SOLO el efectivo.** Al abrir el cierre se muestra todo: cuántas ventas hubo,
+cuánto se pagó con cada tarjeta, cuánta propina, y los campos para escribir lo que dice la
+máquina. Lo único tapado es la columna del efectivo —ventas y propinas— porque es lo que
+está dentro del cajón: si el número que debería haber estuviera en pantalla, contar hasta
+llegar a esa cifra sería lo natural y el arqueo no probaría nada. Lo de tarjeta no está en
+el cajón y se cuadra contra un papel de afuera, así que taparlo no protegía nada y solo
+obligaba a escribir el total de Transbank sin haberlo visto venir.
+
 **El efectivo se CUENTA; las tarjetas se COPIAN.** Son dos cuadres distintos y por eso
 `conteo_cierre` y `conteo_medios` son campos separados. El conteo del cajón se hace por
 denominación y a ciegas; lo de tarjeta sale del comprobante de cierre de la máquina y de

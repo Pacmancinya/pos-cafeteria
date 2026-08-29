@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=23">
+<link rel="stylesheet" href="/static/styles.css?v=24">
 </head>
 <body>
 
@@ -24,6 +24,8 @@
     <button class="quien" id="quienEsta" hidden>
       <span class="quien__punto"></span><b id="quienNombre"></b>
     </button>
+    <button class="turno" id="verEquipo" data-permiso="usuarios" hidden
+            title="Quiénes entran a la caja">Equipo</button>
     <span class="turno" id="turnoEstado">…</span>
     <span class="version" id="version" title="Ver versión y buscar actualizaciones">v…</span>
     <span class="reloj" id="reloj">--:--</span>
@@ -194,6 +196,11 @@
 </div>
 
 <!-- ══════════ TURNO ══════════ -->
+<!-- ══════════ EQUIPO ══════════ -->
+<div class="capa" id="capaEquipo">
+  <div class="dialogo dialogo--ancho" id="dialogoEquipo"></div>
+</div>
+
 <!-- ══════════ ACTUALIZACIONES ══════════ -->
 <div class="capa" id="capaVersion">
   <div class="dialogo" id="dialogoVersion"></div>

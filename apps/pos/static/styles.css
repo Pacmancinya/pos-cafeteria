@@ -818,3 +818,58 @@ html,body{overscroll-behavior:none}
   color:var(--suave);min-width:132px;
 }
 @media (max-width:700px){.conectar__cual{min-width:0}}
+
+/* ---------- cerrar caja: contar a la izquierda, mirar a la derecha ----------
+   Antes el cierre era una columna larga y todo lo de tarjetas aparecía recién
+   después de apretar "Ver si cuadra": el cajero llegaba a escribir el total de
+   Transbank sin haberlo visto venir. Ahora lo que se cuenta y lo que se compara
+   están lado a lado desde que se abre. */
+.dialogo--cierre{width:min(960px,100%)}
+.cierre{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 26px;align-items:start}
+.cierre__col{min-width:0}
+.cierre__paso{
+  display:flex;align-items:center;gap:9px;margin-bottom:7px;
+  font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--suave);
+}
+.cierre__paso b{
+  width:22px;height:22px;flex:none;border-radius:50%;background:var(--clay);color:#fff;
+  display:grid;place-items:center;font-size:12.5px;letter-spacing:0;
+}
+#zonaCuadre:not(:empty){margin-top:22px;border-top:1px solid var(--linea);padding-top:18px}
+
+/* En una columna angosta la fila de tarjetas no cabe en cuatro tramos: se
+   parte en dos filas de dos, igual que en pantalla chica. */
+.cierre .tarjetas__fila{grid-template-columns:1fr 132px;gap:8px 12px}
+
+/* Lo que está DENTRO del cajón y todavía no se cuenta. */
+.tapado{
+  display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--suave);background:#F3E9DB;
+  border-radius:6px;padding:3px 8px;white-space:nowrap;
+}
+.resumen-turno tr.es-tapado td{color:var(--suave)}
+
+@media (max-width:900px){
+  .dialogo--cierre{width:min(620px,100%)}
+  .cierre{grid-template-columns:1fr;gap:18px}
+}
+
+/* ---------- el equipo ---------- */
+.equipo{display:flex;flex-direction:column;gap:9px;max-height:52vh;overflow:auto;
+  overscroll-behavior:contain}
+.equipo__fila{
+  display:grid;grid-template-columns:auto 1fr auto;gap:13px;align-items:center;
+  text-align:left;border:1px solid var(--linea);background:var(--papel);
+  border-radius:13px;padding:10px 14px;min-height:var(--toque);color:var(--tinta);
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.equipo__fila:hover{background:#F6EFE4;border-color:var(--clay)}
+.equipo__fila:active{transform:scale(.99);background:#F1E4D2}
+.equipo__fila.es-baja{opacity:.55}
+.equipo__ini{
+  width:42px;height:42px;border-radius:50%;background:var(--c);color:#fff;
+  display:grid;place-items:center;font:700 18px/1 var(--f);
+}
+.equipo__quien b{display:block;font-size:15.5px}
+.equipo__quien small{color:var(--suave);font-size:12.5px}
+.equipo__ir{color:var(--clay);font-size:13.5px;font-weight:700}
