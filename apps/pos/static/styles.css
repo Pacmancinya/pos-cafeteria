@@ -71,8 +71,14 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- vistas ---------- */
 .vista{display:none;flex:1;min-height:0}
 .vista.is-on{display:flex}
-.vista[data-vista="dia"],.vista[data-vista="carta"]{overflow:auto;display:none}
-.vista[data-vista="dia"].is-on,.vista[data-vista="carta"].is-on{display:block}
+/* Las vistas que NO son la caja se desplazan enteras. Ojo: hay que agregar
+   acá cada vista nueva. Si falta, su contenido se corta abajo y no hay forma
+   de llegar al resto — el <body> tiene overflow:hidden a propósito, para que
+   la pantalla de venta no se mueva. Pasó con Bodega y con Ayuda. */
+.vista[data-vista="dia"],.vista[data-vista="carta"],
+.vista[data-vista="inventario"],.vista[data-vista="guias"]{overflow:auto;display:none}
+.vista[data-vista="dia"].is-on,.vista[data-vista="carta"].is-on,
+.vista[data-vista="inventario"].is-on,.vista[data-vista="guias"].is-on{display:block}
 .panel{padding:18px;max-width:1200px;margin:0 auto}
 
 /* ---------- rail de categorías ---------- */
@@ -726,11 +732,17 @@ html,body{overscroll-behavior:none}
 .resumen-turno__pie b{color:var(--tinta);font-variant-numeric:tabular-nums}
 
 /* ---------- ayuda ---------- */
-.panel--ayuda{max-width:1180px}
+.panel--ayuda{max-width:1180px;padding-bottom:28px}
 .ayuda-cabecera{display:flex;align-items:flex-start;justify-content:space-between;
   gap:16px;margin-bottom:18px}
 .ayuda-cuerpo{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
-.ayuda-lista{display:flex;flex-direction:column;gap:8px}
+.ayuda-lista{
+  display:flex;flex-direction:column;gap:8px;
+  position:sticky;top:0;max-height:calc(100vh - 170px);
+  overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 4px 16px 2px;   /* aire abajo: la última tarjeta no
+                                 puede quedar pegada al borde */
+}
 .ayuda-item{
   text-align:left;border:1px solid var(--linea);background:var(--tarjeta);
   border-radius:12px;padding:12px 14px;min-height:var(--toque-alto);
@@ -744,7 +756,6 @@ html,body{overscroll-behavior:none}
 .ayuda-texto{
   background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;
   padding:24px 28px;box-shadow:var(--sombra);line-height:1.7;font-size:15.5px;
-  max-height:calc(100vh - 190px);overflow:auto;
 }
 .ayuda-texto h2{font-size:23px;margin-bottom:14px}
 .ayuda-texto h3{font-size:17px;margin:22px 0 8px}

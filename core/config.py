@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 # La versión tiene que coincidir con la de version.json cuando se publica.
 # Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
 # novedades entre versiones, o nadie distingue una de otra.
-APP_VERSION = "1.6"
-APP_NOMBRE = "Nada se pierde"
+APP_VERSION = "1.7"
+APP_NOMBRE = "Se llega hasta abajo"
 VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
 
 # De dónde se enteran las cajas de que hay una versión nueva.
