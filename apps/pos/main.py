@@ -95,6 +95,7 @@ def salud():
         "turno_abierto": bool(t),
         # Lo que hay que pegar en las pantallas del local:
         "carta_url": f"http://{ip}:{PUERTO}/api/v1/carta",
+        "pantallas_url": f"http://{ip}:{PUERTO}/pantallas",
         "en_la_red": HOST == "0.0.0.0",
     }
 
@@ -119,3 +120,20 @@ app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
 @app.get("/")
 def caja():
     return FileResponse(os.path.join(ESTATICOS, "index.html"))
+
+
+@app.get("/pantallas")
+def pantallas():
+    """Las pantallas del menú del local, servidas por la propia caja.
+
+    Vivían como un archivo suelto que había que copiar a cada equipo. Servirlas
+    de acá resuelve tres cosas de una: cada TV solo abre una dirección de la
+    red (no necesita el archivo ni un cable al notebook), la carta viene del
+    MISMO origen —así que no hay IP que escribir ni CORS que pelear—, y las
+    pantallas se actualizan con el mismo mecanismo que el resto del programa.
+
+    Cada TV abre la suya:
+        http://<ip-de-la-caja>:8090/pantallas?p=1   → la vitrina
+        http://<ip-de-la-caja>:8090/pantallas?p=2   → la carta con precios
+    """
+    return FileResponse(os.path.join(ESTATICOS, "pantallas.html"))

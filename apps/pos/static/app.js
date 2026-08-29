@@ -612,19 +612,34 @@ async function guardarProducto(id) {
 /* Dirección que hay que pegar en las pantallas del local. La mostramos acá para
    que nadie tenga que ir a buscar la IP del computador. */
 function pintarConectar(salud) {
+  // Las pantallas ahora las sirve esta misma caja, así que no hay archivo que
+  // copiar ni dirección de carta que escribir: cada TV abre su propia URL y la
+  // carta le llega del mismo origen.
+  const base = salud.pantallas_url || (salud.carta_url || "").replace("/api/v1/carta", "/pantallas");
   $("#conectar").innerHTML = `
     <b>Conectar las pantallas del local</b><br>
-    En la pantalla: tecla <b>C</b> → Punto de venta → pegar esta dirección y apretar
-    “Probar la conexión”. Después, cada precio que cambies acá se ve allá solo.
+    En cada televisor, abre el navegador y entra a la dirección que le toca.
+    No hay que instalar ni copiar nada: la carta le llega de esta caja sola.
     <div class="conectar__url">
-      <code id="cartaUrl">${salud.carta_url}</code>
-      <button class="btn btn--chico" id="copiarUrl">Copiar</button>
-    </div>`;
-  $("#copiarUrl").onclick = () => {
-    const t = salud.carta_url;
-    if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => avisar("Dirección copiada"));
-    else avisar("Selecciona la dirección y copia con Ctrl+C");
-  };
+      <span class="conectar__cual">Vitrina</span>
+      <code id="urlP1">${base}?p=1</code>
+      <button class="btn btn--chico" data-copiar="${base}?p=1">Copiar</button>
+    </div>
+    <div class="conectar__url">
+      <span class="conectar__cual">Carta con precios</span>
+      <code id="urlP2">${base}?p=2</code>
+      <button class="btn btn--chico" data-copiar="${base}?p=2">Copiar</button>
+    </div>
+    <div class="conectar__url">
+      <span class="conectar__cual">Las dos turnándose</span>
+      <code>${base}?tv=1</code>
+      <button class="btn btn--chico" data-copiar="${base}?tv=1">Copiar</button>
+    </div>
+    <p style="margin:10px 0 0;font-size:13px;line-height:1.6">
+      En el televisor: mueve el mouse o toca la pantalla y aparece una barra abajo
+      para <b>girar</b> la pantalla, <b>ajustarla</b> si el TV recorta los bordes,
+      y <b>configurar</b>.
+    </p>`;
 }
 
 /* ---------------- actualizaciones ----------------
@@ -1896,6 +1911,12 @@ document.addEventListener("click", (e) => {
   }
   if (cerca("data-guia")) return pintarGuias(cerca("data-guia").dataset.guia);
   if (t.id === "versionAyuda") return dialogoNovedades();
+  if (cerca("data-copiar")) {
+    const txt = cerca("data-copiar").dataset.copiar;
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => avisar("Dirección copiada"));
+    else avisar("Selecciona la dirección y cópiala con Ctrl+C");
+    return;
+  }
   if (t.id === "btnNuevoInsumo") return dialogoInsumo(0);
   if (t.id === "btnCompra") return dialogoCompra();
   if (t.id === "btnMerma") return dialogoMerma();

@@ -272,23 +272,48 @@ window.GUIAS = [
 {
   id: "pantallas-del-local",
   titulo: "Las pantallas del menú",
-  resumen: "Cómo toman los precios desde esta caja.",
+  resumen: "Cómo se conectan y cómo se arreglan si se ven mal.",
   html: `
-    <p>Las pantallas del local <b>no tienen su propia lista de precios</b>: leen
-       la de acá. Por eso un cambio en la Carta se ve en las dos partes.</p>
+    <p>Las pantallas del local <b>las sirve esta misma caja</b>. No hay que
+       instalar ni copiar nada en el televisor: solo abrir una dirección.</p>
+
+    <h3>Conectar un televisor</h3>
     <ol>
-      <li>Pestaña <b>Carta</b>: arriba aparece una dirección tipo
-          <b>http://192.168.1.12:8090/api/v1/carta</b>.</li>
-      <li>En la pantalla del local, esa dirección se pega en su panel de
-          configuración.</li>
+      <li>Pestaña <b>Carta</b>: ahí están las tres direcciones, con su botón de
+          copiar.</li>
+      <li>En el televisor, abre el navegador y entra a la que le toca:
+        <ul>
+          <li><b>?p=1</b> — la vitrina, la que invita a elegir.</li>
+          <li><b>?p=2</b> — la carta con los precios.</li>
+          <li><b>?tv=1</b> — las dos turnándose, si tienes un solo televisor.</li>
+        </ul>
+      </li>
     </ol>
-    <div class="ayuda">Tiene que ser la dirección con números
-      (192.168...), no <b>127.0.0.1</b>: esa última significa "este mismo
-      computador" y la pantalla no la va a encontrar.</div>
-    <p>Los cambios aparecen en la pantalla en la siguiente revisión, cada 10
-       minutos más o menos. Y el computador de la caja tiene que estar
-       encendido: si se apaga, las pantallas se quedan con lo último que
-       alcanzaron a leer.</p>`,
+    <div class="ayuda">La carta le llega sola, desde esta caja. Cada precio que
+      cambies acá se ve allá en la siguiente revisión, sin tocar el televisor.</div>
+
+    <h3>Si se ve cortada por los bordes</h3>
+    <p>Casi todos los televisores <b>recortan entre 3% y 5%</b> de cada borde
+       cuando reciben por HDMI. No es la pantalla, es el TV.</p>
+    <p>En el televisor, <b>mueve el mouse o toca la pantalla</b>: aparece una
+       barra abajo. Usa <b>Ajustar al TV</b> con − y + hasta que entre entero.
+       Queda guardado.</p>
+    <p>Si prefieres arreglarlo en el televisor, busca en su menú de imagen algo
+       que diga <b>Just Scan</b>, <b>Ajuste de pantalla</b> o <b>1:1</b>.</p>
+
+    <h3>Si está al revés (vertical u horizontal)</h3>
+    <p>En esa misma barra: <b>Girar pantalla</b>. Un toque.</p>
+
+    <h3>Si quedó en pantalla completa y no puedes salir</h3>
+    <p>La barra también trae <b>Salir</b>. Y la tecla <b>Escape</b> saca de todo.</p>
+
+    <h3>Dos televisores con un solo cable</h3>
+    <p>Como cada pantalla es una dirección de la red, <b>no necesitas cable</b>
+       desde el computador. Lo más simple es un aparatito barato en cada TV
+       (Chromecast, Fire Stick o una caja Android) abriendo su dirección. Así
+       las pantallas siguen andando aunque muevas el notebook.</p>
+    <div class="ayuda">Un divisor de HDMI <b>no sirve</b> para esto: manda la
+      misma imagen a los dos televisores, y acá cada uno muestra algo distinto.</div>`,
 },
 {
   id: "respaldos",

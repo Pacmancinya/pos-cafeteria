@@ -65,3 +65,17 @@ def test_desde_la_caja_no_se_pide_pin(cliente, carta):
     assert cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo"}).status_code == 200
+
+
+def test_las_pantallas_se_abren_sin_pin_desde_la_red(cliente):
+    """Un TV colgado en la pared no tiene teclado para escribir el PIN, y lo
+    que muestra ya está a la vista del público."""
+    with remoto() as r:
+        resp = r.get("/pantallas")
+        assert resp.status_code == 200
+        assert "Pantallas Kofe" in resp.text
+
+
+def test_las_pantallas_traen_su_direccion_en_salud(cliente):
+    s = cliente.get("/api/v1/salud").json()
+    assert s["pantallas_url"].endswith("/pantallas")

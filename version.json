@@ -1,6 +1,6 @@
 {
-  "version": "1.7",
-  "nombre": "Se llega hasta abajo",
-  "novedades": "Arreglo de una cosa que dejaba media pantalla inalcanzable: en Ayuda y en Bodega, lo que no cabía en el alto de la ventana quedaba cortado y no había forma de bajar. Ahora las dos vistas se desplazan, y en Ayuda la lista de guías se queda a la vista mientras lees una guía larga.",
+  "version": "1.8",
+  "nombre": "Las pantallas adentro",
+  "novedades": "Las pantallas del menú ahora las sirve la misma caja. Cada televisor abre una dirección de la red y listo: no hay que copiar ningún archivo, ni escribir la dirección de la carta, ni configurar nada — la carta le llega del mismo lugar. En la pestaña Carta salen las tres direcciones, una por TV, con su botón de copiar. Además, en el televisor basta mover el mouse o tocar la pantalla para que aparezca una barra abajo con Girar, Ajustar al TV y Configurar: antes, si la pantalla arrancaba en modo kiosco, no había forma de volver. Y el ajuste al TV compensa el recorte de los bordes que hacen casi todos los televisores por HDMI.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }
