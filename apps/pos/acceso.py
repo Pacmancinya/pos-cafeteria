@@ -21,11 +21,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from core.config import PIN, token_de_acceso
 
 GALLETA = "pos_acceso"
-# `/pantallas` va acá por lo mismo que `/api/v1/carta`: es de solo lectura y
-# muestra precios que ya están a la vista del público. Si pidiera el PIN de red,
-# cada TV del local necesitaría que alguien lo escribiera, y un TV colgado en la
-# pared no tiene teclado.
-LIBRES = ("/api/v1/carta", "/api/v1/salud", "/pantallas", "/static/",
+# `/api/v1/carta` va libre porque es de solo lectura y muestra precios que ya
+# están a la vista del público. Y porque es de donde el programa de las pantallas
+# —que desde la 2.2 corre aparte— saca la carta: si pidiera el PIN de red, cada
+# TV del local necesitaría que alguien lo escribiera, y un TV colgado en la pared
+# no tiene teclado.
+LIBRES = ("/api/v1/carta", "/api/v1/salud", "/static/",
           "/entrar", "/favicon.ico")
 LOCALES = {"127.0.0.1", "::1", "localhost"}
 

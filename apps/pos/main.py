@@ -62,8 +62,10 @@ async def ciclo(app: FastAPI):
 
 app = FastAPI(title=f"Punto de venta · {NOMBRE_LOCAL}", version=VERSION, lifespan=ciclo)
 
-# Las pantallas del local corren en otro puerto, o sea otro origen. Sin CORS el
-# navegador rechaza la carta y el menú se queda con los precios viejos.
+# El programa de las pantallas del menú corre APARTE, en otro puerto: para el
+# navegador del televisor eso es otro origen. Sin CORS rechaza la carta y el menú
+# se queda con los precios viejos. Esto no es opcional desde que los dos
+# programas se separaron.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -94,9 +96,11 @@ def salud():
     return {
         "ok": True, "version": VERSION, "local": NOMBRE_LOCAL,
         "turno_abierto": bool(t),
-        # Lo que hay que pegar en las pantallas del local:
+        # De acá saca la carta el programa de las PANTALLAS DEL MENÚ, que desde
+        # la 2.2 es una aplicación aparte: un almacén o una botillería no tienen
+        # televisores y no tienen por qué cargar, actualizar ni arrancar ese
+        # código. Esta dirección es el único contrato entre los dos programas.
         "carta_url": f"http://{ip}:{PUERTO}/api/v1/carta",
-        "pantallas_url": f"http://{ip}:{PUERTO}/pantallas",
         "en_la_red": HOST == "0.0.0.0",
     }
 
@@ -123,40 +127,3 @@ def caja():
     return FileResponse(os.path.join(ESTATICOS, "index.html"))
 
 
-@app.get("/pantallas")
-def pantallas():
-    """Las pantallas del menú del local, servidas por la propia caja.
-
-    Vivían como un archivo suelto que había que copiar a cada equipo. Servirlas
-    de acá resuelve tres cosas de una: cada TV solo abre una dirección de la
-    red (no necesita el archivo ni un cable al notebook), la carta viene del
-    MISMO origen —así que no hay IP que escribir ni CORS que pelear—, y las
-    pantallas se actualizan con el mismo mecanismo que el resto del programa.
-
-    Cada TV abre la suya:
-        http://<ip-de-la-caja>:8090/pantallas?p=1   → la vitrina
-        http://<ip-de-la-caja>:8090/pantallas?p=2   → la carta con precios
-    """
-    return FileResponse(os.path.join(ESTATICOS, "pantallas.html"))
-
-
-@app.get("/pantallas/simple")
-def pantallas_simple():
-    """La misma carta, para el navegador que trae el televisor.
-
-    Existe porque el navegador de un smart TV no es un navegador. En el
-    televisor del local, `pantallas.html` se vio SIN NINGUN ESTILO: fondo
-    blanco, texto negro y los botones grises del sistema.
-
-    Esta versión no usa nada que un navegador de 2015 pueda no entender: ni
-    variables CSS, ni Grid, ni fuentes incrustadas, y el JavaScript es de los
-    de `var` y `XMLHttpRequest`. Se ve más sobria y funciona en cualquier cosa
-    que tenga pantalla.
-
-    `pantallas.html` manda para acá SOLA cuando detecta que el navegador no da,
-    así que el dueño puede seguir pegando la dirección de siempre.
-
-        http://<ip-de-la-caja>:8090/pantallas/simple
-        http://<ip-de-la-caja>:8090/pantallas/simple?diag=1   → qué entiende el TV
-    """
-    return FileResponse(os.path.join(ESTATICOS, "pantallas-simple.html"))

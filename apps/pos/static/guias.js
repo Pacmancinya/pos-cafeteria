@@ -309,15 +309,18 @@ window.GUIAS = [
 {
   id: "pantallas-del-local",
   titulo: "Las pantallas del menú",
-  resumen: "Cómo se conectan y cómo se arreglan si se ven mal.",
+  resumen: "Son otro programa. Cómo se conectan y cómo se arreglan.",
   html: `
-    <p>Las pantallas del local <b>las sirve esta misma caja</b>. No hay que
-       instalar ni copiar nada en el televisor: solo abrir una dirección.</p>
+    <p>Las pantallas del menú son un <b>programa aparte</b> de esta caja. Se
+       abren con su propio icono: <b>Pantallas del menú</b>.</p>
+    <div class="ayuda">Están separadas porque no todos los locales tienen
+      televisores. Un almacén o una botillería instalan solo la caja y no cargan
+      ni actualizan código que nunca van a usar.</div>
 
     <h3>Conectar un televisor</h3>
     <ol>
-      <li>Pestaña <b>Carta</b>: ahí están las tres direcciones, con su botón de
-          copiar.</li>
+      <li>Abre el programa <b>Pantallas del menú</b> en este mismo computador.
+          Se abre una ventana negra con las direcciones escritas.</li>
       <li>En el televisor, abre el navegador y entra a la que le toca:
         <ul>
           <li><b>?p=1</b> — la vitrina, la que invita a elegir.</li>
@@ -326,47 +329,40 @@ window.GUIAS = [
         </ul>
       </li>
     </ol>
-    <div class="ayuda">La carta le llega sola, desde esta caja. Cada precio que
-      cambies acá se ve allá en la siguiente revisión, sin tocar el televisor.</div>
+    <p>Esa ventana negra <b>tiene que quedarse abierta</b>: es la que sirve las
+       pantallas. Cerrarla las apaga. No es como la caja, que se abre sola y sin
+       ventana — acá la ventana es el programa.</p>
+
+    <h3>La carta le llega sola</h3>
+    <p>Cada precio que cambies acá se ve en los televisores en la siguiente
+       revisión, sin tocar nada. Las pantallas vienen a buscar la carta a esta
+       caja.</p>
+    <div class="ayuda">Por eso la caja tiene que estar <b>abierta</b>. Si apagas
+      este computador, los televisores se quedan sin carta.</div>
 
     <h3>Si el televisor la muestra en blanco y sin colores</h3>
-    <p>Se ve fondo blanco, letras negras chicas a la izquierda y botones grises:
-       no es que esté mal la carta, es que <b>el navegador que trae ese televisor
-       es muy viejo</b> y no entiende cómo está hecha la pantalla bonita.</p>
-    <p>Usa la última dirección de la pestaña <b>Carta</b>, la que termina en
-       <b>/simple</b>. Es la misma carta, más sobria —letras grandes, precios a
-       la derecha, sin dibujos— y anda en cualquier televisor. La normal se
-       cambia sola a esa cuando se da cuenta de que el TV no da, pero si no lo
-       hizo, escíbela a mano.</p>
-    <div class="ayuda">Para saber qué tan viejo es ese navegador, agrégale
-      <b>?diag=1</b> al final de la dirección simple. Sale en grande lo que el
-      televisor entiende y lo que no. Sirve para pedir ayuda con datos.</div>
-    <p>Si quieres la pantalla bonita en ese televisor, la salida es un aparatito
-       barato conectado al TV —Chromecast, Fire Stick o una caja Android— y abrir
-       la dirección desde ahí. Esos traen un navegador de verdad.</p>
+    <p>Se ve fondo blanco, letras negras chicas y botones grises: el navegador de
+       ese televisor es muy viejo. Usa la dirección que termina en
+       <b>/simple</b> — la misma carta, más sobria, y anda en cualquier cosa.
+       La normal se cambia sola a esa cuando se da cuenta.</p>
+    <div class="ayuda">Agrégale <b>?diag=1</b> a la dirección simple y sale en
+      grande qué entiende ese televisor. Sirve para pedir ayuda con datos.</div>
 
     <h3>Si se ve cortada por los bordes</h3>
-    <p>Casi todos los televisores <b>recortan entre 3% y 5%</b> de cada borde
-       cuando reciben por HDMI. No es la pantalla, es el TV.</p>
-    <p>En el televisor, <b>mueve el mouse o toca la pantalla</b>: aparece una
-       barra abajo. Usa <b>Ajustar al TV</b> con − y + hasta que entre entero.
-       Queda guardado.</p>
-    <p>Si prefieres arreglarlo en el televisor, busca en su menú de imagen algo
-       que diga <b>Just Scan</b>, <b>Ajuste de pantalla</b> o <b>1:1</b>.</p>
+    <p>Casi todos los televisores <b>recortan entre 3% y 5%</b> de cada borde por
+       HDMI. En el televisor, mueve el mouse o toca la pantalla: aparece una
+       barra abajo con <b>Ajustar al TV</b>. Queda guardado.</p>
 
-    <h3>Si está al revés (vertical u horizontal)</h3>
-    <p>En esa misma barra: <b>Girar pantalla</b>. Un toque.</p>
-
-    <h3>Si quedó en pantalla completa y no puedes salir</h3>
-    <p>La barra también trae <b>Salir</b>. Y la tecla <b>Escape</b> saca de todo.</p>
+    <h3>Si está al revés, o quedó en pantalla completa</h3>
+    <p>En esa misma barra: <b>Girar pantalla</b> y <b>Salir</b>. La tecla
+       <b>Escape</b> saca de todo.</p>
 
     <h3>Dos televisores con un solo cable</h3>
-    <p>Como cada pantalla es una dirección de la red, <b>no necesitas cable</b>
+    <p>Cada pantalla es una dirección de la red, así que <b>no necesitas cable</b>
        desde el computador. Lo más simple es un aparatito barato en cada TV
-       (Chromecast, Fire Stick o una caja Android) abriendo su dirección. Así
-       las pantallas siguen andando aunque muevas el notebook.</p>
-    <div class="ayuda">Un divisor de HDMI <b>no sirve</b> para esto: manda la
-      misma imagen a los dos televisores, y acá cada uno muestra algo distinto.</div>`,
+       (Chromecast, Fire Stick o una caja Android) abriendo su dirección.</p>
+    <div class="ayuda">Un divisor de HDMI <b>no sirve</b>: manda la misma imagen a
+      los dos televisores, y acá cada uno muestra algo distinto.</div>`,
 },
 {
   id: "cuanto-cobrar",

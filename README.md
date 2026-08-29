@@ -91,16 +91,27 @@ pos-cafeteria/
 
 ## Cómo se conecta con las pantallas del local
 
-El proyecto `menu-cafeteria` (las dos pantallas del local) lee la carta desde acá:
+Las pantallas del menú son **otro programa**:
+[`pantallas-cafeteria`](https://github.com/Pacmancinya/pantallas-cafeteria).
+Vivieron adentro de esta caja durante la 1.8 y la 2.1, y se separaron en la 2.2
+cuando el mismo sistema pasó a usarse en un almacén y en una botillería: esos
+locales no tienen televisores y no tienen por qué cargar, actualizar ni arrancar
+ese código.
+
+El contrato entre los dos es **uno solo**:
 
 ```
-http://<ip-del-pc-de-la-caja>:8090/api/v1/carta
+GET http://<ip-del-pc-de-la-caja>:8090/api/v1/carta
 ```
 
-En la pantalla: tecla `C` → **Punto de venta** → pegar esa dirección → **Probar la conexión**.
-Desde ahí, cambiar un precio en la caja lo cambia en la pantalla en la siguiente revisión.
-Verificado de punta a punta: subí el Espresso de $1.900 a $2.100 en la caja y la pantalla
-lo tomó sola.
+Público, de solo lectura y con `Access-Control-Allow-Origin: *`. Los dos
+programas corren en puertos distintos —o sea, orígenes distintos para el
+navegador del televisor— así que sin ese CORS el TV rechaza la carta y se queda
+con los precios viejos.
+
+Las pantallas deducen esa dirección solas del host que usó el televisor: no hay
+IP que escribir en ninguna parte. Verificado de punta a punta: la app de
+pantallas en el 8091 tomó la carta del 8090 sin tocar nada.
 
 ---
 

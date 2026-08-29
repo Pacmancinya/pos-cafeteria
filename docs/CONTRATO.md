@@ -91,6 +91,23 @@ dos formas al lado: cuánto queda y cuántas veces el costo es el precio. El sug
 redondea SIEMPRE hacia arriba, para que el margen pedido sea un piso y no algo que el
 redondeo se come.
 
+**12. Las pantallas del menú son OTRO PROGRAMA.** Vivieron adentro de la caja entre la 1.8
+y la 2.1. Se separaron cuando el mismo sistema pasó a usarse en un almacén y en una
+botillería: esos locales no tienen televisores y no tienen por qué cargar, actualizar ni
+arrancar código de pantallas. El contrato entre los dos programas es **uno solo**:
+`GET /api/v1/carta`, público, de solo lectura y con `Access-Control-Allow-Origin: *`.
+
+> **Ese CORS no es opcional y no se cierra "por seguridad".** Los dos programas corren en
+> puertos distintos, o sea orígenes distintos para el navegador del televisor. Sin él, el TV
+> rechaza la carta y se queda con los precios viejos — y el síntoma no dice por qué.
+
+> **Separar no puede significar volver a un archivo suelto.** Antes de la 1.8, las pantallas
+> eran un `.html` que había que copiar a CADA televisor y al que había que escribirle la IP
+> de la caja a mano. Ese fue el dolor de verdad, y es el que la 1.8 resolvió. Por eso el
+> programa separado es un servidor chico: cada TV sigue abriendo una dirección y nada más.
+> La caja tampoco muestra las direcciones de las pantallas, porque no sabe si ese programa
+> está instalado ni en qué puerto: una dirección inventada es peor que ninguna.
+
 ---
 
 ## 2. Modelo de datos `[IMPL]`

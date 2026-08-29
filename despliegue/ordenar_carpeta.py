@@ -33,15 +33,20 @@ PLAN = [
         ("LEEME.md", "Cómo se usa la caja.md"),
         ("docs/SII.md", "Conectar la boleta del SII.md"),
         ("docs/PUBLICAR-ACTUALIZACIONES.md", "Cómo publico una versión nueva.md"),
-        ("apps/pos/static/pantallas.html", "Pantallas del local (respaldo).html"),
-        ("apps/pos/static/pantallas-simple.html",
-         "Pantallas del local (para TV viejo).html"),
     ]),
     ("3 - Actualizaciones", [
         (f"despliegue/Kofe-actualizacion-v{APP_VERSION}.zip", None),
         ("VERSIONES.md", "Qué cambió en cada versión.md"),
     ]),
-    ("5 - Para el que programa", [
+    # Las pantallas son OTRO programa desde la 2.2: acá va su guía, para que el
+    # dueño encuentre las dos cosas en el mismo lugar aunque sean dos programas.
+    ("5 - Pantallas del menú", [
+        ("../pantallas-cafeteria/LEEME.md", "Cómo se usan las pantallas.md"),
+        ("../pantallas-cafeteria/VERSIONES.md", "Qué cambió en cada versión.md"),
+        ("../pantallas-cafeteria/pantallas-simple.html",
+         "Pantalla para TV viejo (respaldo).html"),
+    ]),
+    ("6 - Para el que programa", [
         ("README.md", "Cómo está hecho por dentro.md"),
         ("docs/CONTRATO.md", "Las decisiones que mandan.md"),
     ]),
@@ -81,14 +86,23 @@ Qué hay en cada carpeta
       carpeta "registros"), y lo que se exporte para el contador.
       ESTA CARPETA ES TUYA: no se borra ni se reordena.
 
-  5 - Para el que programa
+  5 - Pantallas del menú
+      Los televisores que muestran la carta. Desde la 2.2 son OTRO
+      PROGRAMA, con su propio icono: la caja ya no los sirve. Se
+      separaron porque un almacén o una botillería no tienen televisores
+      y no tienen por qué cargar ese código.
+      Acá está su guía, y una copia de la pantalla para televisores
+      viejos por si alguna vez hay que abrirla a mano.
+
+  6 - Para el que programa
       Cómo está construido y las decisiones que no se cambian sin pensar.
 
 El código
 ---------
 
-El programa vive en:
+Los dos programas viven en:
     {codigo}
+    {codigo_pantallas}
 
 Es un repositorio de git conectado a GitHub. No se mueve de ahí: si se
 cambia de lugar, se rompen el repositorio y las rutas.
@@ -107,27 +121,59 @@ def copiar(origen: str, carpeta: str, nombre: str | None) -> bool:
     return True
 
 
-def ordenar() -> tuple[int, list[str]]:
+def ordenar() -> tuple[int, list[str], list[str], list[str]]:
     # Cada carpeta se rehace de cero, así que dos entradas con el mismo nombre
     # harían que la segunda borre lo de la primera. Mejor que reviente acá.
     nombres = [c for c, _ in PLAN]
     assert len(nombres) == len(set(nombres)), f"carpeta repetida en PLAN: {nombres}"
 
     os.makedirs(DESTINO, exist_ok=True)
-    copiados, faltantes = 0, []
+    copiados, faltantes, intactas = 0, [], []
 
     for carpeta, archivos in PLAN:
         ruta = os.path.join(DESTINO, carpeta)
-        # Se rehace de cero: si una versión vieja dejó un ZIP, no puede quedar
-        # al lado del nuevo — nadie sabría cuál entregar.
+
+        # Si falta algo que iba a ir acá, esta carpeta NO se toca.
+        #
+        # Se rehace de cero cuando se puede, porque si una versión vieja dejó un
+        # ZIP no puede quedar al lado del nuevo: nadie sabría cuál entregar.
+        # Pero borrar primero y descubrir después que el archivo nuevo no existe
+        # deja la carpeta VACÍA — y así se pierde el instalador de la versión
+        # anterior, que era lo único que había para un local nuevo. Pasó de
+        # verdad: basta con ordenar sin haber construido el .exe.
+        sin_construir = [o for o, _ in archivos
+                         if not os.path.exists(os.path.join(RAIZ, o))]
+        if sin_construir:
+            faltantes.extend(sin_construir)
+            intactas.append(carpeta)
+            continue
+
         if os.path.exists(ruta):
             shutil.rmtree(ruta, ignore_errors=True)
         os.makedirs(ruta, exist_ok=True)
         for origen, nombre in archivos:
             if copiar(origen, ruta, nombre):
                 copiados += 1
-            else:
-                faltantes.append(origen)
+
+    # Las carpetas que YA NO están en el PLAN se barren.
+    #
+    # Sin esto, renumerar una carpeta —lo que pasó al agregar «5 - Pantallas del
+    # menú» y correr la de programación al 6— deja la vieja ahí para siempre, y el
+    # dueño se encuentra con dos carpetas que dicen casi lo mismo.
+    #
+    # Solo se barren las que EMPIEZAN CON UN NÚMERO, que son las que pone este
+    # programa. Si el dueño dejó una carpeta suya acá, no se toca: esta carpeta
+    # también es de él.
+    esperadas = {c for c, _ in PLAN} | {DEL_DUENO}
+    barridas = []
+    for nombre in sorted(os.listdir(DESTINO)):
+        ruta_vieja = os.path.join(DESTINO, nombre)
+        if not os.path.isdir(ruta_vieja) or nombre in esperadas:
+            continue
+        if not nombre[:1].isdigit():
+            continue                      # no la puso este programa
+        shutil.rmtree(ruta_vieja, ignore_errors=True)
+        barridas.append(nombre)
 
     # La del dueño se crea si falta y NO se toca si ya está.
     del_dueno = os.path.join(DESTINO, DEL_DUENO)
@@ -144,9 +190,11 @@ def ordenar() -> tuple[int, list[str]]:
                 "'Descargar para el contador'.\n")
 
     with open(os.path.join(DESTINO, "LEEME PRIMERO.txt"), "w", encoding="utf-8") as f:
-        f.write(LEEME.format(version=APP_VERSION, nombre=APP_NOMBRE,
-                             fecha=f"{datetime.now():%d-%m-%Y}", codigo=RAIZ))
-    return copiados, faltantes
+        f.write(LEEME.format(
+            version=APP_VERSION, nombre=APP_NOMBRE,
+            fecha=f"{datetime.now():%d-%m-%Y}", codigo=RAIZ,
+            codigo_pantallas=os.path.join(os.path.dirname(RAIZ), "pantallas-cafeteria")))
+    return copiados, faltantes, intactas, barridas
 
 
 if __name__ == "__main__":
@@ -154,11 +202,20 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
-    copiados, faltantes = ordenar()
+    copiados, faltantes, intactas, barridas = ordenar()
     print(f"\n  {DESTINO}  ·  {copiados} archivos ordenados\n")
     for carpeta, _ in PLAN:
         print(f"    {carpeta}")
     print(f"    {DEL_DUENO}   (tuya, no se toca)")
+    if barridas:
+        print("\n  Carpetas viejas que ya no van, borradas:")
+        for b in barridas:
+            print("    -", b)
+    if intactas:
+        print("\n  Estas se dejaron COMO ESTABAN, porque falta construir algo")
+        print("  de lo que iba adentro. Lo que ya había sigue ahí:")
+        for c in intactas:
+            print("    -", c)
     if faltantes:
         print("\n  No estaban (¿falta construir?):")
         for f in faltantes:

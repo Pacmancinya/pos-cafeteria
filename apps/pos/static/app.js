@@ -611,45 +611,41 @@ async function guardarProducto(id) {
 
 /* Dirección que hay que pegar en las pantallas del local. La mostramos acá para
    que nadie tenga que ir a buscar la IP del computador. */
+/* El recuadro de la pestaña Carta.
+
+   Muestra la dirección de ESTA caja en la red —que sirve para abrirla desde un
+   tablet o desde otro computador del local— y avisa que las pantallas del menú
+   son otro programa desde la 2.2.
+
+   Las direcciones de las PANTALLAS no se muestran acá a propósito: esta caja no
+   sabe si ese programa está instalado en este computador, ni en qué puerto
+   quedó. Escribir una dirección que capaz no existe es peor que no escribir
+   ninguna — el dueño la pega en el televisor, no anda, y no sabe si el problema
+   es el TV, la red o el programa. Esas direcciones las muestra el programa de
+   las pantallas, que sí las conoce. */
 function pintarConectar(salud) {
-  // Las pantallas ahora las sirve esta misma caja, así que no hay archivo que
-  // copiar ni dirección de carta que escribir: cada TV abre su propia URL y la
-  // carta le llega del mismo origen.
-  const base = salud.pantallas_url || (salud.carta_url || "").replace("/api/v1/carta", "/pantallas");
-  $("#conectar").innerHTML = `
-    <b>Conectar las pantallas del local</b><br>
-    En cada televisor, abre el navegador y entra a la dirección que le toca.
-    No hay que instalar ni copiar nada: la carta le llega de esta caja sola.
-    <div class="conectar__url">
-      <span class="conectar__cual">Vitrina</span>
-      <code id="urlP1">${base}?p=1</code>
-      <button class="btn btn--chico" data-copiar="${base}?p=1">Copiar</button>
-    </div>
-    <div class="conectar__url">
-      <span class="conectar__cual">Carta con precios</span>
-      <code id="urlP2">${base}?p=2</code>
-      <button class="btn btn--chico" data-copiar="${base}?p=2">Copiar</button>
-    </div>
-    <div class="conectar__url">
-      <span class="conectar__cual">Las dos turnándose</span>
-      <code>${base}?tv=1</code>
-      <button class="btn btn--chico" data-copiar="${base}?tv=1">Copiar</button>
-    </div>
+  const caja = $("#conectar");
+  if (!caja) return;
+  if (!salud.en_la_red) { caja.hidden = true; return; }
+  const mia = (salud.carta_url || "").replace("/api/v1/carta", "");
+  caja.innerHTML = `
+    <b>Esta caja en la red del local</b><br>
+    Para abrirla desde un tablet o desde otro computador, en el mismo wifi.
+    ${mia ? `<div class="conectar__url">
+      <span class="conectar__cual">La caja</span>
+      <code>${mia}</code>
+      <button class="btn btn--chico" data-copiar="${mia}">Copiar</button>
+    </div>` : ""}
     <div class="conectar__url conectar__url--simple">
-      <span class="conectar__cual">Si el TV se ve mal</span>
-      <code>${base}/simple</code>
-      <button class="btn btn--chico" data-copiar="${base}/simple">Copiar</button>
+      <span class="conectar__cual">Las pantallas del menú</span>
+      <span style="font-size:13.5px;line-height:1.6">Son un programa aparte.
+        Se abren con su propio icono, <b>Pantallas del menú</b>, y ahí salen las
+        direcciones de cada televisor.</span>
     </div>
     <p style="margin:10px 0 0;font-size:13px;line-height:1.6">
-      En el televisor: mueve el mouse o toca la pantalla y aparece una barra abajo
-      para <b>girar</b> la pantalla, <b>ajustarla</b> si el TV recorta los bordes,
-      y <b>configurar</b>.
-    </p>
-    <p style="margin:8px 0 0;font-size:13px;line-height:1.6">
-      El navegador que traen algunos televisores es muy viejo y no entiende la
-      pantalla bonita: se ve en blanco, con letras negras. Si te pasa eso, usa la
-      última dirección — es la misma carta, más sobria, y funciona en cualquier
-      televisor. La pantalla normal se cambia sola cuando detecta que el TV no da.
+      La carta le llega sola a los televisores: la vienen a buscar acá. Eso sí,
+      esta caja tiene que estar abierta — si el computador se apaga, se quedan
+      con la última que alcanzaron a leer.
     </p>`;
 }
 
