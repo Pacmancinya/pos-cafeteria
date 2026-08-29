@@ -33,6 +33,7 @@ PLAN = [
         ("LEEME.md", "Cómo se usa la caja.md"),
         ("docs/SII.md", "Conectar la boleta del SII.md"),
         ("docs/PUBLICAR-ACTUALIZACIONES.md", "Cómo publico una versión nueva.md"),
+        ("apps/pos/static/pantallas.html", "Pantallas del local (respaldo).html"),
     ]),
     ("3 - Actualizaciones", [
         (f"despliegue/Kofe-actualizacion-v{APP_VERSION}.zip", None),
@@ -103,6 +104,11 @@ def copiar(origen: str, carpeta: str, nombre: str | None) -> bool:
 
 
 def ordenar() -> tuple[int, list[str]]:
+    # Cada carpeta se rehace de cero, así que dos entradas con el mismo nombre
+    # harían que la segunda borre lo de la primera. Mejor que reviente acá.
+    nombres = [c for c, _ in PLAN]
+    assert len(nombres) == len(set(nombres)), f"carpeta repetida en PLAN: {nombres}"
+
     os.makedirs(DESTINO, exist_ok=True)
     copiados, faltantes = 0, []
 
