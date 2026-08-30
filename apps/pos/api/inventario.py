@@ -24,6 +24,7 @@ from apps.pos.db.models import Insumo, Movimiento, Producto, Receta
 from apps.pos.db.session import get_session
 from core.config import (a_local, costo_de, hoy_local, mostrar_cantidad,
                          rango_utc_del_dia)
+from core.planilla import sin_tildes
 from core.schemas import (CompraIn, ConteoIn, InsumoIn, MermaIn, RecetaIn, TalCualIn)
 
 router = APIRouter(prefix="/api/v1", tags=["inventario"])
@@ -130,6 +131,28 @@ def devolver_venta(s: Session, venta, quien: dict | None = None) -> int:
 # ---------------------------------------------------------------------------
 # Mirar el inventario
 # ---------------------------------------------------------------------------
+def _insumo_repetido(s: Session, nombre: str, salvo_id: int | None) -> Insumo | None:
+    """El insumo que ya se llama así, o None. Compara SIN tildes ni mayúsculas.
+
+    Existe porque crear un insumo no revisaba nada y se creaban dos iguales en
+    silencio: el dueño escribía "Leche" dos veces y quedaban dos saldos, cada
+    uno con la mitad de la verdad.
+
+    Compara normalizado y no con `==` porque el `==` crudo es exactamente lo que
+    fallaba: "Coca-Cola 1.5 L" y "Coca Cola 1.5L" son la misma botella para
+    cualquier persona y dos cosas distintas para un `==`.
+
+    Y mira TODOS los insumos, no solo los activos —al revés que los usuarios—
+    porque un insumo sacado de la bodega conserva su libro de movimientos. Dejar
+    que otro le tome el nombre deja dos historias mezcladas para siempre.
+    """
+    objetivo = sin_tildes(nombre)
+    for otro in s.exec(select(Insumo)).all():
+        if otro.id != salvo_id and sin_tildes(otro.nombre) == objetivo:
+            return otro
+    return None
+
+
 def _insumo_dict(i: Insumo) -> dict:
     valor = costo_de(max(0, i.stock), i.compra_costo, i.compra_contenido)
     return {
@@ -141,6 +164,8 @@ def _insumo_dict(i: Insumo) -> dict:
         "formato": i.formato, "compra_contenido": i.compra_contenido,
         "compra_costo": i.compra_costo, "valor": valor,
         "activo": i.activo, "orden": i.orden,
+        # De qué producto es "el mismo". Vacío en un insumo de verdad.
+        "producto_id": i.producto_id,
     }
 
 
@@ -215,6 +240,11 @@ def movimientos(insumo_id: int,
 @router.post("/inventario/insumos")
 def crear_insumo(datos: InsumoIn, s: Session = Depends(get_session),
                  quien: dict = Depends(sesion.exige("inventario"))):
+    repetido = _insumo_repetido(s, datos.nombre, None)
+    if repetido:
+        raise HTTPException(409, f"Ya hay algo que se llama {repetido.nombre} en la bodega."
+                            + ("" if repetido.activo else " Está sacado de la bodega:"
+                               " ábrelo y devuélvelo en vez de crear otro."))
     i = Insumo(**datos.model_dump(exclude={"stock_inicial"}), stock=0)
     s.add(i)
     s.commit()
@@ -233,6 +263,9 @@ def editar_insumo(insumo_id: int, datos: InsumoIn, s: Session = Depends(get_sess
     i = s.get(Insumo, insumo_id)
     if not i:
         raise HTTPException(404, "No existe ese insumo")
+    repetido = _insumo_repetido(s, datos.nombre, insumo_id)
+    if repetido:
+        raise HTTPException(409, f"Ya hay algo que se llama {repetido.nombre} en la bodega.")
     # El stock NO se toca por acá a propósito: para cambiarlo está el conteo o
     # el ajuste, que dejan una fila en el libro diciendo quién y por qué.
     for campo, valor in datos.model_dump(exclude={"stock_inicial"}).items():
@@ -449,14 +482,40 @@ def receta_tal_cual(producto_id: int, datos: TalCualIn, s: Session = Depends(get
     if not p:
         raise HTTPException(404, "No existe ese producto")
 
-    i = s.exec(select(Insumo).where(Insumo.nombre == p.nombre)).first()
+    # Se busca por ID, no por nombre. Antes se comparaba `Insumo.nombre ==
+    # p.nombre` y eso tenía tres formas de fallar, las tres vistas en la base
+    # del local: (a) el `==` distingue tildes y espacios, así que "Coca-Cola
+    # 1.5 L" y "Coca Cola 1.5L" creaban DOS insumos y el stock del primero
+    # quedaba huérfano; (b) si al producto le cambiaban el nombre después, el
+    # insumo se quedaba con el viejo — en la base real quedó un insumo llamado
+    # "Producto nuevo" apuntando a "redbul 550ml"; (c) no filtraba `activo`, así
+    # que podía enganchar la receta a un insumo SACADO de la bodega, y entonces
+    # la venta no descontaba nada y no daba ningún error.
+    i = s.exec(select(Insumo).where(Insumo.producto_id == producto_id)).first()
     if not i:
+        # Sin dueño todavía: se acepta uno que se llame igual, normalizado, y se
+        # adopta. Es el caso de las bodegas cargadas a mano antes de esto.
+        candidato = _insumo_repetido(s, p.nombre, None)
+        i = candidato if candidato and not candidato.producto_id else None
+
+    if i:
+        # Ya existía: se ACTUALIZA en vez de ignorarlo. Antes, si el insumo ya
+        # estaba, el costo y el mínimo que el dueño acababa de escribir se
+        # descartaban en silencio y la API igual contestaba que sí.
+        i.producto_id = producto_id
+        i.nombre = p.nombre           # el nombre lo manda la carta, no la bodega
+        i.activo = True               # si estaba sacado, vuelve
+        if datos.compra_costo:
+            i.compra_costo = datos.compra_costo
+        if datos.minimo:
+            i.minimo = datos.minimo
+    else:
         i = Insumo(nombre=p.nombre, unidad="un", minimo=datos.minimo,
                    formato="Unidad", compra_contenido=1,
-                   compra_costo=datos.compra_costo)
-        s.add(i)
-        s.commit()
-        s.refresh(i)
+                   compra_costo=datos.compra_costo, producto_id=producto_id)
+    s.add(i)
+    s.commit()
+    s.refresh(i)
 
     for vieja in s.exec(select(Receta).where(Receta.producto_id == producto_id)).all():
         s.delete(vieja)

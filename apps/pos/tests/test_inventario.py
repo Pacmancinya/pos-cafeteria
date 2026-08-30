@@ -233,3 +233,151 @@ def test_sacar_un_insumo_no_borra_su_historia(cliente, bodega):
                                   cliente.get("/api/v1/inventario").json()["insumos"]]
     mv = cliente.get(f"/api/v1/inventario/insumos/{bodega['leche']['id']}/movimientos").json()
     assert len(mv["movimientos"]) == 1
+
+
+# ------------------------------------- un solo lugar para agregar un producto
+def test_crear_un_producto_tal_cual_deja_todo_hecho(cliente, carta):
+    """La queja del dueño, textual: «es bien incómodo tener que agregar
+    productos en carta y en bodega». Un formulario tiene que dejar la ficha, el
+    insumo, la receta y el saldo — todo, o nada."""
+    p = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Alfajor grande",
+        "precio": 1500, "tal_cual": True, "costo": 700,
+        "stock_inicial": 20, "minimo": 5}).json()
+
+    inv = cliente.get("/api/v1/inventario").json()
+    suyo = [i for i in inv["insumos"] if i["producto_id"] == p["id"]]
+    assert len(suyo) == 1, "tiene que quedar UN insumo, amarrado por id"
+    assert suyo[0]["nombre"] == "Alfajor grande"
+    assert suyo[0]["stock"] == 20
+    assert suyo[0]["compra_costo"] == 700
+    assert suyo[0]["minimo"] == 5
+
+    r = cliente.get(f"/api/v1/productos/{p['id']}/receta").json()
+    assert len(r["lineas"]) == 1
+    assert r["costo_total"] == 700
+
+
+def test_vender_lo_creado_asi_descuenta_el_stock(cliente, carta):
+    """Que quede amarrado no basta: tiene que descontar de verdad."""
+    p = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Botella de agua",
+        "precio": 1000, "tal_cual": True, "costo": 400,
+        "stock_inicial": 10}).json()
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 3}]})
+
+    inv = cliente.get("/api/v1/inventario").json()
+    suyo = [i for i in inv["insumos"] if i["producto_id"] == p["id"]][0]
+    assert suyo["stock"] == 7
+
+
+def test_renombrar_el_producto_renombra_su_insumo(cliente, carta):
+    """En la base real quedó un insumo llamado «Producto nuevo» apuntando a un
+    producto llamado «redbul 550ml». El dueño abre la bodega, no reconoce nada,
+    y termina creando otro."""
+    p = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Producto nuevo",
+        "precio": 1000, "tal_cual": True}).json()
+    cliente.put(f"/api/v1/productos/{p['id']}", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Red Bull 550 ml",
+        "precio": 1000})
+
+    inv = cliente.get("/api/v1/inventario").json()
+    suyo = [i for i in inv["insumos"] if i["producto_id"] == p["id"]][0]
+    assert suyo["nombre"] == "Red Bull 550 ml"
+
+
+# --------------------------------------------- el bug del nombre repetido
+def test_no_se_pueden_crear_dos_insumos_con_el_mismo_nombre(cliente):
+    """Se creaban dos en silencio y quedaban dos saldos, cada uno con la mitad
+    de la verdad."""
+    assert cliente.post("/api/v1/inventario/insumos", json={
+        "nombre": "Leche entera", "unidad": "ml"}).status_code == 200
+    r = cliente.post("/api/v1/inventario/insumos", json={
+        "nombre": "Leche entera", "unidad": "ml"})
+    assert r.status_code == 409
+    assert "Leche entera" in r.json()["detail"]
+
+
+def test_las_tildes_y_los_espacios_no_hacen_un_insumo_distinto(cliente):
+    """«Coca-Cola 1.5 L» y «coca cola 1.5 l» son la misma botella para cualquier
+    persona. El `==` crudo de antes decía que no."""
+    cliente.post("/api/v1/inventario/insumos", json={"nombre": "Café en grano", "unidad": "g"})
+    r = cliente.post("/api/v1/inventario/insumos", json={"nombre": "CAFE EN GRANO", "unidad": "g"})
+    assert r.status_code == 409
+
+
+def test_tampoco_se_puede_renombrar_encima_de_otro(cliente):
+    cliente.post("/api/v1/inventario/insumos", json={"nombre": "Azúcar", "unidad": "g"})
+    otro = cliente.post("/api/v1/inventario/insumos",
+                        json={"nombre": "Harina", "unidad": "g"}).json()
+    r = cliente.put(f"/api/v1/inventario/insumos/{otro['id']}",
+                    json={"nombre": "azucar", "unidad": "g"})
+    assert r.status_code == 409
+
+
+def test_un_insumo_sacado_de_la_bodega_igual_protege_su_nombre(cliente):
+    """Su libro de movimientos sigue ahí. Dejar que otro le tome el nombre deja
+    dos historias mezcladas para siempre."""
+    i = cliente.post("/api/v1/inventario/insumos",
+                     json={"nombre": "Sirope", "unidad": "ml"}).json()
+    cliente.delete(f"/api/v1/inventario/insumos/{i['id']}")
+    r = cliente.post("/api/v1/inventario/insumos", json={"nombre": "Sirope", "unidad": "ml"})
+    assert r.status_code == 409
+    assert "sacado" in r.json()["detail"]
+
+
+def test_la_migracion_amarra_y_renombra_lo_que_venia_de_antes(cliente, carta):
+    """La base real llegó a la 2.3 con un insumo llamado «Producto nuevo»
+    amarrado por receta a un producto llamado «redbul 550ml». La migración tiene
+    que traducir esa relación a un id y de paso arreglarle el nombre."""
+    from sqlmodel import Session, select
+
+    from apps.pos.db.migraciones import _amarrar_insumos_a_su_producto
+    from apps.pos.db.models import Insumo, Receta
+    from apps.pos.db.session import engine
+
+    p = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Red Bull 550 ml",
+        "precio": 2500}).json()
+    i = cliente.post("/api/v1/inventario/insumos", json={
+        "nombre": "Producto nuevo", "unidad": "un"}).json()
+
+    # Como quedaban antes: amarrados solo por la receta, sin producto_id.
+    with Session(engine) as s:
+        s.add(Receta(producto_id=p["id"], insumo_id=i["id"], cantidad=1))
+        s.commit()
+
+    hechos = _amarrar_insumos_a_su_producto()
+    assert hechos, "la migración tenía que hacer algo"
+
+    with Session(engine) as s:
+        quedo = s.exec(select(Insumo).where(Insumo.id == i["id"])).first()
+        assert quedo.producto_id == p["id"]
+        assert quedo.nombre == "Red Bull 550 ml"
+
+    # Y es idempotente: la segunda vez no encuentra nada que hacer.
+    assert _amarrar_insumos_a_su_producto() == []
+
+
+def test_la_migracion_no_toca_una_receta_de_verdad(cliente, carta):
+    """Un capuchino NO «es» la leche. Solo se amarra el caso de una línea."""
+    from sqlmodel import Session, select
+
+    from apps.pos.db.migraciones import _amarrar_insumos_a_su_producto
+    from apps.pos.db.models import Insumo, Receta
+    from apps.pos.db.session import engine
+
+    leche = cliente.post("/api/v1/inventario/insumos",
+                         json={"nombre": "Leche", "unidad": "ml"}).json()
+    cafe = cliente.post("/api/v1/inventario/insumos",
+                        json={"nombre": "Café molido", "unidad": "g"}).json()
+    with Session(engine) as s:
+        s.add(Receta(producto_id=carta["latte"]["id"], insumo_id=leche["id"], cantidad=200))
+        s.add(Receta(producto_id=carta["latte"]["id"], insumo_id=cafe["id"], cantidad=18))
+        s.commit()
+
+    _amarrar_insumos_a_su_producto()
+    with Session(engine) as s:
+        assert s.exec(select(Insumo).where(Insumo.id == leche["id"])).first().producto_id is None

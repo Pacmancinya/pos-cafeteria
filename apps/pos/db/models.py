@@ -180,6 +180,16 @@ class Insumo(SQLModel, table=True):
     compra_contenido: int = 1             # cuántas unidades base trae el formato
     compra_costo: int = 0                 # CLP enteros que cuesta ese formato
 
+    # De qué producto es "el mismo". Solo para lo que se compra y se vende TAL
+    # CUAL: una botella, un alfajor, un pastel. Vacío en un insumo de verdad
+    # (leche, café en grano), que alimenta varios productos y no es ninguno.
+    #
+    # Antes esto se resolvía comparando NOMBRES, y ahí estaba el bug que el
+    # dueño encontró: "Coca-Cola 1.5 L" en la carta y "Coca Cola 1.5L" en la
+    # bodega eran dos cosas distintas, así que se creaba un segundo insumo y el
+    # stock del primero quedaba huérfano. Un id no se escribe mal.
+    producto_id: Optional[int] = Field(default=None, foreign_key="producto.id", index=True)
+
 
 class Ajuste(SQLModel, table=True):
     """Las preferencias del local. Una fila por decisión, en texto.
@@ -194,6 +204,28 @@ class Ajuste(SQLModel, table=True):
     """
     clave: str = Field(primary_key=True)
     valor: str = ""
+
+
+class CodigoBarra(SQLModel, table=True):
+    """Un código de barras que apunta a un producto.
+
+    Tabla aparte y no una columna en `Producto` porque **un producto tiene más
+    de un código**, y en una botillería eso es el caso diario: la lata suelta y
+    el pack de 6 traen códigos distintos y son el mismo trago. Lo mismo el vino
+    que cambió de etiqueta y quedaron las dos en la bodega. Con una columna, ese
+    caso queda afuera para siempre; con esta tabla cuesta lo mismo hoy.
+
+    El código se guarda SIEMPRE normalizado a 13 dígitos: un UPC-A de 12 es un
+    EAN-13 con un cero adelante, y guardarlos distinto significa tener el mismo
+    producto duplicado según qué lector lo leyó.
+
+    `cuantos` es cuántas unidades entrega ese código: 1 la lata, 6 el pack. Así
+    el pack descuenta seis del mismo saldo sin ninguna tabla extra.
+    """
+    codigo: str = Field(primary_key=True)      # 13 dígitos, sin espacios
+    producto_id: int = Field(foreign_key="producto.id", index=True)
+    cuantos: int = 1
+    nota: str = ""                             # "pack de 6", "etiqueta vieja"
 
 
 class Receta(SQLModel, table=True):

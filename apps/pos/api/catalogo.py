@@ -9,9 +9,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 
-from apps.pos.db.models import Categoria, Producto
+from apps.pos.db.models import Categoria, CodigoBarra, Insumo, Producto, Receta
 from apps.pos import sesion
 from apps.pos.db.session import get_session
+from core.codigos import normalizar, por_que_no_sirve
 from core.config import AVISOS, NOMBRE_LOCAL
 from core.schemas import CategoriaIn, ProductoIn
 
@@ -114,14 +115,65 @@ def editar_categoria(cat_id: int, datos: CategoriaIn, s: Session = Depends(get_s
     return c
 
 
+# Lo que ProductoIn trae de más y no es columna de Producto: son las cosas que
+# antes obligaban a ir a la Bodega a escribir todo de nuevo.
+EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo"}
+
+
 @router.post("/productos")
 def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
                    quien: dict = Depends(sesion.exige("editar_carta"))):
+    """Crea el producto y, si se pide, TODO lo demás en la misma operación.
+
+    Un producto que se compra y se vende tal cual —una botella, un alfajor, un
+    pastel— necesita cuatro cosas: la ficha, un insumo con su saldo, la receta
+    que los amarra y el código de barras. Antes eso eran tres pantallas y el
+    nombre escrito dos veces, y el resultado está en la base del local: 148
+    ventas y UN insumo cargado. Acá es un formulario.
+
+    Va todo en la MISMA transacción a propósito: un producto a medio crear
+    —ficha sí, insumo no— es peor que no haberlo creado, porque se vende y no
+    descuenta y nadie se entera hasta el conteo.
+    """
     if not s.get(Categoria, datos.categoria_id):
         raise HTTPException(404, "No existe esa categoría")
-    p = Producto(**datos.model_dump())
+
+    codigo = ""
+    if datos.codigo:
+        problema = por_que_no_sirve(datos.codigo)
+        if problema:
+            raise HTTPException(422, problema)
+        codigo = normalizar(datos.codigo)
+        ya = s.get(CodigoBarra, codigo)
+        if ya:
+            otro = s.get(Producto, ya.producto_id)
+            raise HTTPException(409, f"Ese código ya es de «{otro.nombre if otro else '?'}».")
+
+    p = Producto(**datos.model_dump(exclude=EXTRAS))
     _un_solo_destacado(s, p)
     s.add(p)
+    s.commit()
+    s.refresh(p)
+
+    if codigo:
+        s.add(CodigoBarra(codigo=codigo, producto_id=p.id, cuantos=1))
+
+    if datos.tal_cual:
+        # El producto ES su propio insumo. Se amarra por id y no por nombre:
+        # comparar nombres es lo que dejó un insumo llamado "Producto nuevo"
+        # apuntando a un producto llamado "redbul 550ml" en la base real.
+        i = Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
+                   compra_contenido=1, compra_costo=datos.costo,
+                   minimo=datos.minimo, producto_id=p.id)
+        s.add(i)
+        s.commit()
+        s.refresh(i)
+        s.add(Receta(producto_id=p.id, insumo_id=i.id, cantidad=1))
+        if datos.stock_inicial:
+            from apps.pos.api.inventario import anotar
+            anotar(s, i, "carga", datos.stock_inicial,
+                   motivo="Con lo que había al empezar", quien=quien)
+
     s.commit()
     s.refresh(p)
     return p
@@ -133,8 +185,20 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
     p = s.get(Producto, prod_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")
-    for k, v in datos.model_dump().items():
+    antes = p.nombre
+    for k, v in datos.model_dump(exclude=EXTRAS).items():
         setattr(p, k, v)
+
+    # El insumo de un producto que se vende TAL CUAL lleva su mismo nombre, y
+    # tiene que seguirlo cuando se lo cambian. Si no, pasa lo que hay en la base
+    # del local: un insumo llamado "Producto nuevo" amarrado a "redbul 550ml".
+    # El dueño abre la bodega, no reconoce nada, y termina creando otro.
+    if p.nombre != antes:
+        suyo = s.exec(select(Insumo).where(Insumo.producto_id == p.id)).first()
+        if suyo:
+            suyo.nombre = p.nombre
+            s.add(suyo)
+
     _un_solo_destacado(s, p)
     s.add(p)
     s.commit()

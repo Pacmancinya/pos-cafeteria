@@ -72,6 +72,18 @@ class ProductoIn(BaseModel):
     dibujo: str = "mug"
     color: str = ""
 
+    # ---- lo que antes obligaba a ir a la Bodega ----
+    # Estos campos existen para que crear un producto sea UN solo formulario.
+    # Antes había que crearlo en la carta, ir a la bodega, crearlo otra vez con
+    # el mismo nombre escrito a mano, y recién ahí amarrarlos. La base del local
+    # lo demuestra: 148 ventas y UN insumo cargado. No es que el inventario no
+    # importe — es que entrar costaba más de lo que daba.
+    codigo: str = ""                       # el de barras, si lo escaneó
+    tal_cual: bool = False                 # se compra y se vende igual: es su propio insumo
+    costo: int = Field(default=0, ge=0)    # cuánto cuesta cada uno
+    stock_inicial: int = Field(default=0, ge=0)
+    minimo: int = Field(default=0, ge=0)   # bajo esto aparece en "Por comprar"
+
 
 class CategoriaIn(BaseModel):
     nombre: str
@@ -222,3 +234,12 @@ class AjustesIn(BaseModel):
     # tanto que deja de ser una sugerencia. El tope es para que la pantalla no
     # muestre un disparate, no para decirle al dueño cuánto ganar.
     margen_sugerido: int = Field(default=MARGEN_SUGERIDO, ge=0, le=95)
+
+
+class CodigoIn(BaseModel):
+    """Un código de barras que se le pega a un producto."""
+    codigo: str
+    # Cuántas unidades entrega este código: 1 la lata, 6 el pack. Es lo que hace
+    # que el pack descuente seis del mismo saldo sin ninguna tabla extra.
+    cuantos: int = Field(default=1, ge=1, le=999)
+    nota: str = ""

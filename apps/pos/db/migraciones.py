@@ -60,4 +60,68 @@ def poner_al_dia() -> list[str]:
                     f'ALTER TABLE "{nombre}" ADD COLUMN "{col.name}" {_sql_del_tipo(col)}'
                 ))
                 hechos.append(f"{nombre}.{col.name}")
+
+        # `create_all` crea las tablas nuevas con sus índices, pero una tabla que
+        # YA existía no recibe nunca un índice nuevo. Y el del código de barras
+        # importa: con el escáner, "dame el producto de este código" pasa a ser
+        # la consulta más caliente de la caja — una por venta, con la fila de
+        # clientes esperando. Sin índice, cada escaneo recorre la tabla entera.
+        for indice, tabla, columna in (
+            ("ix_codigobarra_producto_id", "codigobarra", "producto_id"),
+            ("ix_insumo_producto_id", "insumo", "producto_id"),
+            ("ix_producto_nombre", "producto", "nombre"),
+        ):
+            if tabla not in existentes:
+                continue
+            columnas = {c["name"] for c in inspector.get_columns(tabla)}
+            if columna not in columnas:
+                continue
+            con.execute(text(
+                f'CREATE INDEX IF NOT EXISTS "{indice}" ON "{tabla}" ("{columna}")'))
+
+    hechos += _amarrar_insumos_a_su_producto()
+    return hechos
+
+
+def _amarrar_insumos_a_su_producto() -> list[str]:
+    """Le pone `producto_id` a los insumos que ya existían.
+
+    Hasta ahora, un producto que se vendía TAL CUAL se amarraba a su insumo
+    comparando NOMBRES. Eso ya no se usa, pero las bases que vienen de antes
+    tienen la relación escrita solo en la receta. Acá se traduce a un id.
+
+    Solo toca el caso que no admite duda: una receta de UNA sola línea, con
+    cantidad 1, y el insumo todavía sin dueño. Si son dos líneas es una receta
+    de verdad —un capuchino no "es" la leche— y no se toca.
+
+    Es idempotente: la segunda vez no encuentra nada que hacer.
+    """
+    from apps.pos.db.models import Insumo, Producto, Receta
+    from sqlmodel import Session, select
+
+    hechos = []
+    with Session(engine) as s:
+        cuantas = {}
+        for r in s.exec(select(Receta)).all():
+            cuantas[r.producto_id] = cuantas.get(r.producto_id, 0) + 1
+        for r in s.exec(select(Receta)).all():
+            if cuantas.get(r.producto_id) != 1 or r.cantidad != 1:
+                continue
+            i = s.get(Insumo, r.insumo_id)
+            if not i or i.producto_id:
+                continue
+            i.producto_id = r.producto_id
+            # De paso, el nombre. En la base del local quedó un insumo llamado
+            # "Producto nuevo" amarrado a "redbul 550ml": el producto se creó,
+            # se marcó "se vende tal cual" con el nombre por defecto, y después
+            # se le cambió el nombre solo a la ficha. El dueño abre la bodega,
+            # no reconoce nada, y termina creando otro.
+            p = s.get(Producto, r.producto_id)
+            if p and p.nombre and i.nombre != p.nombre:
+                hechos.append(f"insumo {i.id}: «{i.nombre}» → «{p.nombre}»")
+                i.nombre = p.nombre
+            s.add(i)
+            hechos.append(f"insumo {i.id} → producto {r.producto_id}")
+        if hechos:
+            s.commit()
     return hechos

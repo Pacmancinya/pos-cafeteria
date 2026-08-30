@@ -108,6 +108,70 @@ arrancar código de pantallas. El contrato entre los dos programas es **uno solo
 > La caja tampoco muestra las direcciones de las pantallas, porque no sabe si ese programa
 > está instalado ni en qué puerto: una dirección inventada es peor que ninguna.
 
+**13. Un producto se crea en UN solo lugar.** `POST /api/v1/productos` con `tal_cual` crea
+la ficha, su insumo, la receta que los amarra y el saldo inicial **en la misma transacción**.
+Antes había que crearlo en la carta, ir a la bodega, escribir el nombre otra vez a mano y
+recién ahí amarrarlos. El resultado de ese diseño está en la base del local: **148 ventas y
+UN insumo cargado**. No es que el inventario no importe — es que entrar costaba más de lo
+que daba.
+
+> **Va todo junto o no va nada.** Un producto a medio crear —ficha sí, insumo no— es peor
+> que no haberlo creado: se vende, no descuenta, y nadie se entera hasta el conteo.
+
+**14. Lo que se vende y lo que se guarda se amarran por ID, nunca por nombre.**
+`Insumo.producto_id` es el vínculo. Antes se comparaban los NOMBRES y eso falló de tres
+formas distintas, las tres vistas en la base real: "Coca-Cola 1.5 L" y "Coca Cola 1.5L"
+creaban dos insumos y el saldo del primero quedaba huérfano; renombrar el producto dejaba
+el insumo con el nombre viejo —quedó uno llamado "Producto nuevo" apuntando a "redbul
+550ml"—; y la búsqueda no filtraba `activo`, así que podía amarrar la receta a un insumo
+sacado de la bodega, y entonces la venta no descontaba nada **sin dar ningún error**.
+
+> **`Producto` sigue SIN columna de stock**, y es a propósito (ver la sección de
+> inventario). La tentación en una botillería es obvia y el precio se paga el día que
+> exista el pack de 6: la botella saldría del stock por dos caminos y el inventario deja de
+> cuadrar. La receta de una línea cuesta una fila y hace que el pack y la unidad suelta
+> descuenten del mismo saldo, sin código nuevo.
+
+**15. Un código de barras identifica un producto, y un producto puede tener varios.**
+Tabla `CodigoBarra`, no una columna: la lata suelta y el pack de 6 traen códigos distintos
+y son el mismo trago. `cuantos` dice cuántas unidades entrega cada código.
+
+Se guardan **siempre normalizados a 13 dígitos**: un UPC-A de 12 es un EAN-13 con un cero
+adelante, y guardarlos distinto deja el mismo producto duplicado según qué lector lo leyó.
+Se valida el dígito verificador **antes** de buscar: una etiqueta arrugada devuelve dígitos
+cambiados, y sin esa validación se crea un producto fantasma.
+
+> **Los códigos que empiezan con 2 NO se guardan nunca.** Son los que imprime la balanza
+> del local para el pan, el fiambre y el queso: llevan el peso o el precio adentro, así que
+> **cambian con cada trozo**. Si se aceptaran, habría un producto nuevo por cada pan
+> vendido. La caja los reconoce y se niega, explicando por qué.
+
+**16. El escáner intercepta en fase de CAPTURA sobre `window`, y eso no es un detalle.**
+Un lector de pistola es un teclado: manda los dígitos y un Enter. La caja ya tenía dos
+oyentes globales de teclado, y sin interceptar antes que ellos pasaba esto: con el diálogo
+de cobro abierto, **el escaneo cobraba la venta** con "paga con $7.801.610.001.196"; con el
+carrito armado, el Enter abría solo el cobro; y frente al candado, un código de 13 dígitos
+se convertía en **tres intentos de entrar seguidos**. Está probado en `test_codigos.py` y
+verificado en el navegador. Si alguien mueve ese oyente a `document` o a fase de burbujeo,
+vuelven los tres.
+
+> **La cámara no es una opción en Windows, y no es cosa de esperar.** `BarcodeDetector`
+> delega en el sistema operativo y Windows no tiene esa API, así que en WebView2 sencilla-
+> mente no existe. Y escanear desde el celular por la red tampoco: `getUserMedia` exige
+> contexto seguro, y `http://192.168.x.x` no lo es. La pistola USB cuesta menos que
+> cualquiera de las salidas.
+
+**17. No existe una base de códigos de barra chilena, y el catálogo se arma solo.** GS1
+Chile **vende** códigos a los fabricantes; no publica un catálogo ni tiene API abierta.
+Open Food Facts sí es libre (ODbL, sin clave) pero tiene **6.680 productos chilenos** contra
+4,7 millones en el mundo, y **cero** cervezas, vinos y piscos: es una base nutricional. Para
+un almacén ayuda; para una botillería, casi nunca.
+
+Por eso Open Food Facts se usa **solo para sugerir el nombre**, editable, y nunca como
+catálogo. El precio no está en ninguna base del mundo: ese es del local. Lo que de verdad
+resuelve el problema es que cada producto se escriba UNA vez, la primera que pasa por la
+caja, y quede con su código para siempre.
+
 ---
 
 ## 2. Modelo de datos `[IMPL]`

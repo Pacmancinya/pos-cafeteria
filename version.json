@@ -1,6 +1,6 @@
 {
-  "version": "2.2",
-  "nombre": "Cada cosa en su programa",
-  "novedades": "Las pantallas del menú se separaron: ahora son su propio programa, con su icono y sus propias actualizaciones. La caja ya no las sirve. Es porque el mismo sistema pasó a usarse en un almacén y en una botillería, que no tienen televisores y no tienen por qué cargar ni actualizar ese código. Para la cafetería no cambia casi nada: cada TV sigue abriendo una dirección de la red y la carta le sigue llegando sola desde acá — lo único es que ahora hay que tener abierto también el programa de las pantallas, que muestra las direcciones de cada televisor. En la pestaña Carta, el recuadro ahora muestra la dirección de esta caja en la red, que es la que sirve para cobrar desde un tablet.",
+  "version": "2.3",
+  "nombre": "Se arma sola",
+  "novedades": "Lector de códigos de barra. Se enchufa una pistola USB —no hay nada que instalar— y pasar un producto lo agrega al pedido. Si la caja no lo conoce, te pregunta ahí mismo qué es y a cuánto lo vendes, y queda guardado con su código para siempre: el catálogo se arma solo, un producto por vez, sin sentarse una tarde a escribirlo todo. El nombre a veces llega escrito desde una base pública y gratis. Y se acabó tener que agregar un producto en dos lados: un solo formulario deja la ficha, el stock y el costo. Se arregló también el bug de la bodega: crear algo con un nombre que ya existía creaba otro igual en silencio, y quedaban dos saldos con la mitad de la verdad cada uno.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }

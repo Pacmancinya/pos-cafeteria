@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=26">
+<link rel="stylesheet" href="/static/styles.css?v=27">
 </head>
 <body>
 
@@ -215,6 +215,13 @@
   <div class="dialogo dialogo--ancho" id="dialogoImportar"></div>
 </div>
 
+<!-- ══════════ PRODUCTO NUEVO DESDE EL ESCÁNER ══════════ -->
+<!-- Va en una capa firme: acá se está armando un producto con el cliente
+     esperando, y un toque al lado no puede borrarlo. -->
+<div class="capa capa--firme" id="capaCodigo">
+  <div class="dialogo" id="dialogoCodigo"></div>
+</div>
+
 <div class="capa" id="capaInsumo">
   <div class="dialogo" id="dialogoInsumo"></div>
 </div>
@@ -232,8 +239,9 @@
 <div class="aviso" id="aviso"></div>
 
 <script src="/static/dibujos.js?v=4"></script>
-<script src="/static/guias.js?v=6"></script>
+<script src="/static/guias.js?v=7"></script>
 <script src="/static/teclado.js?v=2"></script>
-<script src="/static/app.js?v=27"></script>
+<script src="/static/escaner.js?v=1"></script>
+<script src="/static/app.js?v=28"></script>
 </body>
 </html>

@@ -88,38 +88,90 @@ window.GUIAS = [
 {
   id: "compre-pasteles",
   titulo: "Compré pasteles: ¿dónde los pongo?",
-  resumen: "El caso más común, resuelto de un toque.",
+  resumen: "En un solo lugar. Ya no hay que escribirlo dos veces.",
   html: `
-    <p>Esta es la duda que más se repite, y tiene una respuesta corta.</p>
+    <p>En <b>un solo lugar</b>: la pestaña <b>Carta</b>. Antes había que crearlo
+       acá y después otra vez en la Bodega, escribiendo el mismo nombre a mano.
+       Eso se acabó.</p>
 
-    <h3>Primero, la diferencia</h3>
-    <ul>
-      <li>Un <b>producto</b> es lo que el cliente compra y paga. Está en la
-          <b>Carta</b>.</li>
-      <li>Un <b>insumo</b> es lo que se te gasta de la bodega. Está en la
-          <b>Bodega</b>.</li>
-    </ul>
-    <p>Para un pastel que compras hecho y vendes tal cual, <b>son la misma
-       cosa</b>. Y por eso hay un atajo.</p>
-
-    <h3>El atajo: "se vende tal cual"</h3>
+    <h3>Cómo se hace</h3>
     <ol>
-      <li>Crea el producto en la <b>Carta</b>, como cualquier otro: nombre,
-          precio, dibujo.</li>
-      <li>Abre su ficha y usa <b>"se vende tal cual"</b>.</li>
-      <li>Te va a preguntar cuántos tienes ahora y cuánto te costó cada uno.</li>
+      <li>Carta → <b>+ Producto</b>. Nombre y precio.</li>
+      <li>Más abajo, en <b>Bodega</b>, escribe <b>cuántos tienes</b> y
+          <b>cuánto te cuesta cada uno</b>, y toca <b>Se vende tal cual</b>.</li>
     </ol>
-    <p>Listo. Cada vez que vendas uno, el stock baja solo. No tienes que
-       entender la palabra "insumo" ni crear nada aparte.</p>
+    <p>Listo. Cada vez que vendas uno, el stock baja solo.</p>
 
-    <div class="ayuda"><b>Cuando llegue más mercadería:</b> Bodega →
-      <b>Llegó mercadería</b> → eliges el pastel y pones cuántos llegaron.</div>
+    <div class="ayuda"><b>Si tienes lector de códigos</b>, es todavía más corto:
+      pasa el producto por el lector en la pantalla de venta. Como no lo conoce,
+      te lo pregunta ahí mismo — y queda guardado con su código para siempre.
+      Mira la guía <i>Vender con lector de códigos</i>.</div>
 
-    <h3>¿Cuándo NO sirve el atajo?</h3>
+    <h3>Cuando llegue más mercadería</h3>
+    <p>Bodega → <b>Llegó mercadería</b> → eliges el pastel y pones cuántos
+       llegaron.</p>
+
+    <h3>¿Cuándo NO sirve esto?</h3>
     <p>Cuando lo que vendes <b>se prepara</b> con cosas que comparte con otros
-       productos. Un latte gasta leche, y esa misma leche la gasta el capuchino
-       y el cortado. Ahí no puedes tratar el latte como si fuera un insumo:
-       necesitas una receta. Está explicado en la guía de al lado.</p>`,
+       productos. Un latte gasta leche, y esa misma leche la gastan el capuchino
+       y el cortado. Ahí necesitas una receta, que está en la guía de al lado.</p>
+
+    <div class="ayuda"><b>Si la bodega te dice que ya existe algo con ese
+      nombre</b>, no lo crees de nuevo: es lo mismo. Antes se creaban dos en
+      silencio y quedaban dos saldos, cada uno con la mitad de la verdad.</div>`,
+},
+{
+  id: "lector-de-codigos",
+  titulo: "Vender con lector de códigos",
+  resumen: "La pistola, y cómo el catálogo se arma solo.",
+  html: `
+    <p>Sirve cualquier <b>lector de pistola USB</b> de los que se venden en
+       Chile (entre $15.000 y $40.000). Se enchufa y ya: para el computador es un
+       teclado, no hay nada que instalar.</p>
+
+    <h3>Vender</h3>
+    <p>Pasa el producto por el lector. Entra solo al pedido. Nada más.</p>
+
+    <h3>Cuando el producto es nuevo</h3>
+    <p>La primera vez que pasas algo que la caja no conoce, te pregunta ahí
+       mismo: qué es, a cuánto lo vendes, cuánto te cuesta y cuántos tienes.
+       Lo guardas y sigue la venta.</p>
+    <p><b>Esa es toda la carga de productos.</b> No hay que sentarse una tarde a
+       escribir el almacén entero: se arma solo, un producto por vez, la primera
+       que pasa por la caja. En una semana de trabajo normal ya está casi todo.</p>
+
+    <div class="ayuda"><b>El nombre a veces llega escrito.</b> La caja lo busca en
+      una base pública y gratis (Open Food Facts). Para abarrotes, lácteos y
+      bebidas de marca acierta harto. Para <b>alcohol chileno casi nunca</b>: esa
+      base es de información nutricional y no tiene cervezas ni vinos ni piscos.
+      Cuando no lo encuentra, lo escribes tú y listo — igual queda para siempre.</div>
+
+    <p><b>El precio nunca viene de ninguna parte.</b> Ese es tuyo y lo pones tú.
+       No existe ninguna base en el mundo que sepa a cuánto vendes.</p>
+
+    <h3>El pack de 6</h3>
+    <p>La lata suelta y el pack traen códigos distintos y son el mismo trago. En
+       la ficha del producto puedes agregarle <b>varios códigos</b>: pasas el
+       pack por el lector y le dices que entrega 6. Al venderlo descuenta seis
+       del mismo saldo.</p>
+
+    <h3>Lo que el lector NO puede hacer</h3>
+    <ul>
+      <li><b>El pan y el fiambre pesados.</b> La etiqueta que imprime la balanza
+          lleva el peso adentro, así que el código <b>cambia con cada trozo</b>.
+          La caja los reconoce y no los deja guardar: si lo hiciera, tendrías un
+          producto nuevo por cada pan que vendas. Esos se cobran a mano.</li>
+      <li><b>El código del cartón.</b> La caja de una docena tiene su propio
+          código, distinto al de la botella. Escanea la unidad suelta.</li>
+      <li><b>Con la cámara del computador no se puede.</b> Windows no trae lo que
+          hace falta para leer códigos de barra por cámara, y con el celular
+          tampoco funciona por cómo se conecta a la caja. La pistola sale más
+          barata que cualquier vuelta.</li>
+    </ul>
+
+    <div class="ayuda">Si el código sale mal leído, la caja te lo dice y te pide
+      pasarlo de nuevo, en vez de crear un producto fantasma. Pasa con etiquetas
+      arrugadas.</div>`,
 },
 {
   id: "descuento-automatico",

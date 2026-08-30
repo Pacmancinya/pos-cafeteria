@@ -183,6 +183,189 @@ function cambiarCantidad(id, delta) {
 
 const totalCarrito = () => carrito.reduce((s, l) => s + l.precio * l.cantidad, 0);
 
+/* ---------------- el lector de códigos ----------------
+   escaner.js detecta la ráfaga de teclas y llama acá con el número. Todo lo de
+   arriba —que no cobre la venta, que no intente un PIN— ya pasó allá; acá solo
+   queda decidir qué hacer con el código.
+
+   La regla de oro: escanear NUNCA puede interrumpir una venta. Si el código no
+   se conoce, se ofrece guardarlo, pero el pedido que estaba armado se queda
+   donde está. */
+async function alEscanear(codigo) {
+  // Con un diálogo abierto que no sea el de la carta, el escaneo no es para
+  // vender: puede ser el dueño pegándole un código a un producto.
+  const ficha = $("#capaProducto.is-on") && $("#fCodigo");
+  if (ficha) return ponerCodigoEnFicha(codigo);
+
+  if (!puedo("vender")) return;
+
+  let r;
+  try { r = await api("/codigos/" + encodeURIComponent(codigo)); }
+  catch (e) { return avisar(e.message, true); }
+
+  if (r.encontrado) {
+    // El `cuantos` es lo que hace que el pack de 6 descuente seis: el código
+    // del pack entrega seis unidades del mismo producto.
+    for (let k = 0; k < (r.cuantos || 1); k++) agregarPorId(r.producto);
+    avisar(`${r.producto.nombre}${r.cuantos > 1 ? ` × ${r.cuantos}` : ""}`);
+    return;
+  }
+
+  if (r.problema && !r.se_puede_guardar) return avisar(r.problema, true);
+  if (!puedo("editar_carta")) {
+    return avisar("Ese código no está en la carta. Lo tiene que agregar el dueño.", true);
+  }
+  dialogoProductoNuevoPorCodigo(r.codigo);
+}
+
+/* El código no está en la carta: se guarda AHORA, sin salir de la venta.
+
+   Esta pantalla es la respuesta de verdad a «tráete la base de datos de SKU».
+   Esa base no existe para Chile —GS1 vende códigos, no catálogos, y no hay
+   descarga— así que el catálogo se arma solo: cada producto se escribe UNA vez,
+   la primera vez que pasa por la caja, y queda para siempre.
+
+   El nombre se pide a Open Food Facts, que es libre y tiene 6.680 productos
+   chilenos. Para un almacén —leche, bebidas, abarrotes de marca— acierta harto.
+   Para una botillería casi nunca: es una base nutricional y no tiene el alcohol
+   chileno. Por eso el campo llega escrito PERO editable, y si no llegó nada, se
+   escribe a mano y ya está — que es lo que se haría igual.
+
+   El precio nunca viene de ninguna parte: ese es del local. */
+async function dialogoProductoNuevoPorCodigo(codigo) {
+  const cats = CATEGORIAS.filter((c) => c.activa);
+  const cual = cats.find((c) => c.id === catActiva) || cats[0];
+
+  $("#dialogoCodigo").innerHTML = `
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>Producto nuevo</h2>
+    <div class="codigo-leido">${esc(codigo)}</div>
+    <p class="ayuda" id="cdDe">Buscando cómo se llama…</p>
+    <label class="campo"><span>¿Qué es?</span>
+      <input id="cdNombre" type="text" placeholder="Escríbelo" autocomplete="off"></label>
+    <div class="fila2">
+      <label class="campo"><span>¿A cuánto lo vendes?</span>
+        <input id="cdPrecio" type="text" inputmode="numeric" placeholder="0"></label>
+      <label class="campo"><span>¿Cuánto te cuesta?</span>
+        <input id="cdCosto" type="text" inputmode="numeric" placeholder="0"></label>
+    </div>
+    <div id="cdSugerido"></div>
+    <label class="campo"><span>¿Dónde va?</span>
+      <select id="cdCat">${cats.map((c) =>
+        `<option value="${c.id}"${cual && c.id === cual.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>
+    <label class="campo"><span>¿Cuántos tienes ahora?</span>
+      <input id="cdStock" type="text" inputmode="numeric" placeholder="0"></label>
+    <p class="ayuda" style="margin-bottom:0">Queda guardado con su código: la próxima vez
+      que lo pases por el lector, entra solo al pedido.</p>
+    <div class="dialogo__pie">
+      <button class="btn btn--fantasma" data-cerrar-capa>Ahora no</button>
+      <button class="btn btn--cobrar" data-guardar-codigo="${esc(codigo)}"
+              style="width:auto">Guardar y cobrar</button>
+    </div>`;
+  $("#capaCodigo").classList.add("is-on");
+  setTimeout(() => $("#cdNombre").focus(), 60);
+
+  // El sugerido de precio se mueve solo con lo que cuesta.
+  $("#cdCosto").addEventListener("input", () => {
+    const v = soloNumeros($("#cdCosto").value);
+    const caja = $(".sugerido");
+    if (caja) return repintarSugerido(v);
+    $("#cdSugerido").innerHTML = bloqueSugerido(v, "cdPrecio");
+    refrescarSugerido();
+  });
+
+  // Preguntar el nombre va DESPUÉS de dibujar: que la pantalla esté lista
+  // aunque no haya internet. Nunca se espera por esto para poder escribir.
+  try {
+    const r = await api(`/codigos/${encodeURIComponent(codigo)}/sugerir`);
+    const campo = $("#cdNombre");
+    if (!campo) return;                       // cerraron el diálogo mientras tanto
+    if (r.nombre && !campo.value) {
+      campo.value = r.nombre;
+      $("#cdDe").innerHTML = `Lo encontré en <b>${esc(r.de_donde)}</b>. `
+        + "Corrígelo si no es así: manda lo que escribas tú.";
+    } else {
+      $("#cdDe").textContent = "No está en ninguna base pública, así que escríbelo tú. "
+        + "Se guarda con su código y no lo vuelves a escribir nunca.";
+    }
+  } catch (e) {
+    const d = $("#cdDe");
+    if (d) d.textContent = "Escribe cómo se llama.";
+  }
+}
+
+async function guardarProductoDelCodigo(codigo) {
+  const nombre = ($("#cdNombre").value || "").trim();
+  const precio = soloNumeros($("#cdPrecio").value);
+  if (!nombre) return avisar("Escribe qué es", true);
+  if (!precio) return avisar("Ponle precio", true);
+
+  const costo = soloNumeros($("#cdCosto").value);
+  const stock = soloNumeros($("#cdStock").value);
+  try {
+    const p = await api("/productos", { method: "POST", body: JSON.stringify({
+      categoria_id: +$("#cdCat").value,
+      nombre, precio, codigo,
+      // Lo que viene del escáner se compra y se vende tal cual, siempre: es una
+      // botella, una lata, un paquete. Por eso no se pregunta.
+      tal_cual: true, costo, stock_inicial: stock,
+    }) });
+    $("#capaCodigo").classList.remove("is-on");
+    await cargarCarta();
+    agregarPorId(p);
+    avisar(`${nombre} queda guardado. Ya está en el pedido.`);
+  } catch (e) { avisar(e.message, true); }
+}
+
+/* Escanear con la ficha de un producto abierta: el código se le pega a ESE
+   producto. Es como se le agrega el código del pack de 6 a algo que ya existe. */
+let FICHA_ABIERTA = null;
+
+async function pintarCodigos(productoId) {
+  FICHA_ABIERTA = productoId;
+  const caja = $("#fCodigos");
+  if (!caja) return;
+  let lista = [];
+  try { lista = await api(`/productos/${productoId}/codigos`); } catch (e) { }
+  caja.innerHTML = lista.length
+    ? lista.map((c) => `<div class="codigo-fila">
+        <code>${esc(c.codigo)}</code>
+        ${c.cuantos > 1 ? `<span class="codigo-cuantos">× ${c.cuantos}</span>` : ""}
+        <button class="btn btn--chico btn--fantasma" data-sacar-codigo="${esc(c.codigo)}">Sacar</button>
+      </div>`).join("")
+    : `<p class="ayuda" style="margin:0 0 8px;font-size:13px">Todavía no tiene ninguno.</p>`;
+}
+
+async function pegarCodigo(productoId) {
+  const campo = $("#fCodigo");
+  const codigo = (campo.value || "").trim();
+  if (!codigo) return avisar("Pasa el producto por el lector, o escribe el número", true);
+  try {
+    await api(`/productos/${productoId}/codigos`, { method: "POST",
+      body: JSON.stringify({ codigo, cuantos: 1 }) });
+    campo.value = "";
+    await pintarCodigos(productoId);
+    avisar("Código guardado");
+  } catch (e) { avisar(e.message, true); }
+}
+
+async function ponerCodigoEnFicha(codigo) {
+  const campo = $("#fCodigo");
+  if (!campo) return;
+  campo.value = codigo;
+  campo.dispatchEvent(new Event("input", { bubbles: true }));
+  avisar("Código leído. Se guarda al apretar Guardar.");
+}
+
+/* Agrega al pedido algo que vino del escáner, aunque la grilla no lo tenga
+   cargado todavía: el producto puede ser de una categoría que no está abierta. */
+function agregarPorId(prod) {
+  const ya = carrito.find((l) => l.id === prod.id);
+  if (ya) ya.cantidad += 1;
+  else carrito.push({ id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1 });
+  pintarCarrito();
+}
+
 function pintarCarrito() {
   const cont = $("#lineas");
   if (!carrito.length) {
@@ -510,6 +693,19 @@ function abrirFichaProducto(id) {
     <label class="campo"><span>Descripción (se ve en la pantalla del menú)</span>
       <input id="fDesc" type="text" value="${esc(p.descripcion)}"></label>
     <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
+    <div class="campo">
+      <span>Códigos de barra</span>
+      <div id="fCodigos"></div>
+      <div class="codigo-poner">
+        <!-- inputmode="none" a propósito: con "numeric" el teclado en pantalla
+             se abre encima cada vez que el lector "escribe" acá. -->
+        <input id="fCodigo" type="text" inputmode="none" autocomplete="off"
+               placeholder="Pasa el producto por el lector">
+        <button class="btn btn--chico" data-pegar-codigo="${p.id}">Agregar</button>
+      </div>
+      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Un producto puede tener
+        varios: la lata suelta y el pack de 6 traen códigos distintos.</p>
+    </div>
     ${selectorDeDibujo(p.dibujo)}
     <div class="fila2">
       <label class="campo"><span>Etiqueta (opcional)</span>
@@ -533,6 +729,7 @@ function abrirFichaProducto(id) {
     </div>`;
   $("#capaProducto").classList.add("is-on");
   pintarTalCual(p);
+  pintarCodigos(p.id);
 
   $("#fGuardar").onclick = async () => {
     const antes = soloNumeros($("#fAntes").value);
@@ -2231,6 +2428,18 @@ document.addEventListener("click", (e) => {
     return salirDeLaCaja("cambio");
   }
 
+  // ---- el lector de codigos ----
+  if (cerca("data-guardar-codigo"))
+    return guardarProductoDelCodigo(cerca("data-guardar-codigo").dataset.guardarCodigo);
+  if (cerca("data-pegar-codigo"))
+    return pegarCodigo(+cerca("data-pegar-codigo").dataset.pegarCodigo);
+  if (cerca("data-sacar-codigo")) {
+    const c = cerca("data-sacar-codigo").dataset.sacarCodigo;
+    return api("/codigos/" + encodeURIComponent(c), { method: "DELETE" })
+      .then(() => { avisar("Código sacado"); pintarCodigos(FICHA_ABIERTA); })
+      .catch((e) => avisar(e.message, true));
+  }
+
   // ---- cuanto cobrar ----
   if (cerca("data-usar-sugerido")) {
     const caja = cerca("data-usar-sugerido").closest(".sugerido");
@@ -2376,6 +2585,7 @@ document.addEventListener("keydown", (e) => {
   else reiniciarInactividad();
 
   await cargarAjustes();
+  if (window.Escaner) window.Escaner.alLeer = alEscanear;
   await cargarCarta();
   await cargarTurno();
   cargarVersion();

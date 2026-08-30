@@ -919,3 +919,32 @@ html,body{overscroll-behavior:none}
   margin-top:12px;padding-top:12px;border-top:1px dashed var(--linea);
 }
 .conectar__url--simple .conectar__cual{color:var(--clay)}
+
+/* ---------- el lector de códigos de barra ---------- */
+.codigo-leido{
+  font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  font-size:26px;letter-spacing:.09em;text-align:center;
+  background:var(--papel);border:1px solid var(--linea);border-radius:12px;
+  padding:14px;margin-bottom:10px;color:var(--tinta);
+}
+.codigo-poner{display:flex;gap:8px;align-items:center}
+.codigo-poner input{
+  flex:1;min-width:0;height:var(--toque-alto);padding:0 14px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--tarjeta);
+  color:var(--tinta);font-family:ui-monospace,Consolas,monospace;font-size:16px;
+  letter-spacing:.05em;
+}
+.codigo-poner input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.codigo-fila{
+  display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px solid #F3EBE0;
+}
+.codigo-fila:last-of-type{border-bottom:0}
+.codigo-fila code{
+  font-size:14.5px;letter-spacing:.05em;background:var(--papel);
+  border:1px solid var(--linea);border-radius:7px;padding:5px 10px;color:var(--tinta);
+}
+.codigo-cuantos{
+  font-size:12.5px;font-weight:700;color:#14603A;background:#EAF6EF;
+  border-radius:99px;padding:3px 10px;
+}
