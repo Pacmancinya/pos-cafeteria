@@ -225,6 +225,17 @@ window.GUIAS = [
   titulo: "Abrir y cerrar la caja",
   resumen: "El arqueo del cajón y el cuadre de las tarjetas.",
   html: `
+    <div class="ayuda"><b>Sin caja abierta no se puede hacer nada.</b> Desde la
+      2.5, al entrar te espera una sola pantalla: abrir la caja. No es rigor por
+      rigor — una venta cobrada sin caja abierta no entra en ningún cuadre y no
+      aparece en ningún cierre. Es plata sin dueño, y no se descubre hasta que
+      el cajón no calza con nada.</div>
+
+    <p>Y al revés: <b>no puedes salir de tu cuenta dejando TU caja abierta.</b>
+       Si terminaste, ciérrala y después sal. Si la caja es de otra persona, sí
+       puedes cambiar de usuario — justamente para que esa persona entre a
+       cerrar la suya.</p>
+
     <h3>En la mañana</h3>
     <p>Arriba a la derecha dice <b>Caja cerrada</b>. Tócalo → <b>Abrir caja</b>.
        Cuenta el fondo del cajón billete por billete; el total lo suma el

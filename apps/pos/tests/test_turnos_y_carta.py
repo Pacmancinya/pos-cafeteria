@@ -91,7 +91,7 @@ def test_un_solo_destacado_por_categoria(cliente, carta):
     assert len(destacados) == 1
 
 
-def test_borrar_producto_es_logico(cliente, carta):
+def test_borrar_producto_es_logico(cliente, carta, caja):
     """No se elimina: las ventas viejas tienen que seguir cuadrando."""
     cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}], "medio_pago": "efectivo"})

@@ -29,6 +29,19 @@ def cliente():
 
 
 @pytest.fixture()
+def caja(cliente):
+    """Una caja abierta. Desde la 2.5, vender sin esto responde 409.
+
+    Es una fixture aparte y no algo que haga `carta` porque las pruebas de
+    turnos necesitan justamente lo contrario: empezar con la caja cerrada para
+    poder abrirla ellas. Que un test PIDA la caja abierta es además la
+    documentación de la regla: si vende, la necesita.
+    """
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Prueba", "monto_inicial": 0})
+    return cliente
+
+
+@pytest.fixture()
 def carta(cliente):
     """Dos categorías con productos, creadas por la API (como en la vida real)."""
     cafe = cliente.post("/api/v1/categorias", json={"nombre": "Café", "orden": 0}).json()

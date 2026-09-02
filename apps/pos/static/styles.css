@@ -780,21 +780,24 @@ html,body{overscroll-behavior:none}
 /* ---------- elegir el dibujo viéndolo ---------- */
 .dibujos{
   border:1px solid var(--linea);border-radius:12px;background:var(--papel);
-  padding:10px 12px;max-height:300px;overflow:auto;overscroll-behavior:contain;
+  padding:10px 12px;max-height:min(46vh,420px);overflow:auto;
+  overscroll-behavior:contain;
 }
 .dibujos__grupo{
   font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:var(--suave);margin:10px 0 6px;
 }
 .dibujos__grupo:first-child{margin-top:0}
-.dibujos__fila{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
+/* Recuadros más grandes: con 90 dibujos, lo que se busca es el NOMBRE, y en
+   80 px con letra de 10,5 no se alcanzaba a leer. */
+.dibujos__fila{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:10px}
 .dibujo-op{
   border:1.5px solid var(--linea);background:var(--tarjeta);border-radius:11px;
   padding:6px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:2px;
   touch-action:manipulation;-webkit-tap-highlight-color:transparent;
 }
 .dibujo-op svg{width:100%;height:48px;display:block}
-.dibujo-op small{font-size:10.5px;line-height:1.2;color:var(--suave);text-align:center}
+.dibujo-op small{font-size:12.5px;line-height:1.25;color:var(--suave);text-align:center}
 .dibujo-op:active{transform:scale(.95)}
 .dibujo-op.is-on{border-color:var(--clay);background:#FBF1E7}
 .dibujo-op.is-on small{color:var(--clay-osc);font-weight:700}
@@ -1021,3 +1024,17 @@ html,body{overscroll-behavior:none}
   .fila2{grid-template-columns:1fr}
   .panel{padding:12px}
 }
+
+/* La cara de quien está entrando, sola, mientras escribe su PIN. */
+.cara--sola{margin:0 auto;pointer-events:none}
+.candado__nota .btn--chico{min-height:36px;padding:0 12px;font-size:13px}
+
+/* El buscador de dibujos. Sin él, encontrar uno entre 90 es hacer scroll y
+   esperar reconocerlo. */
+.dibujos__buscar{
+  width:100%;height:var(--toque);padding:0 14px;margin-bottom:8px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:15px;
+}
+.dibujos__buscar:focus{outline:2px solid var(--clay);outline-offset:1px}
+.dibujos__seccion[hidden],.dibujo-op[hidden]{display:none!important}

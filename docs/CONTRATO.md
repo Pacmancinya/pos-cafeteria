@@ -44,8 +44,23 @@ porque con padding el alto real depende del font-size del navegador — así hab
 alturas distintas sin que nadie lo decidiera. Los campos numéricos usan el teclado de
 `teclado.js`, no el de Windows, porque el de Windows tapa el botón *Confirmar venta*.
 
+> **Revertido en la 2.5, y con motivo.** El teclado numérico en pantalla queda APAGADO por
+> defecto (`TECLADO_EN_PANTALLA`). Se diseñó para una pantalla táctil que todavía no existe;
+> en el notebook del local hay un teclado de verdad, y un teclado dibujado que se abre solo
+> tapa media pantalla justo cuando uno quiere escribir. Los tamaños cómodos para el dedo se
+> quedan: no estorban con mouse y sirven el día que llegue la pantalla. El código del teclado
+> tampoco se borró — se prende desde los ajustes.
+
 **7. El stock avisa, no bloquea.** Nunca, bajo ninguna configuración, la falta de stock
 puede impedir cobrar una venta. Ver la sección de inventario.
+
+> **Matizado en la 2.5.** Sigue sin bloquear, pero ahora AVISA DE VERDAD: al pasar de lo
+> que queda, el primer toque no suma y dice cuántos hay. El segundo sí suma. Antes se podía
+> poner 12 de algo que tenía 3 sin que nada dijera nada, y el inventario quedaba en −9 hasta
+> el conteo. El tope se pasa a propósito porque el saldo es lo que dice el programa, no lo
+> que hay en la repisa: si llegó mercadería y nadie la anotó, negarse a vender sería peor
+> que descuadrar el inventario — el cliente está ahí con la plata en la mano. Solo aplica a
+> lo que se vende TAL CUAL: un capuchino no tiene "cuántos quedan", tiene leche y café.
 
 **8. Reiniciar el programa pide el PIN de nuevo, pero no pierde nada.** Las galletas
 emitidas antes de que arrancara el proceso (`sesion.ARRANQUE`) no valen. Es la única
@@ -171,6 +186,23 @@ Por eso Open Food Facts se usa **solo para sugerir el nombre**, editable, y nunc
 catálogo. El precio no está en ninguna base del mundo: ese es del local. Lo que de verdad
 resuelve el problema es que cada producto se escriba UNA vez, la primera que pasa por la
 caja, y quede con su código para siempre.
+
+**18. Sin caja abierta no se vende, y no se usa el programa.** El servidor responde 409 a
+cualquier venta sin turno, y la pantalla tapa todo con una puerta hasta que se abra la caja.
+Antes se aceptaba y la venta quedaba con `turno_id` en nulo: no entraba en ningún cuadre, no
+aparecía en ningún cierre, y nadie se enteraba hasta que el efectivo del cajón no calzaba con
+nada. Una venta que no pertenece a ningún turno es plata sin dueño.
+
+> **La puerta tiene DOS salidas, y la segunda no es un adorno.** Además de «Abrir caja» está
+> «Salir de mi cuenta». Sin ella, cerrar la caja a las 20:00 dejaría al dueño encerrado: la
+> puerta le pediría abrirla de nuevo para poder hacer cualquier cosa. Terminar el día es
+> cerrar la caja y salir.
+
+> **No se puede salir dejando la caja PROPIA abierta**, pero sí dejando la de otro. La
+> condición es sobre la caja propia a propósito: si la abrió Javi y está Ana en pantalla, Ana
+> no puede cerrarla —decisión 10— así que si tampoco pudiera cambiar de usuario, no habría
+> forma de que Javi volviera a entrar a cerrar la suya. El bloqueo por inactividad no cuenta
+> como salir: bloquea la pantalla y deja el turno donde está.
 
 ---
 

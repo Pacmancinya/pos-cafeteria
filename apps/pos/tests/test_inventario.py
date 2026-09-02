@@ -65,14 +65,14 @@ def test_la_carga_inicial_queda_en_el_libro(cliente, bodega):
     assert mv["movimientos"][0]["saldo_despues"] == 4000
 
 
-def test_vender_descuenta_segun_la_receta(cliente, bodega, carta):
+def test_vender_descuenta_segun_la_receta(cliente, bodega, carta, caja):
     cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 3}]})
     assert _stock(cliente, "Leche entera") == 4000 - 600
     assert _stock(cliente, "Café en grano") == 1000 - 54
 
 
-def test_un_producto_sin_receta_se_vende_y_no_mueve_nada(cliente, bodega, carta):
+def test_un_producto_sin_receta_se_vende_y_no_mueve_nada(cliente, bodega, carta, caja):
     """Es el estado normal el primer día. No es un error y no avisa nada."""
     antes = _stock(cliente, "Leche entera")
     r = cliente.post("/api/v1/ventas", json={
@@ -81,7 +81,7 @@ def test_un_producto_sin_receta_se_vende_y_no_mueve_nada(cliente, bodega, carta)
     assert _stock(cliente, "Leche entera") == antes
 
 
-def test_el_stock_en_cero_no_impide_cobrar(cliente, bodega, carta):
+def test_el_stock_en_cero_no_impide_cobrar(cliente, bodega, carta, caja):
     """Hay cola en el mostrador y el cliente ya pagó con tarjeta. Si el POS se
     negara, el cajero solo podría mentirle al cliente o anotar la venta en un
     papel: las dos cosas son peores que un número de stock equivocado."""
@@ -93,7 +93,7 @@ def test_el_stock_en_cero_no_impide_cobrar(cliente, bodega, carta):
     assert any(a["bajo_cero"] for a in r.json()["inventario"])
 
 
-def test_el_saldo_negativo_es_informacion(cliente, bodega, carta):
+def test_el_saldo_negativo_es_informacion(cliente, bodega, carta, caja):
     """−4 L dice 'vendiste más lattes que la leche que tus papeles dicen que
     tenías', o sea hay una compra sin registrar. Bloquear destruiría esa señal."""
     cliente.post("/api/v1/ventas", json={
@@ -103,7 +103,7 @@ def test_el_saldo_negativo_es_informacion(cliente, bodega, carta):
 
 
 # ------------------------------------------------------------------ anular
-def test_anular_devuelve_lo_que_la_venta_descontó(cliente, bodega, carta):
+def test_anular_devuelve_lo_que_la_venta_descontó(cliente, bodega, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 2}]}).json()
     assert _stock(cliente, "Leche entera") == 3600
@@ -111,7 +111,7 @@ def test_anular_devuelve_lo_que_la_venta_descontó(cliente, bodega, carta):
     assert _stock(cliente, "Leche entera") == 4000
 
 
-def test_anular_lee_el_libro_no_la_receta_de_hoy(cliente, bodega, carta):
+def test_anular_lee_el_libro_no_la_receta_de_hoy(cliente, bodega, carta, caja):
     """Si entremedio alguien cambia el latte de 200 a 100 ml, recalcular
     devolvería 100 y se perderían 100 ml para siempre sin que nadie lo note."""
     v = cliente.post("/api/v1/ventas", json={
@@ -122,7 +122,7 @@ def test_anular_lee_el_libro_no_la_receta_de_hoy(cliente, bodega, carta):
     assert _stock(cliente, "Leche entera") == 4000       # los 200 que salieron
 
 
-def test_anular_dos_veces_no_devuelve_dos_veces(cliente, bodega, carta):
+def test_anular_dos_veces_no_devuelve_dos_veces(cliente, bodega, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}]}).json()
     cliente.post(f"/api/v1/ventas/{v['id']}/anular", json={"motivo": "x"})
@@ -130,7 +130,7 @@ def test_anular_dos_veces_no_devuelve_dos_veces(cliente, bodega, carta):
     assert _stock(cliente, "Leche entera") == 4000
 
 
-def test_una_venta_anterior_a_la_receta_no_devuelve_nada(cliente, carta):
+def test_una_venta_anterior_a_la_receta_no_devuelve_nada(cliente, carta, caja):
     """Sin caso especial: no escribió movimientos, así que no hay qué devolver."""
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}]}).json()
@@ -213,7 +213,7 @@ def test_la_receta_dice_el_costo_y_para_cuantos_alcanza(cliente, bodega, carta):
     assert r["alcanza_para"] == 20
 
 
-def test_se_vende_tal_cual_arma_todo_de_un_toque(cliente, carta):
+def test_se_vende_tal_cual_arma_todo_de_un_toque(cliente, carta, caja):
     """El atajo del día 1: el alfajor pasa a tener stock sin que nadie tenga
     que entender la palabra insumo."""
     r = cliente.post(f"/api/v1/productos/{carta['alfajor']['id']}/receta/tal-cual",
@@ -258,7 +258,7 @@ def test_crear_un_producto_tal_cual_deja_todo_hecho(cliente, carta):
     assert r["costo_total"] == 700
 
 
-def test_vender_lo_creado_asi_descuenta_el_stock(cliente, carta):
+def test_vender_lo_creado_asi_descuenta_el_stock(cliente, carta, caja):
     """Que quede amarrado no basta: tiene que descontar de verdad."""
     p = cliente.post("/api/v1/productos", json={
         "categoria_id": carta["cafe"]["id"], "nombre": "Botella de agua",

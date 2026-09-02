@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 # La versión tiene que coincidir con la de version.json cuando se publica.
 # Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
 # novedades entre versiones, o nadie distingue una de otra.
-APP_VERSION = "2.4"
-APP_NOMBRE = "También en el celular"
+APP_VERSION = "2.5"
+APP_NOMBRE = "Como se usa de verdad"
 VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
 
 # De dónde se enteran las cajas de que hay una versión nueva.
@@ -183,6 +183,15 @@ MARGEN_SUGERIDO = 50            # % de la venta que se queda el local
 # Nadie cobra $2.437. El sugerido sube al múltiplo de $50 de arriba: así el
 # margen pedido es un PISO y no algo que el redondeo se come.
 REDONDEO_PRECIO = 50
+
+# ¿Se usa el teclado numérico en pantalla?
+#
+# Apagado por defecto desde la 2.5, y es un cambio de opinión con motivo: la
+# caja se diseñó "táctil primero" pensando en una pantalla táctil que todavía no
+# existe. En un notebook con teclado de verdad, un teclado dibujado que se abre
+# solo tapa media pantalla y estorba para escribir. Cuando llegue la pantalla
+# táctil se prende acá y vuelve entero.
+TECLADO_EN_PANTALLA = False
 
 NOMBRE_LOCAL = os.getenv("POS_LOCAL", "Kofe")
 AVISOS = [

@@ -191,8 +191,22 @@
     estado = null;
   }
 
+  /* ---------------- ¿se usa este teclado? ----------------
+     Apagado por defecto desde la 2.5. La caja se diseñó "táctil primero"
+     pensando en una pantalla táctil que todavía no existe; en el notebook del
+     local hay un teclado de verdad, y un teclado dibujado que se abre solo tapa
+     media pantalla y estorba justo para lo que uno quiere hacer, que es
+     escribir. Cuando llegue la pantalla táctil se prende desde los ajustes y
+     vuelve entero: el código no se borró. */
+  let SE_USA = false;
+  function encender(siONo) {
+    SE_USA = !!siONo;
+    if (!SE_USA && estado) cerrar();
+  }
+
   /* ---------------- enganche automático ---------------- */
   document.addEventListener("focusin", (e) => {
+    if (!SE_USA) return;                 // con teclado de verdad, no estorbamos
     const campo = e.target.closest && e.target.closest(SELECTOR);
     if (campo) { if (!estado || estado.campo !== campo) abrir(campo); return; }
     if (estado && !caja.contains(e.target)) cerrar();
@@ -236,6 +250,7 @@
   if (document.body) construir();
   else document.addEventListener("DOMContentLoaded", construir);
 
-  window.Teclado = { abrir: abrir, cerrar: cerrar,
+  window.Teclado = { abrir: abrir, cerrar: cerrar, encender: encender,
+                     get seUsa() { return SE_USA; },
                      get abierto() { return !!estado; } };
 })();

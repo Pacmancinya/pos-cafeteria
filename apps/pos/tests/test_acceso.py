@@ -29,7 +29,7 @@ def test_desde_otro_equipo_no_se_puede_vender_sin_pin(cliente, carta):
         assert resp.status_code == 401
 
 
-def test_desde_otro_equipo_no_se_puede_anular_sin_pin(cliente, carta):
+def test_desde_otro_equipo_no_se_puede_anular_sin_pin(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo"}).json()
@@ -44,7 +44,7 @@ def test_la_caja_redirige_a_pedir_pin(cliente):
         assert resp.headers["location"] == "/entrar"
 
 
-def test_con_el_pin_correcto_se_entra(cliente, carta):
+def test_con_el_pin_correcto_se_entra(cliente, carta, caja):
     with remoto() as r:
         assert r.post("/entrar", data={"pin": PIN}, follow_redirects=False).status_code == 303
         # la galleta quedó puesta: ahora sí puede vender
@@ -60,7 +60,7 @@ def test_con_el_pin_malo_no_se_entra(cliente):
         assert "Ese PIN no es" in resp.text
 
 
-def test_desde_la_caja_no_se_pide_pin(cliente, carta):
+def test_desde_la_caja_no_se_pide_pin(cliente, carta, caja):
     """El cajero no tiene que escribir nada: 127.0.0.1 pasa directo."""
     assert cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],

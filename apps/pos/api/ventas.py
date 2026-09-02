@@ -84,10 +84,23 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
     # Un descuento mayor que la venta dejaría un cobro negativo: se recorta.
     descuento = min(datos.descuento, total)
 
+    # SIN CAJA ABIERTA NO SE VENDE.
+    #
+    # Antes se aceptaba y la venta quedaba con `turno_id` en nulo: no entraba en
+    # ningún cuadre, no aparecía en ningún cierre, y nadie se enteraba hasta que
+    # el efectivo del cajón no calzaba con nada. Una venta que no pertenece a
+    # ningún turno es plata sin dueño.
+    #
+    # Se rechaza en el SERVIDOR y no solo en la pantalla, porque la pantalla se
+    # puede recargar, abrir en otro aparato, o quedar con una copia vieja.
     turno = _turno_abierto(s)
+    if not turno:
+        raise HTTPException(409, "La caja está cerrada. Ábrela antes de vender, "
+                                 "contando el fondo con el que parte el cajón.")
+
     venta = Venta(
         numero=_siguiente_numero(s),
-        turno_id=turno.id if turno else None,
+        turno_id=turno.id,
         total=total,
         descuento=descuento,
         propina=datos.propina,

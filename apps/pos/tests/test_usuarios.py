@@ -32,7 +32,7 @@ def test_un_hash_roto_no_deja_entrar_a_nadie():
 
 
 # --------------------------------------------------- la caja nunca se traba
-def test_sin_usuarios_la_caja_vende_igual(cliente, carta):
+def test_sin_usuarios_la_caja_vende_igual(cliente, carta, caja):
     """La base del local ya está vendiendo y no tiene usuarios. Si esta
     actualización exigiera login, el lunes nadie podría cobrar."""
     assert cliente.get("/api/v1/candado").json()["primer_arranque"] is True
@@ -85,10 +85,11 @@ def test_el_cajero_no_puede_todo(cliente, dueno, carta):
                         json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
     cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
 
-    # Vende y cuadra su caja...
+    # Abre su caja y vende. El orden importa desde la 2.5: sin caja abierta no
+    # se vende, así que primero se abre.
+    assert cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi"}).status_code == 200
     assert cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}]}).status_code == 200
-    assert cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi"}).status_code == 200
     # ...pero no toca los precios ni la gente.
     assert cliente.post("/api/v1/productos", json={
         "categoria_id": carta["cafe"]["id"], "nombre": "X", "precio": 1}).status_code == 403
@@ -124,7 +125,7 @@ def test_no_hay_dos_personas_con_el_mismo_nombre(cliente, dueno):
                         json={"nombre": "Ruperto", "pin": "9999"}).status_code == 409
 
 
-def test_sacar_a_alguien_no_borra_sus_ventas(cliente, dueno, carta):
+def test_sacar_a_alguien_no_borra_sus_ventas(cliente, dueno, carta, caja):
     javi = cliente.post("/api/v1/usuarios",
                         json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
     cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
@@ -139,7 +140,7 @@ def test_sacar_a_alguien_no_borra_sus_ventas(cliente, dueno, carta):
 
 
 # ------------------------------------------------------------ quién hizo qué
-def test_la_venta_guarda_quien_la_cobro(cliente, dueno, carta):
+def test_la_venta_guarda_quien_la_cobro(cliente, dueno, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}]}).json()
     assert v["usuario_id"] == dueno["id"]

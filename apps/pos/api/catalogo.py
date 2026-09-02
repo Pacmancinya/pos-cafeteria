@@ -74,6 +74,21 @@ def carta(respuesta: Response, s: Session = Depends(get_session)):
 @router.get("/categorias")
 def listar_categorias(s: Session = Depends(get_session)):
     cats = s.exec(select(Categoria).order_by(Categoria.orden, Categoria.id)).all()
+
+    # Cuántos quedan de cada producto que se vende TAL CUAL. Se manda para que
+    # la pantalla no deje pedir 12 de algo que tiene 3.
+    #
+    # Va solo para los productos que SON su propio insumo. Un capuchino no tiene
+    # "cuántos quedan": tiene leche y café, y cuántos capuchinos salen de eso es
+    # una estimación, no un número que sirva para topear una venta.
+    #
+    # Una consulta para todos y no una por producto: con 800 productos, N+1
+    # consultas acá son la diferencia entre abrir la caja y esperarla.
+    quedan = {i.producto_id: i.stock
+              for i in s.exec(select(Insumo).where(
+                  Insumo.producto_id != None,          # noqa: E711
+                  Insumo.activo == True)).all()}       # noqa: E712
+
     return [
         {
             "id": c.id, "nombre": c.nombre, "orden": c.orden, "activa": c.activa,
@@ -83,6 +98,9 @@ def listar_categorias(s: Session = Depends(get_session)):
                     "precio": p.precio, "activo": p.activo, "orden": p.orden,
                     "destacado": p.destacado, "badge": p.badge, "antes": p.antes,
                     "etiqueta": p.etiqueta, "dibujo": p.dibujo, "color": p.color,
+                    # None = no se lleva stock de esto. Distinto de 0, que es
+                    # "se lleva y no queda ninguno".
+                    "stock": quedan.get(p.id),
                 }
                 for p in _productos_de(s, c.id, solo_activos=False)
             ],

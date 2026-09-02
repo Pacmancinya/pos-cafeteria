@@ -163,15 +163,49 @@ function buscar(texto) {
 }
 
 /* ---------------- carrito ---------------- */
+/* ---------------- agregar al pedido ----------------
+   Con TOPE en lo que queda. Antes se podía poner 12 de algo que tenía 3, y el
+   inventario quedaba en −9 sin que nadie lo notara hasta el conteo.
+
+   El tope se puede pasar a propósito, y eso es a propósito: el saldo de la
+   bodega es lo que dice el programa, no lo que hay en la repisa. Si llegó
+   mercadería y nadie la anotó, negarse a vender sería peor que descuadrar el
+   inventario — el cliente está ahí con la plata en la mano. Ver CONTRATO,
+   decisión 7: el stock avisa. Ahora avisa MEJOR: una vez, y deja seguir.
+
+   Solo topea lo que se vende TAL CUAL. Un capuchino no tiene "cuántos quedan":
+   tiene leche y café. */
+/* De qué productos ya se avisó en este pedido. Avisar en cada toque sería un
+   cartel que nadie lee; avisar una vez y dejar pasar, es un tope de verdad. */
+const avisado = new Set();
+const olvidarAvisos = () => avisado.clear();
+
 function agregar(id) {
   const cat = CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
   const p = cat && cat.productos.find((x) => x.id === id);
   if (!p) return;
-  const ya = carrito.find((l) => l.id === id);
+  sumarAlPedido(p);
+}
+
+function sumarAlPedido(p) {
+  const ya = carrito.find((l) => l.id === p.id);
+  const pide = (ya ? ya.cantidad : 0) + 1;
+
+  if (p.stock != null && pide > p.stock && !avisado.has(p.id)) {
+    avisado.add(p.id);
+    avisar(p.stock > 0
+      ? `Quedan ${p.stock} de ${p.nombre}. Si igual los tienes, sigue agregando.`
+      : `${p.nombre} está en cero. Si igual lo tienes, sigue agregando.`, true);
+    return;                                  // el primer toque avisa y no suma
+  }
+
   if (ya) ya.cantidad += 1;
-  else carrito.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1 });
+  else carrito.push({ id: p.id, nombre: p.nombre, precio: p.precio,
+                      cantidad: 1, stock: p.stock });
   pintarCarrito();
 }
+
+
 
 function cambiarCantidad(id, delta) {
   const l = carrito.find((x) => x.id === id);
@@ -360,10 +394,14 @@ async function ponerCodigoEnFicha(codigo) {
 /* Agrega al pedido algo que vino del escáner, aunque la grilla no lo tenga
    cargado todavía: el producto puede ser de una categoría que no está abierta. */
 function agregarPorId(prod) {
-  const ya = carrito.find((l) => l.id === prod.id);
-  if (ya) ya.cantidad += 1;
-  else carrito.push({ id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1 });
-  pintarCarrito();
+  // Se busca en la carta para saber cuántos quedan: lo que llega del escáner
+  // trae nombre y precio, no el saldo.
+  let p = prod;
+  for (const c of CATEGORIAS) {
+    const hallado = c.productos.find((x) => x.id === prod.id);
+    if (hallado) { p = hallado; break; }
+  }
+  sumarAlPedido(p);
 }
 
 function pintarCarrito() {
@@ -448,6 +486,7 @@ async function confirmarVenta() {
 
     const venta = await api("/ventas", { method: "POST", body: JSON.stringify(cuerpo) });
     carrito = [];
+    olvidarAvisos();
     pintarCarrito();
     $("#capaCobro").classList.remove("is-on");
     ultimaVenta = venta.id;
@@ -630,6 +669,26 @@ const GRUPOS_DIBUJO = [
     "muffin-chips": "Muffin con chips", "cupcake": "Cupcake",
     "helado": "Helado", "helado-chocolate": "Helado de chocolate",
   }],
+  ["Cervezas", {
+    "cerveza-lata": "Cerveza en lata", "cerveza-lata-roja": "Lata roja",
+    "cerveza-lata-verde": "Lata verde", "cerveza-lata-azul": "Lata azul",
+    "cerveza-botella": "Cerveza en botella", "cerveza-botella-verde": "Botella verde",
+    "cerveza-litro": "Litro de cerveza", "pack-cervezas": "Pack de cervezas",
+  }],
+  ["Bebidas y aguas", {
+    "bebida-cola": "Bebida cola", "bebida-naranja": "Bebida naranja",
+    "bebida-amarilla": "Bebida amarilla", "bebida-lima": "Bebida lima limón",
+    "bebida-lata-cola": "Cola en lata", "bebida-lata-naranja": "Naranja en lata",
+    "agua-mineral": "Agua mineral", "agua-con-gas": "Agua con gas",
+    "energetica": "Bebida energética", "pack-bebidas": "Pack de bebidas",
+  }],
+  ["Vinos y destilados", {
+    "vino-tinto": "Vino tinto", "vino-blanco": "Vino blanco",
+    "espumante": "Espumante", "pisco": "Pisco", "ron": "Ron", "whisky": "Whisky",
+  }],
+  ["Almacén", {
+    "leche-caja": "Leche en caja", "nectar-caja": "Néctar en caja",
+  }],
   ["Promociones", { "combo": "Combo", "desayuno": "Desayuno" }],
 ];
 
@@ -637,19 +696,43 @@ const DIBUJOS = Object.assign({}, ...GRUPOS_DIBUJO.map(([, m]) => m));
 
 /* Elegir el dibujo VIÉNDOLO. Con 68 opciones, una lista de nombres es
    inservible: nadie sabe qué es "vaso-menta" hasta que lo ve. */
+/* El selector de dibujos.
+
+   Con 68 dibujos ya costaba encontrar uno; con los de botillería y almacén son
+   más de 90 y en una grilla de recuadros de 80 px el nombre no se alcanzaba a
+   leer. Dos arreglos: los recuadros crecen —el nombre es lo que se busca, no el
+   dibujo— y hay un buscador que filtra mientras se escribe. */
+function filtrarDibujos(texto) {
+  const q = sinTildes(texto);
+  document.querySelectorAll(".dibujos__seccion").forEach((sec) => {
+    let vivos = 0;
+    sec.querySelectorAll("[data-busca]").forEach((b) => {
+      const calza = !q || b.dataset.busca.includes(q);
+      b.hidden = !calza;
+      if (calza) vivos++;
+    });
+    sec.hidden = vivos === 0;
+  });
+}
+
 function selectorDeDibujo(elegido) {
   return `
     <div class="campo"><span>Dibujo en la pantalla</span>
       <input type="hidden" id="fDibujo" value="${esc(elegido || "mug")}">
+      <input id="buscarDibujo" class="dibujos__buscar" type="text" autocomplete="off"
+             placeholder="Buscar dibujo: cerveza, torta, lata...">
       <div class="dibujos">
         ${GRUPOS_DIBUJO.map(([grupo, mapa]) => `
-          <div class="dibujos__grupo">${esc(grupo)}</div>
-          <div class="dibujos__fila">
-            ${Object.entries(mapa).map(([k, nombre]) => `
-              <button type="button" class="dibujo-op ${k === elegido ? "is-on" : ""}"
-                      data-dibujo="${k}" title="${esc(nombre)}">
-                ${dibujo({ k })}<small>${esc(nombre)}</small>
-              </button>`).join("")}
+          <div class="dibujos__seccion" data-grupo="${esc(grupo)}">
+            <div class="dibujos__grupo">${esc(grupo)}</div>
+            <div class="dibujos__fila">
+              ${Object.entries(mapa).map(([k, nombre]) => `
+                <button type="button" class="dibujo-op ${k === elegido ? "is-on" : ""}"
+                        data-dibujo="${k}" data-busca="${esc(sinTildes(nombre + " " + grupo))}"
+                        title="${esc(nombre)}">
+                  ${dibujo({ k })}<small>${esc(nombre)}</small>
+                </button>`).join("")}
+            </div>
           </div>`).join("")}
       </div>
     </div>`;
@@ -933,6 +1016,30 @@ async function esperarQueVuelva(intentos = 40) {
 }
 
 /* ---------------- turno ---------------- */
+/* Lo último que se supo del turno. Lo miran la puerta y el candado. */
+let TURNO = { abierto: false, turno: null };
+
+/* ---------------- la caja cerrada tapa todo ----------------
+   Desde la 2.5 no se puede usar el programa sin abrir la caja. No es rigor por
+   rigor: una venta sin turno queda con `turno_id` en nulo, no entra en ningún
+   cuadre, no aparece en ningún cierre, y nadie se entera hasta que el efectivo
+   del cajón no calza con nada. El servidor también la rechaza; esto es para que
+   no se llegue a intentar.
+
+   La puerta tiene DOS salidas y la segunda no es un adorno: sin ella, cerrar la
+   caja a las 20:00 dejaría al dueño encerrado —la puerta le pediría abrirla de
+   nuevo para poder hacer cualquier cosa—. Terminar el día es cerrar la caja y
+   salir de la cuenta. */
+function pintarPuertaDeLaCaja(t) {
+  const puerta = $("#cajaCerrada");
+  if (!puerta) return;
+  const nombre = $("#cajaCerradaLocal");
+  if (nombre) nombre.textContent = NOMBRE_DEL_LOCAL;
+  // Con el candado arriba manda el candado: primero se sabe quién está.
+  const hayCandado = !$("#candado").hidden;
+  puerta.hidden = !SESION.entrado || SESION.provisorio || t.abierto || hayCandado;
+}
+
 async function cargarTurno() {
   const t = await api("/turnos/actual");
   const chip = $("#turnoEstado");
@@ -941,6 +1048,8 @@ async function cargarTurno() {
     ? `Caja abierta${t.turno.cajero ? " · " + t.turno.cajero : ""}`
     : "Caja cerrada";
   chip.dataset.abierto = t.abierto ? "1" : "0";
+  TURNO = t;
+  pintarPuertaDeLaCaja(t);
   // De quién es la caja, al pasar el mouse. No se apaga el chip: el MISMO chip
   // sirve para ABRIR caja, que sí puede cualquiera.
   chip.title = t.abierto && esDeOtro(t.turno) && !puedo("turno_cerrar_ajeno")
@@ -1269,6 +1378,8 @@ async function mostrarCandado(motivo) {
     <input id="candadoPin" type="password" inputmode="numeric" data-teclado="pin"
            autocomplete="off" hidden>`;
   $("#candado").hidden = false;
+  const puerta = $("#cajaCerrada");
+  if (puerta) puerta.hidden = true;
 }
 
 function pintarPrimerUsuario() {
@@ -1291,10 +1402,46 @@ function pintarPrimerUsuario() {
 async function pedirPin(usuarioId) {
   const u = CANDADO_USUARIOS.find((x) => x.id === usuarioId);
   if (!u) return;
-  Teclado.abrir($("#candadoPin"), {
-    modo: "pin",
-    titulo: "PIN de " + u.nombre,
-    alConfirmar: (pin) => entrarComo(u.id, pin),
+  // Con teclado de verdad no se dibuja uno: se pide el PIN escrito. El teclado
+  // en pantalla existe para cuando llegue la pantalla táctil (ver ajustes).
+  if (window.Teclado && Teclado.seUsa) {
+    Teclado.abrir($("#candadoPin"), {
+      modo: "pin",
+      titulo: "PIN de " + u.nombre,
+      alConfirmar: (pin) => entrarComo(u.id, pin),
+    });
+    return;
+  }
+  pedirPinEscrito(u);
+}
+
+/* El PIN escrito, cuando no hay teclado en pantalla.
+
+   Se reemplaza la pantalla del candado por una sola cosa: el nombre de quien
+   entra y un campo con el foco puesto. Enter confirma. Nada de tocar nada. */
+function pedirPinEscrito(u) {
+  $("#candadoCaja").innerHTML = `
+    <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
+    <div class="cara cara--sola" style="--c:${u.color || "#C9552B"}">
+      <span class="cara__ini">${esc((u.nombre[0] || "?").toUpperCase())}</span>
+      <b>${esc(u.nombre)}</b>
+    </div>
+    <label class="campo" style="max-width:280px;margin:22px auto 0;text-align:left">
+      <span>Tu PIN</span>
+      <input id="candadoPin" type="password" inputmode="numeric" maxlength="8"
+             autocomplete="off" placeholder="••••"
+             style="text-align:center;letter-spacing:.5em;font-size:26px"></label>
+    <p class="candado__nota">Escríbelo y aprieta Enter.
+      <button class="btn btn--fantasma btn--chico" data-otro-usuario
+              style="margin-left:8px">Es otra persona</button></p>`;
+
+  const campo = $("#candadoPin");
+  setTimeout(() => campo.focus(), 60);
+  campo.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const pin = (campo.value || "").replace(/\D/g, "");
+    if (pin.length >= 4) entrarComo(u.id, pin);
   });
 }
 
@@ -1304,6 +1451,7 @@ async function entrarComo(usuarioId, pin) {
       method: "POST", body: JSON.stringify({ usuario_id: usuarioId, pin }) });
     $("#candado").hidden = true;
     await cargarSesion();
+    await cargarTurno();          // la puerta de la caja depende de esto
     avisar("Hola, " + r.nombre);
     reiniciarInactividad();
   } catch (e) {
@@ -1448,6 +1596,17 @@ async function revivirUsuario(id) {
   } catch (e) { avisar(e.message, true); }
 }
 
+/* ¿Puedo irme? Solo si no dejo MI caja abierta.
+
+   La condición es sobre la caja PROPIA y no sobre cualquier caja abierta, y eso
+   evita un encierro: si la abrió Javi y está Ana en pantalla, Ana no puede
+   cerrarla —esa es la regla de la 2.0— así que si tampoco pudiera cambiar de
+   usuario, no habría forma de que Javi volviera a entrar a cerrar la suya. */
+function puedoIrme() {
+  if (!TURNO.abierto || !TURNO.turno) return true;
+  return esDeOtro(TURNO.turno);
+}
+
 async function salirDeLaCaja(por) {
   try { await api("/sesion/salir", { method: "POST", body: JSON.stringify({ por }) }); }
   catch (e) {}
@@ -1481,6 +1640,12 @@ function reiniciarInactividad() {
 document.addEventListener("input", (e) => {
   const campo = e.target.closest && e.target.closest("[data-margen-libre]");
   if (campo) elegirMargen(soloNumeros(campo.value));
+});
+
+// El buscador de dibujos. Global porque el selector se dibuja de nuevo cada vez
+// que se abre una ficha, y un oyente colgado del campo se perdería.
+document.addEventListener("input", (e) => {
+  if (e.target && e.target.id === "buscarDibujo") filtrarDibujos(e.target.value);
 });
 
 /* ---------------- bodega ----------------
@@ -2392,7 +2557,7 @@ document.addEventListener("click", (e) => {
       .catch((err) => avisar(err.message, true));
   }
   if (t.id === "btnCobrar") return abrirCobro();
-  if (t.id === "btnLimpiar") { carrito = []; return pintarCarrito(); }
+  if (t.id === "btnLimpiar") { carrito = []; olvidarAvisos(); return pintarCarrito(); }
   if (t.id === "cobroCancelar") return $("#capaCobro").classList.remove("is-on");
   if (t.id === "cobroConfirmar") return confirmarVenta();
   if (t.id === "turnoEstado") return dialogoTurno();
@@ -2421,8 +2586,17 @@ document.addEventListener("click", (e) => {
   }
   // ---- candado ----
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
+  if (cerca("data-otro-usuario")) return mostrarCandado();
+  if (t.id === "abrirLaCaja") return dialogoTurno();
+  if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");
   if (t.id === "crearPrimero") return crearPrimerUsuario();
-  if (t.id === "quienEsta" || t.closest("#quienEsta")) return salirDeLaCaja("cambio");
+  if (t.id === "quienEsta" || t.closest("#quienEsta")) {
+    if (!puedoIrme()) {
+      return avisar("Tienes la caja abierta. Ciérrala antes de salir o de cambiar "
+                    + "de usuario: si no, tu turno queda a medias.", true);
+    }
+    return salirDeLaCaja("cambio");
+  }
   if (t.id === "cambiarParaCerrar" || t.closest("#cambiarParaCerrar")) {
     $("#capaTurno").classList.remove("is-on");
     return salirDeLaCaja("cambio");
@@ -2579,13 +2753,17 @@ document.addEventListener("keydown", (e) => {
     pintarConectar(s);
   } catch (e) { avisar("No se pudo conectar con el punto de venta", true); }
 
-  // Antes que nada, quién está. Si no hay nadie, el candado tapa todo.
+  // Los ajustes van PRIMERO: el candado pregunta el PIN de una forma o de otra
+  // según haya teclado en pantalla o no. Si se leyeran después, la primera
+  // pantalla del día se dibujaría con el valor por defecto y no con el del local.
+  await cargarAjustes();
+  if (window.Escaner) window.Escaner.alLeer = alEscanear;
+  if (window.Teclado) Teclado.encender(!!AJUSTES.teclado_en_pantalla);
+
+  // Y recién ahí, quién está. Si no hay nadie, el candado tapa todo.
   await cargarSesion();
   if (!SESION.entrado) await mostrarCandado();
   else reiniciarInactividad();
-
-  await cargarAjustes();
-  if (window.Escaner) window.Escaner.alLeer = alEscanear;
   await cargarCarta();
   await cargarTurno();
   cargarVersion();

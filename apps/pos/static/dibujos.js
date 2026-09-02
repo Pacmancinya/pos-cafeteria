@@ -509,10 +509,27 @@ function combo(o) {               /* dos cosas juntas: promo, desayuno */
   </g>`;
 }
 
+function pack(o) {                /* el six-pack: la unidad de venta de una botilleria */
+  const col = o.col2 || o.liq || "#B8862B";
+  const carton = o.carton || "#8A5A34";
+  const cuellos = [88, 120, 152].map((x) => `
+    <rect x="${x - 9}" y="62" width="18" height="34" rx="4" fill="${col}"/>
+    <rect x="${x - 11}" y="56" width="22" height="12" rx="4" fill="#C9A227"/>`).join("");
+  return `${SOMBRA}
+  ${cuellos}
+  <path d="M62 92 h116 v96 q0 12 -12 12 H74 q-12 0 -12 -12 Z" fill="${carton}"/>
+  <path d="M62 92 h116 v20 H62 Z" fill="#FFFFFF" opacity=".14"/>
+  <path d="M166 92 h12 v96 q0 12 -12 12 h-8 Z" fill="#000000" opacity=".13"/>
+  <rect x="80" y="122" width="80" height="42" rx="6" fill="#FFFFFF" opacity=".85"/>
+  <rect x="90" y="134" width="52" height="8" rx="4" fill="${col}" opacity=".75"/>
+  <rect x="90" y="148" width="34" height="7" rx="3.5" fill="${col}" opacity=".5"/>
+  <path d="M96 92 q24 -22 48 0" fill="none" stroke="#000000" stroke-opacity=".18" stroke-width="4"/>`;
+}
+
 const ART = { mug, taza, vaso, frappe, croissant, torta, brownie, alfajor,
               pan, sandwich, empanada, botella, lata, cajaJugo, vasoPapel,
               dona, muffin, galleta, bol, helado, tetera, porcion, plato,
-              combo };
+              combo, pack };
 /* ==========================================================
    Recetas: un nombre simple -> los parámetros del dibujo.
    Existen porque el punto de venta guarda UN campo (`dibujo`) y no toda la
@@ -598,6 +615,40 @@ const RECETAS = {
   "plato-frio":          { k: "plato", col2: "#E8BE7E", hojas: 1 },
   "combo":               { k: "combo", liq: "#3A1B0C" },
   "desayuno":            { k: "combo", liq: "#6B4022" },
+  /* ---- botillería y almacén ----
+     Lo que de verdad se vende en un local de barrio: cervezas, bebidas, vinos
+     y destilados. Se arman con las mismas piezas cambiándoles el color, que es
+     todo lo que hace falta para reconocerlas de un vistazo en la grilla. */
+  "cerveza-lata":        { k: "lata", col2: "#C8A02E" },
+  "cerveza-lata-roja":   { k: "lata", col2: "#B5232E" },
+  "cerveza-lata-verde":  { k: "lata", col2: "#2E7D4F" },
+  "cerveza-lata-azul":   { k: "lata", col2: "#2C5C93" },
+  "cerveza-botella":     { k: "botella", liq: "#B8791E", tapa: "#8A5A34", vidrio: 1, etiqueta: "#C8A02E" },
+  "cerveza-botella-verde": { k: "botella", liq: "#4F7A34", tapa: "#2E7D4F", vidrio: 1, etiqueta: "#2E7D4F" },
+  "cerveza-litro":       { k: "botella", liq: "#9C6318", tapa: "#6B4423", vidrio: 1, etiqueta: "#8A5A34" },
+  "pack-cervezas":       { k: "pack", col2: "#C8A02E", carton: "#8A5A34" },
+  "pack-bebidas":        { k: "pack", col2: "#B5232E", carton: "#3E6E8E" },
+
+  "bebida-cola":         { k: "botella", liq: "#2A1208", tapa: "#B5232E", etiqueta: "#B5232E" },
+  "bebida-naranja":      { k: "botella", liq: "#E4913C", tapa: "#D9761F", etiqueta: "#D9761F" },
+  "bebida-amarilla":     { k: "botella", liq: "#E8C33C", tapa: "#C9A227", etiqueta: "#C9A227" },
+  "bebida-lima":         { k: "botella", liq: "#7FB93C", tapa: "#4F7A34", etiqueta: "#4F7A34" },
+  "bebida-lata-cola":    { k: "lata", col2: "#B5232E" },
+  "bebida-lata-naranja": { k: "lata", col2: "#D9761F" },
+  "agua-mineral":        { k: "botella", liq: "#9CD0D6", tapa: "#3E6E8E", etiqueta: "#3E6E8E" },
+  "agua-con-gas":        { k: "botella", liq: "#BFE3EC", tapa: "#2E7D4F", etiqueta: "#2E7D4F" },
+  "energetica":          { k: "lata", col2: "#3E6E8E" },
+
+  "vino-tinto":          { k: "botella", liq: "#5A1226", tapa: "#3A0C18", vidrio: 1, etiqueta: "#7A1B33" },
+  "vino-blanco":         { k: "botella", liq: "#E3D79A", tapa: "#C9A227", vidrio: 1, etiqueta: "#C9A227" },
+  "espumante":           { k: "botella", liq: "#EBD9A0", tapa: "#C9A227", vidrio: 1, etiqueta: "#8A6A22" },
+  "pisco":               { k: "botella", liq: "#F0E4C4", tapa: "#8A5A34", vidrio: 1, etiqueta: "#A9762E" },
+  "ron":                 { k: "botella", liq: "#7A3E14", tapa: "#3A1B0C", vidrio: 1, etiqueta: "#5A2A0E" },
+  "whisky":              { k: "botella", liq: "#A5601A", tapa: "#3A1B0C", vidrio: 1, etiqueta: "#6B4423" },
+
+  "leche-caja":          { k: "cajaJugo", col2: "#3E6E8E" },
+  "nectar-caja":         { k: "cajaJugo", col2: "#C0392B" },
+
 };
 
 /* En la caja el vapor y las burbujas van quietos: sin animación. */

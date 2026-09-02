@@ -10,7 +10,7 @@ def test_respaldo_deja_una_copia(cliente, carta, tmp_path, monkeypatch):
     assert os.path.exists(os.path.join(str(tmp_path), r["archivo"]))
 
 
-def test_el_respaldo_se_puede_abrir_y_tiene_los_datos(cliente, carta, tmp_path, monkeypatch):
+def test_el_respaldo_se_puede_abrir_y_tiene_los_datos(cliente, carta, tmp_path, monkeypatch, caja):
     """Una copia que no se puede abrir no es un respaldo."""
     import sqlite3
 
@@ -28,7 +28,7 @@ def test_el_respaldo_se_puede_abrir_y_tiene_los_datos(cliente, carta, tmp_path, 
     assert total == 3400
 
 
-def test_exportar_ventas_sale_para_excel(cliente, carta):
+def test_exportar_ventas_sale_para_excel(cliente, carta, caja):
     cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 2}], "medio_pago": "efectivo"})
     r = cliente.get("/api/v1/exportar/ventas")
@@ -40,14 +40,14 @@ def test_exportar_ventas_sale_para_excel(cliente, carta):
     assert "6800" in texto
 
 
-def test_exportar_detalle_lista_los_productos(cliente, carta):
+def test_exportar_detalle_lista_los_productos(cliente, carta, caja):
     cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["espresso"]["id"], "cantidad": 3}], "medio_pago": "efectivo"})
     texto = cliente.get("/api/v1/exportar/detalle").content.decode("utf-8-sig")
     assert "Espresso;3;1900;5700" in texto
 
 
-def test_la_exportacion_no_incluye_las_anuladas_en_el_detalle(cliente, carta):
+def test_la_exportacion_no_incluye_las_anuladas_en_el_detalle(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["espresso"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo"}).json()
@@ -55,7 +55,7 @@ def test_la_exportacion_no_incluye_las_anuladas_en_el_detalle(cliente, carta):
     assert "Espresso" not in cliente.get("/api/v1/exportar/detalle").content.decode("utf-8-sig")
 
 
-def test_comprobante_dice_que_no_es_boleta(cliente, carta):
+def test_comprobante_dice_que_no_es_boleta(cliente, carta, caja):
     """Si pareciera una boleta sin serlo, el local queda expuesto."""
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
@@ -66,7 +66,7 @@ def test_comprobante_dice_que_no_es_boleta(cliente, carta):
     assert "Latte" in html
 
 
-def test_comprobante_de_venta_anulada_lo_dice(cliente, carta):
+def test_comprobante_de_venta_anulada_lo_dice(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo"}).json()

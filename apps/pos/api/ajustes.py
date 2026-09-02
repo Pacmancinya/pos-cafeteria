@@ -18,12 +18,16 @@ from sqlmodel import Session, select
 from apps.pos import sesion
 from apps.pos.db.models import Ajuste
 from apps.pos.db.session import get_session
-from core.config import MARGEN_SUGERIDO, REDONDEO_PRECIO
+from core.config import MARGEN_SUGERIDO, REDONDEO_PRECIO, TECLADO_EN_PANTALLA
 from core.schemas import AjustesIn
 
 router = APIRouter(prefix="/api/v1", tags=["ajustes"])
 
-POR_DEFECTO = {"margen_sugerido": MARGEN_SUGERIDO}
+POR_DEFECTO = {
+    "margen_sugerido": MARGEN_SUGERIDO,
+    # Se guarda como 0/1 y no como booleano: la tabla es de texto.
+    "teclado_en_pantalla": int(TECLADO_EN_PANTALLA),
+}
 
 
 def _leer(s: Session) -> dict:

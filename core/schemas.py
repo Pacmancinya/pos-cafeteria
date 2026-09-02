@@ -5,7 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from core.config import MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES, UNIDADES
+from core.config import (MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
+                         TECLADO_EN_PANTALLA, UNIDADES)
 
 
 class LineaIn(BaseModel):
@@ -234,6 +235,9 @@ class AjustesIn(BaseModel):
     # tanto que deja de ser una sugerencia. El tope es para que la pantalla no
     # muestre un disparate, no para decirle al dueño cuánto ganar.
     margen_sugerido: int = Field(default=MARGEN_SUGERIDO, ge=0, le=95)
+    # 0 o 1. En un notebook con teclado, el teclado dibujado estorba; en una
+    # pantalla táctil es lo único con lo que se puede escribir.
+    teclado_en_pantalla: int = Field(default=int(TECLADO_EN_PANTALLA), ge=0, le=1)
 
 
 class CodigoIn(BaseModel):

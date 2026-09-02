@@ -1,7 +1,7 @@
 """Descuentos: lo cobrado, el cuadre y el IVA tienen que seguir cuadrando."""
 
 
-def test_el_descuento_baja_lo_cobrado(cliente, carta):
+def test_el_descuento_baja_lo_cobrado(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo", "descuento": 400, "paga_con": 5000,
@@ -12,7 +12,7 @@ def test_el_descuento_baja_lo_cobrado(cliente, carta):
     assert v["vuelto"] == 2000
 
 
-def test_no_se_puede_descontar_mas_que_la_venta(cliente, carta):
+def test_no_se_puede_descontar_mas_que_la_venta(cliente, carta, caja):
     """Un descuento gigante dejaría un cobro negativo."""
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["espresso"]["id"], "cantidad": 1}],
@@ -22,7 +22,7 @@ def test_no_se_puede_descontar_mas_que_la_venta(cliente, carta):
     assert v["cobrado"] == 0
 
 
-def test_el_resumen_cuenta_lo_cobrado_no_lo_listado(cliente, carta):
+def test_el_resumen_cuenta_lo_cobrado_no_lo_listado(cliente, carta, caja):
     cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo", "descuento": 400})
@@ -41,7 +41,7 @@ def test_el_cuadre_de_caja_descuenta(cliente, carta):
     assert t["efectivo_esperado"] == 3200      # 3400 - 400 + 200
 
 
-def test_el_comprobante_muestra_el_descuento(cliente, carta):
+def test_el_comprobante_muestra_el_descuento(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo", "descuento": 400}).json()
@@ -50,7 +50,7 @@ def test_el_comprobante_muestra_el_descuento(cliente, carta):
     assert "$3.000" in html
 
 
-def test_el_csv_trae_bruto_descuento_y_cobrado(cliente, carta):
+def test_el_csv_trae_bruto_descuento_y_cobrado(cliente, carta, caja):
     cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo", "descuento": 400})
@@ -59,7 +59,7 @@ def test_el_csv_trae_bruto_descuento_y_cobrado(cliente, carta):
     assert ";3400;400;3000;" in texto
 
 
-def test_sin_descuento_todo_sigue_igual(cliente, carta):
+def test_sin_descuento_todo_sigue_igual(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "medio_pago": "efectivo"}).json()

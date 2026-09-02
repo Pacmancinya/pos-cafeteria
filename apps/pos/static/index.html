@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=28">
+<link rel="stylesheet" href="/static/styles.css?v=29">
 </head>
 <body>
 
@@ -232,16 +232,33 @@
 
 <!-- El candado NO es una vista: es una capa que tapa todo. Si fuera vista,
      escribir #/caja en la barra de direcciones la saltaría. -->
+<!-- ══════════ LA CAJA ESTÁ CERRADA ══════════
+     Tapa todo, igual que el candado. Desde la 2.5 no se puede usar el programa
+     sin abrir la caja: una venta sin turno no entra en ningún cuadre. -->
+<div class="candado" id="cajaCerrada" hidden>
+  <div class="candado__caja">
+    <h1 id="cajaCerradaLocal">Kofe</h1>
+    <p>La caja está cerrada.<br>
+       Ábrela para empezar el día: se cuenta el fondo con el que parte el cajón.</p>
+    <button class="btn btn--cobrar" id="abrirLaCaja">Abrir caja</button>
+    <p class="candado__nota">
+      ¿Terminaste por hoy? Cierra tu sesión y deja la caja cerrada.<br>
+      <button class="btn btn--fantasma btn--chico" id="salirSinCaja"
+              style="margin-top:10px">Salir de mi cuenta</button>
+    </p>
+  </div>
+</div>
+
 <div class="candado" id="candado" hidden>
   <div class="candado__caja" id="candadoCaja"></div>
 </div>
 
 <div class="aviso" id="aviso"></div>
 
-<script src="/static/dibujos.js?v=4"></script>
-<script src="/static/guias.js?v=7"></script>
-<script src="/static/teclado.js?v=2"></script>
-<script src="/static/escaner.js?v=1"></script>
-<script src="/static/app.js?v=28"></script>
+<script src="/static/dibujos.js?v=5"></script>
+<script src="/static/guias.js?v=8"></script>
+<script src="/static/teclado.js?v=3"></script>
+<script src="/static/escaner.js?v=2"></script>
+<script src="/static/app.js?v=29"></script>
 </body>
 </html>

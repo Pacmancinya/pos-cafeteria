@@ -1,6 +1,6 @@
 {
-  "version": "2.4",
-  "nombre": "También en el celular",
-  "novedades": "La caja ahora se puede usar desde el celular. Se abría —es la misma dirección de la red— pero se veía diminuta y con media pantalla vacía, y no se llegaba al botón de cobrar. La culpa era de la barra de arriba: medía 914 píxeles contra los 375 de un celular, y para que cupiera, el navegador achicaba la página entera. Ahora la barra se dobla, las pestañas se deslizan de lado, y el total con el botón Cobrar quedan pegados abajo, siempre a la vista. Los diálogos —cobrar, cerrar caja, productos— ocupan la pantalla completa en vez de una columna angosta.",
+  "version": "2.5",
+  "nombre": "Como se usa de verdad",
+  "novedades": "Siete cosas que salieron de usarla de verdad. Vuelve el teclado del computador: el teclado dibujado en pantalla queda apagado y ya no se abre solo tapando media pantalla — se prende de nuevo el día que haya pantalla táctil. Al vender ya no se puede pedir más de lo que hay: avisa cuántos quedan y, si igual los tienes, deja seguir. Sin caja abierta no se vende ni se usa el programa: al entrar te espera una sola pantalla, abrir la caja, y no puedes salir de tu cuenta dejando tu caja abierta. Y para la botillería y el almacén: 25 dibujos nuevos —cervezas en lata y botella, packs, bebidas, vinos, pisco, ron, whisky, leche en caja— con un buscador para encontrarlos entre los 93, y los recuadros más grandes para que se lea el nombre.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }
