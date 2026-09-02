@@ -234,3 +234,73 @@ def test_el_cierre_impreso_trae_las_tarjetas_y_las_propinas(cliente, carta):
     assert "segun el banco" in html
     assert "PROPINAS" in html
     assert "Por tarjeta" in html
+
+
+# -------------------------------------------- encontrar el descuadre
+def test_el_cierre_dice_con_cuanto_quedo_el_cajon_anoche(cliente):
+    """Es la sospecha número uno de un sobrante, y la más invisible: si el cajón
+    se contó de menos en la mañana, la diferencia aparece recién doce horas
+    después y parece salida de la nada."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Ayer", "monto_inicial": 0})
+    cliente.post("/api/v1/turnos/cerrar",
+                 json={"efectivo_contado": 40000, "fondo_siguiente": 40000})
+
+    # Con la caja CERRADA también, que es cuando hace falta: al abrirla.
+    assert cliente.get("/api/v1/turnos/actual").json()["fondo_anterior"] == 40000
+
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Hoy", "monto_inicial": 39900})
+    t = cliente.get("/api/v1/turnos/actual").json()
+    assert t["fondo_anterior"] == 40000
+    assert t["turno"]["monto_inicial"] == 39900
+    assert t["turno"]["fondo_anterior"] == 40000
+
+
+def test_sin_turnos_anteriores_no_hay_fondo_de_anoche(cliente):
+    """El primer día del local: no se inventa un número."""
+    assert cliente.get("/api/v1/turnos/actual").json()["fondo_anterior"] is None
+
+
+def test_las_ventas_del_turno_se_pueden_listar_una_por_una(cliente, carta, caja):
+    """Sin esto, el cierre decía «sobran $1.450» y ahí quedaba: el dueño sabía
+    que algo no calzaba y no tenía dónde mirar."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito"})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["espresso"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    ventas = cliente.get(f"/api/v1/turnos/{t['id']}/ventas").json()
+    assert len(ventas) == 2
+    assert {v["medio_pago"] for v in ventas} == {"debito", "efectivo"}
+    for v in ventas:
+        assert v["hora"] and v["numero"] and not v["anulada"]
+
+
+def test_lo_listado_es_lo_COBRADO_no_lo_vendido(cliente, carta, caja):
+    """Tiene que calzar con lo que la máquina o el cajón tienen de verdad: el
+    descuento ya restado y la propina incluida. Si listara el bruto, ninguna
+    venta calzaría nunca con la diferencia y la pista no serviría."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito", "descuento": 400, "propina": 500})
+
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    v = cliente.get(f"/api/v1/turnos/{t['id']}/ventas").json()[0]
+    assert v["cobrado"] == carta["latte"]["precio"] - 400 + 500
+
+    # Y calza con lo que el cuadre de tarjetas espera de ese medio.
+    debito = [m for m in t["medios"] if m["medio"] == "debito"][0]
+    assert debito["esperado"] == v["cobrado"]
+
+
+def test_una_venta_anulada_se_marca_para_no_confundir(cliente, carta, caja):
+    v = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito"}).json()
+    cliente.post(f"/api/v1/ventas/{v['id']}/anular", json={"motivo": "la máquina la rechazó"})
+
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    listada = cliente.get(f"/api/v1/turnos/{t['id']}/ventas").json()[0]
+    assert listada["anulada"] is True

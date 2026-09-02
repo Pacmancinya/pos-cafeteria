@@ -1085,3 +1085,46 @@ html,body{overscroll-behavior:none}
    también se ve bien; solo se nota cuando el alto empieza a faltar. */
 .fila2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
 @media (max-width:620px){.fila2{grid-template-columns:1fr;gap:0}}
+
+/* ---------- dónde mirar cuando no cuadra ----------
+   El cierre decía "sobran $1.450" y ahí quedaba: uno sabe que algo no calza y
+   no tiene dónde mirar. Esto es el dónde. */
+.pista{
+  border:1px solid #EBD7B4;background:#FFF6E9;border-radius:11px;
+  padding:11px 14px;margin-top:10px;font-size:13.5px;line-height:1.5;
+}
+.pista>b{display:block;margin-bottom:7px;font-size:14px}
+.pista__linea{
+  display:flex;justify-content:space-between;gap:12px;padding:2px 0;
+  font-variant-numeric:tabular-nums;
+}
+.pista__dif{border-top:1px solid rgba(42,21,11,.14);margin-top:6px;padding-top:7px;font-weight:700}
+
+.ventas-mini{
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:9px;
+  padding:4px 10px;margin-top:7px;max-height:190px;overflow:auto;
+}
+.ventas-mini__fila{
+  display:grid;grid-template-columns:46px 42px 1fr auto;gap:10px;align-items:center;
+  padding:6px 0;border-bottom:1px solid #F3EBE0;font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.ventas-mini__fila:last-child{border-bottom:0}
+.ventas-mini__hora,.ventas-mini__n{color:var(--suave);font-size:12px}
+.ventas-mini__medio{color:var(--suave)}
+.ventas-mini__fila.es-sospechosa{
+  background:#FFF1D8;margin:0 -10px;padding-left:10px;padding-right:10px;
+  border-radius:6px;font-weight:700;
+}
+.ventas-mini__fila.es-sospechosa .ventas-mini__hora,
+.ventas-mini__fila.es-sospechosa .ventas-mini__medio{color:var(--clay)}
+
+.tarjetas__pista{grid-column:1/-1}
+
+/* El fondo de anoche, mientras se cuenta en la mañana. */
+.fondo-anoche{
+  border:1px solid var(--linea);background:var(--papel);border-radius:11px;
+  padding:10px 14px;margin-bottom:12px;font-size:13.5px;
+}
+.fondo-anoche.es-ok{border-color:#BFE3CE;background:#EAF6EF}
+.fondo-anoche.es-mal{border-color:#E8C9C6;background:#FBECEA}

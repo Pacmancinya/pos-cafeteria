@@ -1048,7 +1048,7 @@ async function cargarTurno() {
     ? `Caja abierta${t.turno.cajero ? " · " + t.turno.cajero : ""}`
     : "Caja cerrada";
   chip.dataset.abierto = t.abierto ? "1" : "0";
-  TURNO = t;
+  TURNO = t;                    // trae `abierto`, `turno` y `fondo_anterior`
   pintarPuertaDeLaCaja(t);
   // De quién es la caja, al pasar el mouse. No se apaga el chip: el MISMO chip
   // sirve para ABRIR caja, que sí puede cualquiera.
@@ -1162,6 +1162,27 @@ async function dialogoTurno() {
 }
 
 /* ---- abrir: contar el fondo que queda en el cajón ---- */
+/* Lo que quedó anoche, para contar contra un número y no a ciegas. */
+function pintarFondoDeAnoche() {
+  const caja = $("#fondoDeAnoche");
+  if (!caja) return;
+  const anoche = TURNO.fondo_anterior;
+  if (anoche == null) { caja.innerHTML = ""; return; }
+
+  const llevo = totalConteo();
+  const dif = llevo - anoche;
+  caja.innerHTML = `
+    <div class="fondo-anoche ${!llevo ? "" : dif === 0 ? "es-ok" : "es-mal"}">
+      <div class="pista__linea"><span>Anoche quedaron</span><b>${clp(anoche)}</b></div>
+      ${llevo ? `<div class="pista__linea pista__dif">
+        <span>${dif === 0 ? "Calza exacto" : dif > 0 ? "Llevas de más" : "Te falta"}</span>
+        <b>${dif === 0 ? "✓" : clp(Math.abs(dif))}</b></div>` : ""}
+      ${llevo && dif !== 0 ? `<p class="ayuda" style="margin:6px 0 0;font-size:12.5px">
+        Cuenta de nuevo antes de abrir. Si abres con una diferencia acá, en la
+        noche va a aparecer igual y ya no vas a saber de dónde salió.</p>` : ""}
+    </div>`;
+}
+
 function pintarAbrirCaja() {
   $("#dialogoTurno").className = "dialogo dialogo--ancho";
   $("#dialogoTurno").innerHTML = `
@@ -1171,13 +1192,18 @@ function pintarAbrirCaja() {
       <input id="tCajero" type="text" placeholder="Nombre" autocomplete="off"></label>
     <p class="ayuda" style="margin-bottom:10px">Cuenta la plata con la que parte el cajón.
       Si no hay fondo, déjalo todo en cero.</p>
+    <div id="fondoDeAnoche"></div>
     ${arqueoHTML()}
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" id="tAbrir" style="width:auto">Abrir caja</button>
     </div>`;
   pintarArqueo();
-  conectarArqueo();
+  // Comparar con lo que quedó anoche, MIENTRAS se cuenta. Es el momento barato
+  // de encontrar la diferencia: acá se resuelve contando de nuevo, y doce horas
+  // después ya no hay cómo saber de dónde salió.
+  conectarArqueo(pintarFondoDeAnoche);
+  pintarFondoDeAnoche();
   setTimeout(() => $("#tCajero").focus(), 60);
 }
 
@@ -1251,6 +1277,7 @@ function pintarCerrarCaja(tu) {
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" id="verCuadre" style="width:auto">Ver si cuadra</button>
     </div>`;
+  VENTAS_DEL_TURNO = null;      // se piden de nuevo cada vez que se abre el cierre
   pintarArqueo();
   conectarTarjetas(tu);
   // Si vuelven a tocar el conteo después de ver el cuadre, se rehace.
@@ -1290,6 +1317,7 @@ function mostrarCuadre(tu) {
           </div>
         </div>
         ${bloquePropinas(tu)}
+        <div id="pistaEfectivo"></div>
       </div>
       <div class="cierre__col">
         <label class="campo"><span>¿Cuánto dejas de fondo para mañana?</span>
@@ -1307,6 +1335,7 @@ function mostrarCuadre(tu) {
   };
   $("#tFondo").addEventListener("input", pintarRetiro);
   pintarRetiro();
+  if (dif !== 0) buscarElDescuadre(tu, dif);
 
   const pie = document.querySelector("#dialogoTurno .dialogo__pie");
   pie.innerHTML = `
@@ -2104,6 +2133,7 @@ function bloqueTarjetas(tu) {
           <input type="text" inputmode="numeric" data-dice="${m.medio}"
                  value="${m.declarado != null ? m.declarado : ""}" placeholder="0">
           <div class="tarjetas__dif" data-dif="${m.medio}"></div>
+          <div class="tarjetas__pista" data-pista="${m.medio}"></div>
         </div>`).join("")}
     </div>`;
 }
@@ -2112,18 +2142,151 @@ function bloqueTarjetas(tu) {
    pago del diálogo de cobro ya usan `data-medio` y viven en index.html desde que
    carga la página, así que `querySelector` encontraba el botón en vez del campo
    y el "cuadra ✓" no aparecía nunca. */
+/* Cuando el cajón no cuadra, decir dónde mirar.
+
+   Dos sospechas, en el orden en que conviene revisarlas:
+
+   1. EL FONDO DE LA MAÑANA. Es la que más veces explica un sobrante, y la más
+      invisible: si el cajón se contó de menos al abrir, la diferencia aparece
+      recién doce horas después y parece salida de la nada. Por eso va primero
+      y con el número de anoche al lado.
+   2. UNA VENTA EN EFECTIVO. Si la diferencia calza exacta con una, ahí está. */
+async function buscarElDescuadre(tu, dif) {
+  const caja = $("#pistaEfectivo");
+  if (!caja) return;
+
+  const partes = [];
+  const anoche = tu.fondo_anterior;
+  if (anoche != null && anoche !== tu.monto_inicial) {
+    const salto = tu.monto_inicial - anoche;
+    partes.push(`<div class="pista">
+      <b>El fondo de la mañana no calza con el de anoche.</b>
+      <div class="pista__linea"><span>Anoche quedaron</span><b>${clp(anoche)}</b></div>
+      <div class="pista__linea"><span>Esta mañana se contaron</span><b>${clp(tu.monto_inicial)}</b></div>
+      <div class="pista__linea pista__dif"><span>${salto > 0 ? "De más" : "De menos"}</span>
+        <b>${clp(Math.abs(salto))}</b></div>
+      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Si el cajón se contó
+        de menos en la mañana, el sobrante aparece recién ahora y parece salido de
+        la nada.</p>
+    </div>`);
+  }
+
+  const todas = await ventasDelTurno(tu.id);
+  const enEfectivo = todas.filter((v) => v.medio_pago === "efectivo" && !v.anulada);
+  const calzan = loQueExplicaLaDiferencia(enEfectivo, dif);
+  if (calzan.length) {
+    partes.push(`<div class="pista">
+      <b>${dif > 0 ? "Esta venta calza con lo que sobra:" : "Esta venta calza con lo que falta:"}</b>
+      ${calzan.map((g) => listaDeVentas(g, [g])).join("")}
+      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">${dif > 0
+        ? "Puede ser una venta cobrada dos veces, o cobrada en efectivo y registrada como tarjeta."
+        : "Puede ser una venta registrada y no cobrada, o un vuelto de más."}</p>
+    </div>`);
+  } else if (enEfectivo.length) {
+    partes.push(`<div class="pista">
+      <b>Ninguna venta sola explica la diferencia.</b>
+      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Estas son las ventas
+        en efectivo del turno, por si alguna no calza con lo que recuerdas:</p>
+      ${listaDeVentas(enEfectivo, [])}
+    </div>`);
+  }
+
+  caja.innerHTML = partes.length
+    ? `<div class="cierre__paso"><b>?</b> Dónde mirar</div>${partes.join("")}`
+    : "";
+}
+
+/* ---------------- buscar el descuadre ----------------
+   Hasta ahora el cierre decía "sobran $1.450" y ahí quedaba: uno sabe que algo
+   no calza y no tiene dónde mirar. Estas dos funciones son el "dónde mirar".
+
+   La de abajo es la que de verdad resuelve, y sale de algo que dijo el dueño:
+   «por lo usual en tarjeta puede haber más en el sistema que en la vida real».
+   Pasa cuando una venta se marcó como débito, la máquina la rechazó y nadie la
+   anuló; o cuando se cobró en efectivo y se registró como tarjeta. Si la
+   diferencia calza EXACTA con una venta, casi siempre es esa. */
+let VENTAS_DEL_TURNO = null;
+
+async function ventasDelTurno(turnoId) {
+  if (VENTAS_DEL_TURNO) return VENTAS_DEL_TURNO;
+  try { VENTAS_DEL_TURNO = await api(`/turnos/${turnoId}/ventas`); }
+  catch (e) { VENTAS_DEL_TURNO = []; }
+  return VENTAS_DEL_TURNO;
+}
+
+/* Qué venta —o qué par— explica una diferencia. Devuelve las candidatas.
+
+   Se buscan sumas de UNA y de DOS ventas porque más allá de eso deja de ser una
+   pista y pasa a ser numerología: con quince ventas, algún subconjunto siempre
+   suma cualquier cosa. */
+function loQueExplicaLaDiferencia(ventas, falta) {
+  falta = Math.abs(falta);
+  if (!falta || !ventas.length) return [];
+  const solas = ventas.filter((v) => v.cobrado === falta);
+  if (solas.length) return solas.map((v) => [v]);
+
+  const pares = [];
+  for (let i = 0; i < ventas.length && pares.length < 3; i++) {
+    for (let j = i + 1; j < ventas.length; j++) {
+      if (ventas[i].cobrado + ventas[j].cobrado === falta) {
+        pares.push([ventas[i], ventas[j]]);
+        break;
+      }
+    }
+  }
+  return pares;
+}
+
+function listaDeVentas(ventas, resaltar) {
+  const marcadas = new Set((resaltar || []).flat().map((v) => v.id));
+  return `<div class="ventas-mini">
+    ${ventas.map((v) => `
+      <div class="ventas-mini__fila${marcadas.has(v.id) ? " es-sospechosa" : ""}">
+        <span class="ventas-mini__hora">${esc(v.hora)}</span>
+        <span class="ventas-mini__n">#${v.numero}</span>
+        <span class="ventas-mini__medio">${esc(v.medio)}</span>
+        <b>${clp(v.cobrado)}</b>
+      </div>`).join("")}
+  </div>`;
+}
+
 function conectarTarjetas(tu) {
   (tu.medios || []).forEach((m) => {
     const campo = document.querySelector(`[data-dice="${m.medio}"]`);
     if (!campo) return;
-    const pintar = () => {
+    const pintar = async () => {
       const caja = document.querySelector(`[data-dif="${m.medio}"]`);
+      const pista = document.querySelector(`[data-pista="${m.medio}"]`);
       const escrito = (campo.value || "").trim();
+      if (pista) pista.innerHTML = "";
       if (!escrito) { caja.textContent = ""; caja.className = "tarjetas__dif"; return; }
+
       const dif = soloNumeros(escrito) - m.esperado;
       caja.textContent = dif === 0 ? "cuadra ✓"
         : (dif > 0 ? "sobran " : "faltan ") + clp(Math.abs(dif));
       caja.className = "tarjetas__dif " + (dif === 0 ? "ok" : "mal");
+      if (dif === 0 || !pista) return;
+
+      // Acá está el trabajo de verdad: decir CUÁL venta puede ser.
+      const todas = await ventasDelTurno(tu.id);
+      const deEsteMedio = todas.filter((v) => v.medio_pago === m.medio && !v.anulada);
+      const calzan = loQueExplicaLaDiferencia(deEsteMedio, dif);
+
+      pista.innerHTML = `
+        ${calzan.length ? `<div class="pista">
+          <b>${calzan.length === 1 ? "Esta venta calza justo con la diferencia:"
+                                   : "Estas calzan justo con la diferencia:"}</b>
+          ${calzan.map((grupo) => listaDeVentas(grupo, [grupo])).join("")}
+          <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Si la máquina la
+            rechazó y quedó registrada igual, anúlala en <b>El día</b>. Si se pagó de
+            otra forma, anúlala y vuelve a cobrarla como corresponde.</p>
+        </div>` : `<div class="pista">
+          <b>Ninguna venta sola explica la diferencia.</b>
+          <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Puede ser una propina
+            que la máquina cobró aparte, o varias ventas juntas. Acá están todas las
+            de ${esc(m.nombre.toLowerCase())} de este turno:</p>
+          ${listaDeVentas(deEsteMedio, [])}
+        </div>`}`;
     };
     campo.addEventListener("input", pintar);
     pintar();

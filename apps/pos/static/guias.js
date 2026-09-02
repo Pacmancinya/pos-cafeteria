@@ -289,37 +289,49 @@ window.GUIAS = [
 {
   id: "no-cuadra",
   titulo: "No cuadró: qué hago",
-  resumen: "Cómo se busca dónde estuvo el error.",
+  resumen: "Cómo buscar dónde está el error.",
   html: `
-    <p>Lo primero: <b>la diferencia se guarda igual</b>, cuadre o no. Esconder
-       un descuadre sería lo contrario de para lo que sirve cuadrar la caja.</p>
+    <p>Primero: <b>guarda el cierre igual</b>. Esconder un descuadre es lo
+       contrario de para lo que sirve cuadrar la caja. Queda anotado y se puede
+       revisar después.</p>
 
-    <h3>Para revisar un cierre</h3>
-    <p>Pestaña <b>El día</b> → abajo, <b>Cierres de caja</b> → botón <b>Ver</b>.
-       Ahí sale todo: lo vendido por forma de pago, cómo estaba el cajón billete
-       por billete, y el cuadre contra el banco.</p>
-    <p>Al final de esa tabla aparece el <b>acumulado del período</b>: cuántos
-       cierres hubo y cuánto suman las diferencias. Si un día falta y otro sobra
-       lo mismo, casi siempre es un vuelto mal dado.</p>
+    <h3>La caja te dice dónde mirar</h3>
+    <p>Cuando algo no calza, aparece un recuadro <b>Dónde mirar</b> con las
+       sospechas, en el orden en que conviene revisarlas.</p>
 
-    <h3>Si falta plata en el cajón</h3>
+    <h3>1. El fondo de la mañana</h3>
+    <p>Es la causa más común de un <b>sobrante</b>, y la más difícil de ver: si
+       el cajón se contó de menos al abrir, la diferencia aparece recién doce
+       horas después y parece salida de la nada.</p>
+    <p>Por eso, al <b>abrir</b> la caja te muestra con cuánto quedó anoche y va
+       comparando mientras cuentas. Si no calza, cuenta de nuevo <b>ahí mismo</b>:
+       es el momento barato de arreglarlo.</p>
+
+    <h3>2. Una venta que no calza</h3>
+    <p>Si la diferencia coincide <b>exacta</b> con una venta, la caja te la
+       muestra marcada. Casi siempre es esa.</p>
+    <div class="ayuda"><b>El caso que más se repite en tarjeta:</b> el sistema
+      tiene más de lo que hay en la vida real. Una venta se cobró como débito,
+      la máquina la rechazó, y quedó registrada igual. O se pagó en efectivo y
+      se marcó como tarjeta. En los dos casos: <b>anúlala</b> en El día, y si
+      corresponde vúlvela a cobrar como fue de verdad.</div>
+
+    <h3>3. Lo demás</h3>
     <ul>
-      <li>Revisa las <b>anulaciones</b> del día: quedan con el motivo y con el
-          nombre de quien las hizo.</li>
-      <li>Fíjate en la <b>hora</b> de las ventas: un descuadre suele estar cerca
-          del cambio de turno.</li>
-      <li>Mira quién <b>estuvo</b> en el turno. Sale en el mismo cierre.</li>
+      <li><b>Falta plata:</b> un vuelto de más, una venta registrada y no
+          cobrada, o alguien sacó del cajón sin anotar.</li>
+      <li><b>Sobra plata:</b> una venta cobrada y no registrada, o el fondo de
+          la mañana mal contado.</li>
+      <li><b>Ninguna venta sola explica la diferencia:</b> la caja te lista
+          todas las del turno para que revises cuál no calza con lo que
+          recuerdas. También puede ser una propina que la máquina cobró
+          aparte.</li>
     </ul>
 
-    <h3>Si no cuadra la tarjeta</h3>
-    <p>Casi siempre es una de dos: una venta que se cobró en la máquina pero no
-       se marcó en la caja, o al revés. Compara la cantidad de operaciones, no
-       solo el total.</p>
-
-    <div class="ayuda">Cada cierre queda además escrito en un archivo que se
-      abre con Excel, en la carpeta <b>registros</b> que está al lado del
-      programa. Una fila por cierre, sin que nadie tenga que acordarse de
-      exportar nada.</div>`,
+    <div class="ayuda">Las tarjetas y las transferencias <b>no están en el
+      cajón</b>: esa plata la tiene el banco. Por eso el arqueo del efectivo solo
+      compara contra las ventas en efectivo, y las tarjetas se cuadran aparte
+      contra el comprobante de la máquina.</div>`
 },
 {
   id: "quien-es-quien",

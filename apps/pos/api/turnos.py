@@ -141,6 +141,11 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         # igual (el chequeo de nombre repetido solo mira a los ACTIVOS, así que
         # un "Javi" que sacaron y un "Javi" nuevo conviven sin problema).
         "abierto_por_id": t.abierto_por_id,
+        # Con cuánto se supone que partió el cajón, según el cierre anterior.
+        # Es la primera sospecha cuando el arqueo no cuadra: si el fondo de la
+        # mañana se contó de menos, el sobrante aparece recién en la noche y
+        # parece salido de la nada.
+        "fondo_anterior": _fondo_que_quedo(s, t),
         # Quiénes pasaron por la caja durante el turno. Es la respuesta a
         # "¿quién estuvo?", que no es lo mismo que "¿quién vendió?".
         "estuvieron": _estuvieron(s, t),
@@ -152,6 +157,19 @@ def _nombre(s: Session, usuario_id: int | None) -> str:
         return ""
     u = s.get(Usuario, usuario_id)
     return u.nombre if u else ""
+
+
+def _fondo_que_quedo(s: Session, t: Turno) -> int | None:
+    """Cuánto dejó de fondo el turno cerrado justo antes de este. None si no hay.
+
+    Sirve para una sola pregunta, que es la que más veces explica un descuadre:
+    ¿el cajón de la mañana tenía lo que decía tener?
+    """
+    anterior = s.exec(
+        select(Turno).where(Turno.cerrado_at != None, Turno.id != t.id)  # noqa: E711
+        .order_by(Turno.cerrado_at.desc())
+    ).first()
+    return anterior.fondo_siguiente if anterior else None
 
 
 def _quien_la_abrio(s: Session, t: Turno) -> tuple[int | None, str]:
@@ -220,7 +238,19 @@ def denominaciones():
 @router.get("/actual")
 def actual(s: Session = Depends(get_session)):
     t = turno_abierto(s)
-    return {"abierto": bool(t), "turno": _turno_dict(s, t) if t else None}
+    ultimo = s.exec(
+        select(Turno).where(Turno.cerrado_at != None)          # noqa: E711
+        .order_by(Turno.cerrado_at.desc())
+    ).first()
+    return {
+        "abierto": bool(t),
+        "turno": _turno_dict(s, t) if t else None,
+        # Con cuánto quedó el cajón anoche. Va también con la caja CERRADA
+        # porque es justo lo que hace falta al abrirla en la mañana: contar
+        # contra un número, en vez de contar a ciegas y descubrir la diferencia
+        # doce horas después, cuando ya no hay cómo saber de dónde salió.
+        "fondo_anterior": ultimo.fondo_siguiente if ultimo else None,
+    }
 
 
 @router.get("")
@@ -269,6 +299,40 @@ def abrir(datos: AbrirTurnoIn, s: Session = Depends(get_session),
         s.add(p)
     s.commit()
     return _turno_dict(s, t)
+
+
+@router.get("/{turno_id}/ventas")
+def ventas_del_turno(turno_id: int, s: Session = Depends(get_session),
+                     quien: dict = Depends(sesion.exige("ver_dia"))):
+    """Las ventas de un turno, una por una.
+
+    Existe para BUSCAR UN DESCUADRE. Hasta ahora el cierre decía "sobran $1.450"
+    y ahí quedaba: el dueño sabía que algo no calzaba y no tenía dónde mirar.
+
+    El caso que se repite, y que lo dijo él: en tarjeta puede haber más en el
+    sistema que en la vida real. Una venta se marcó como débito, la máquina la
+    rechazó y nadie la anuló; o se cobró en efectivo y se registró como tarjeta.
+    Con la lista al lado, esa venta se encuentra en diez segundos.
+    """
+    t = s.get(Turno, turno_id)
+    if not t:
+        raise HTTPException(404, "No existe ese turno")
+
+    ventas = s.exec(
+        select(Venta).where(Venta.turno_id == turno_id).order_by(Venta.creada_at.desc())
+    ).all()
+    return [{
+        "id": v.id,
+        "numero": v.numero,
+        "hora": a_local(v.creada_at).strftime("%H:%M"),
+        "medio_pago": v.medio_pago,
+        "medio": NOMBRE_MEDIO.get(v.medio_pago, v.medio_pago),
+        # Lo COBRADO, que es lo que la máquina o el cajón tienen que tener:
+        # el descuento ya está descontado y la propina va incluida.
+        "cobrado": v.total - v.descuento + v.propina,
+        "propina": v.propina,
+        "anulada": v.estado != "pagada",
+    } for v in ventas]
 
 
 @router.post("/cerrar")
