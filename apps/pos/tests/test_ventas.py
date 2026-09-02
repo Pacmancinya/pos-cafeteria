@@ -141,3 +141,30 @@ def test_toda_venta_queda_con_su_turno(cliente, carta, caja):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}]}).json()
     assert v["turno_id"] is not None
+
+
+# ------------------------------------------------- los ajustes de la caja
+def test_guardar_un_ajuste_no_pisa_los_otros(cliente):
+    """El bug: la pantalla manda UNA clave, pero pydantic rellenaba las que
+    faltaban con su valor por defecto y se escribían todas. O sea que mover el
+    margen sugerido apagaba de paso el teclado en pantalla, en silencio."""
+    cliente.put("/api/v1/ajustes", json={"teclado_en_pantalla": 1})
+    assert cliente.get("/api/v1/ajustes").json()["teclado_en_pantalla"] == 1
+
+    cliente.put("/api/v1/ajustes", json={"margen_sugerido": 65})
+    quedo = cliente.get("/api/v1/ajustes").json()
+    assert quedo["margen_sugerido"] == 65
+    assert quedo["teclado_en_pantalla"] == 1, "mover el margen no puede apagar el teclado"
+
+
+def test_un_valor_fuera_de_rango_guardado_a_mano_no_manda(cliente):
+    """El `le=1` del schema solo corre al ESCRIBIR. Un 2 metido a mano en la
+    tabla pasaba entero, y `!!2` prendía el teclado igual."""
+    from sqlmodel import Session
+
+    from apps.pos.db.models import Ajuste
+    from apps.pos.db.session import engine
+    with Session(engine) as s:
+        s.add(Ajuste(clave="teclado_en_pantalla", valor="2"))
+        s.commit()
+    assert cliente.get("/api/v1/ajustes").json()["teclado_en_pantalla"] == 1

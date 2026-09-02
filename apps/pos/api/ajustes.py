@@ -42,6 +42,11 @@ def _leer(s: Session) -> dict:
             salida[clave] = type(defecto)(crudo)
         except (TypeError, ValueError):
             salida[clave] = defecto
+    # Lo que se guardó alguna vez fuera de rango no puede seguir mandando: el
+    # `le=1` del schema solo se aplica al ESCRIBIR, así que un 2 en la tabla
+    # pasaba entero y `!!2` prendía el teclado igual.
+    salida["teclado_en_pantalla"] = 1 if salida.get("teclado_en_pantalla") else 0
+    salida["margen_sugerido"] = min(max(salida.get("margen_sugerido", 0), 0), 95)
     return salida
 
 
@@ -62,7 +67,13 @@ def guardar(datos: AjustesIn, s: Session = Depends(get_session),
             quien: dict = Depends(sesion.exige("config"))):
     """Cambiarlas es del dueño: es cuánto gana el local, no una preferencia
     de pantalla."""
-    for clave, valor in datos.model_dump().items():
+    # `exclude_unset` NO es un detalle: sin él, pydantic rellena las claves que
+    # NO vinieron con su valor por defecto, y este bucle las escribe todas. O
+    # sea que mover el margen sugerido —que manda una sola clave— apagaba de
+    # paso el teclado en pantalla, en silencio. Hoy no se nota porque el defecto
+    # coincide; el día que alguien lo prenda para una pantalla táctil, tocar el
+    # margen se lo apaga y no hay forma de saber por qué.
+    for clave, valor in datos.model_dump(exclude_unset=True).items():
         fila = s.get(Ajuste, clave)
         if fila:
             fila.valor = str(valor)

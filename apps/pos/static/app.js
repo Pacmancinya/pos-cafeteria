@@ -2182,6 +2182,40 @@ function pintarGuias(id) {
   $("#textoGuia").scrollTop = 0;
 }
 
+/* ---------------- ajustes de la caja ----------------
+   Existe porque el changelog de la 2.5 prometía que el teclado en pantalla "se
+   prende desde los ajustes" y esa pantalla no existía: el campo se guardaba, se
+   leía, y no había ninguna forma de cambiarlo desde el programa. Si por lo que
+   fuera quedaba prendido, el dueño no tenía cómo apagarlo. */
+function pintarAjustes() {
+  const caja = $("#panelAjustes");
+  if (!caja) return;
+  if (!puedo("config")) { caja.innerHTML = ""; return; }
+
+  const prendido = !!AJUSTES.teclado_en_pantalla;
+  caja.innerHTML = `
+    <h3>Ajustes de esta caja</h3>
+    <label class="marca" style="margin-top:10px">
+      <input type="checkbox" id="ajTeclado" ${prendido ? "checked" : ""}>
+      Usar el teclado numérico en pantalla</label>
+    <p class="ayuda" style="margin:8px 0 0">
+      Préndelo si esta caja tiene <b>pantalla táctil</b>. En un computador con
+      teclado de verdad estorba: se abre solo y tapa media pantalla justo cuando
+      quieres escribir. Apagado, se escribe con el teclado del computador,
+      incluido el PIN.
+    </p>`;
+}
+
+async function guardarTeclado(prendido) {
+  AJUSTES.teclado_en_pantalla = prendido ? 1 : 0;
+  if (window.Teclado) Teclado.encender(prendido);
+  try {
+    await api("/ajustes", { method: "PUT",
+      body: JSON.stringify({ teclado_en_pantalla: AJUSTES.teclado_en_pantalla }) });
+    avisar(prendido ? "Teclado en pantalla prendido" : "Teclado en pantalla apagado");
+  } catch (e) { avisar(e.message, true); }
+}
+
 async function pintarVersionAyuda() {
   try {
     const r = await api("/novedades");
@@ -2587,6 +2621,7 @@ document.addEventListener("click", (e) => {
   // ---- candado ----
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
   if (cerca("data-otro-usuario")) return mostrarCandado();
+  if (t.id === "ajTeclado") return guardarTeclado(t.checked);
   if (t.id === "abrirLaCaja") return dialogoTurno();
   if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");
   if (t.id === "crearPrimero") return crearPrimerUsuario();
@@ -2768,6 +2803,7 @@ document.addEventListener("keydown", (e) => {
   await cargarTurno();
   cargarVersion();
   pintarVersionAyuda();
+  pintarAjustes();
   pintarCarrito();
   verVista(vistaDelHash(), false);
 })();

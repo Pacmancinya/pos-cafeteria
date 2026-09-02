@@ -1038,3 +1038,50 @@ html,body{overscroll-behavior:none}
 }
 .dibujos__buscar:focus{outline:2px solid var(--clay);outline-offset:1px}
 .dibujos__seccion[hidden],.dibujo-op[hidden]{display:none!important}
+
+/* ---------- cobrar: en dos columnas ----------
+   Apilado medía 711 px en una ventana de 660: había que scrollear 91 px para
+   llegar a "Confirmar venta". Un botón de confirmar que queda abajo del corte,
+   con el cliente esperando, es el peor lugar posible para esconder algo.
+
+   A lo ancho sobraba espacio: el diálogo usaba 460 px de los 1366 de la
+   pantalla. Es el mismo reparto que ya se hizo en el cierre de caja (.cierre). */
+.dialogo--cobro{width:min(760px,100%)}
+.cobro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 24px;align-items:start}
+.cobro__col{min-width:0}
+.cobro .medios{margin-bottom:0}
+.cobro .campo{margin-bottom:12px}
+.cobro .rapidos{margin:-2px 0 0}
+/* Los cuatro descuentos en una fila pareja. Sueltos, "20%" se caía solo a la
+   línea de abajo y la columna crecía 50 px por un botón. */
+#rapidosDesc{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+#rapidosDesc button{padding:0 6px;font-size:14px;white-space:nowrap}
+/* El vuelto es lo que se mira: que no quede apretado contra el borde. */
+.cobro .vuelto{margin-top:10px}
+
+@media (max-width:760px){
+  .dialogo--cobro{width:min(520px,100%)}
+  .cobro{grid-template-columns:1fr;gap:0}
+}
+
+/* ---------- pantallas BAJAS (notebook de 768 px o menos) ----------
+   No es lo mismo angosto que bajo, y acá el problema es el alto: en un notebook
+   quedan 620-660 px útiles y los diálogos se pensaron con más aire. Se aprieta
+   lo que no cuesta nada —los márgenes— antes que achicar lo que se toca. */
+@media (max-height:760px){
+  .capa{padding:10px}
+  .dialogo{padding:16px 20px}
+  .dialogo h2{margin-bottom:10px}
+  .dialogo__pie{margin-top:12px}
+  .cobro .campo{margin-bottom:9px}
+  .cobro{gap:6px 24px}
+  .vuelto{padding:10px 14px}
+  .vuelto b{font-size:23px}
+}
+
+/* Dos campos lado a lado. Se usaba en cuatro lugares —la ficha del producto, el
+   producto nuevo del escáner, el cobro— y NUNCA estuvo definida: el navegador
+   la ignoraba y los campos salían apilados. Nadie lo notó porque "apilado"
+   también se ve bien; solo se nota cuando el alto empieza a faltar. */
+.fila2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+@media (max-width:620px){.fila2{grid-template-columns:1fr;gap:0}}

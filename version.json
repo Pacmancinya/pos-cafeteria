@@ -1,6 +1,6 @@
 {
-  "version": "2.5",
-  "nombre": "Como se usa de verdad",
-  "novedades": "Siete cosas que salieron de usarla de verdad. Vuelve el teclado del computador: el teclado dibujado en pantalla queda apagado y ya no se abre solo tapando media pantalla — se prende de nuevo el día que haya pantalla táctil. Al vender ya no se puede pedir más de lo que hay: avisa cuántos quedan y, si igual los tienes, deja seguir. Sin caja abierta no se vende ni se usa el programa: al entrar te espera una sola pantalla, abrir la caja, y no puedes salir de tu cuenta dejando tu caja abierta. Y para la botillería y el almacén: 25 dibujos nuevos —cervezas en lata y botella, packs, bebidas, vinos, pisco, ron, whisky, leche en caja— con un buscador para encontrarlos entre los 93, y los recuadros más grandes para que se lea el nombre.",
+  "version": "2.6",
+  "nombre": "Todo en una pantalla",
+  "novedades": "El diálogo de cobrar ya no obliga a scrollear: pasó de 711 a 438 píxeles de alto, repartido en dos columnas —a la izquierda con qué paga, descuento y propina; a la derecha con cuánto paga y el vuelto— y el botón Confirmar queda siempre a la vista. Antes, en la pantalla de un notebook, ese botón quedaba abajo del corte. Y se arregló algo que dejaba al local en la versión vieja para siempre: la pantalla del cajero se servía sin decirle al navegador que no la guardara, así que después de actualizar podía seguir mostrando la anterior aunque el número de versión subiera. Además: el interruptor del teclado en pantalla —que la 2.5 prometió y no existía— está en Ayuda, y guardar un ajuste ya no pisa los otros.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }

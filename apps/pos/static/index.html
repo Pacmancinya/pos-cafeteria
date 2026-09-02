@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=29">
+<link rel="stylesheet" href="/static/styles.css?v=33">
 </head>
 <body>
 
@@ -150,38 +150,63 @@
       <article class="ayuda-texto" id="textoGuia"></article>
     </div>
   </div>
+
+  <!-- Los ajustes de la caja viven acá, en Ayuda, y no en su propia pestaña:
+       se tocan una vez en la vida y una pestaña permanente para eso le quita
+       espacio a lo que se usa todos los días. -->
+  <div class="panel" id="panelAjustes"></div>
 </main>
 
 <!-- ══════════ COBRAR ══════════ -->
 <div class="capa" id="capaCobro">
-  <div class="dialogo">
+  <!-- Dos columnas. En una pantalla de notebook (660 px útiles) esto medía 711
+       px apilado: había que scrollear 91 px para llegar a "Confirmar venta", o
+       sea el botón más importante quedaba abajo del corte. A lo ancho sobra
+       espacio de sobra. Se apila solo en pantallas angostas. -->
+  <div class="dialogo dialogo--cobro">
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Cobrar <span id="cobroTotal"></span></h2>
-    <div class="medios" id="medios">
-      <button class="medio is-on" data-medio="efectivo">Efectivo</button>
-      <button class="medio" data-medio="debito">Débito</button>
-      <button class="medio" data-medio="credito">Crédito</button>
-      <button class="medio" data-medio="transferencia">Transferencia</button>
-    </div>
 
-    <div id="bloqueEfectivo">
-      <label class="campo"><span>Con cuánto paga</span>
-        <input id="pagaCon" type="text" inputmode="numeric" placeholder="0" autocomplete="off"></label>
-      <div class="rapidos" id="rapidos"></div>
-      <div class="vuelto" id="vuelto"></div>
-    </div>
+    <div class="cobro">
+      <div class="cobro__col">
+        <div class="campo"><span>¿Con qué paga?</span>
+          <div class="medios" id="medios">
+            <button class="medio is-on" data-medio="efectivo">Efectivo</button>
+            <button class="medio" data-medio="debito">Débito</button>
+            <button class="medio" data-medio="credito">Crédito</button>
+            <button class="medio" data-medio="transferencia">Transferencia</button>
+          </div>
+        </div>
 
-    <label class="campo"><span>Descuento (opcional)</span>
-      <input id="descuento" type="text" inputmode="numeric" placeholder="0" autocomplete="off"></label>
-    <div class="rapidos" id="rapidosDesc">
-      <button data-desc="0">Sin descuento</button>
-      <button data-desc="10">10%</button>
-      <button data-desc="15">15%</button>
-      <button data-desc="20">20%</button>
-    </div>
+        <!-- Descuento y propina van juntos y a la izquierda a propósito: son lo
+             que MENOS se usa. Lo de cada venta —el medio de pago y el vuelto—
+             manda. -->
+        <div class="fila2">
+          <label class="campo"><span>Descuento</span>
+            <input id="descuento" type="text" inputmode="numeric" placeholder="0"
+                   autocomplete="off"></label>
+          <label class="campo"><span>Propina</span>
+            <input id="propina" type="text" inputmode="numeric" placeholder="0"
+                   autocomplete="off"></label>
+        </div>
+        <div class="rapidos" id="rapidosDesc">
+          <button data-desc="0">Sin descuento</button>
+          <button data-desc="10">10%</button>
+          <button data-desc="15">15%</button>
+          <button data-desc="20">20%</button>
+        </div>
+      </div>
 
-    <label class="campo"><span>Propina (opcional)</span>
-      <input id="propina" type="text" inputmode="numeric" placeholder="0" autocomplete="off"></label>
+      <div class="cobro__col">
+        <div id="bloqueEfectivo">
+          <label class="campo"><span>Con cuánto paga</span>
+            <input id="pagaCon" type="text" inputmode="numeric" placeholder="0"
+                   autocomplete="off"></label>
+          <div class="rapidos" id="rapidos"></div>
+          <div class="vuelto" id="vuelto"></div>
+        </div>
+      </div>
+    </div>
 
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" id="cobroCancelar">Cancelar</button>
@@ -259,6 +284,6 @@
 <script src="/static/guias.js?v=8"></script>
 <script src="/static/teclado.js?v=3"></script>
 <script src="/static/escaner.js?v=2"></script>
-<script src="/static/app.js?v=29"></script>
+<script src="/static/app.js?v=30"></script>
 </body>
 </html>

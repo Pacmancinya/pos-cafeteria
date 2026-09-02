@@ -126,6 +126,23 @@ app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
 
 @app.get("/")
 def caja():
-    return FileResponse(os.path.join(ESTATICOS, "index.html"))
+    """La pantalla del cajero. NUNCA se guarda en la caché del navegador.
+
+    Esto no es una precaución: era un bug que dejaba el local en una versión
+    vieja para siempre. `index.html` es el único archivo sin `?v=` en su
+    dirección —es el que LLEVA los `?v=` de todos los demás—, y se servía sin
+    ninguna cabecera de caché. Con solo un ETag, el navegador puede decidir por
+    su cuenta cuánto tiempo confiar en su copia sin siquiera preguntar.
+
+    El síntoma es de los peores: la caja se actualiza, el número de versión sube,
+    el dueño ve que subió... y la pantalla sigue siendo la anterior, porque el
+    HTML viejo sigue pidiendo `app.js?v=28` en vez de `?v=29`. Pasó de verdad:
+    el teclado en pantalla que se apagó en la 2.5 siguió apareciendo.
+
+    Los demás archivos SÍ se guardan en caché, y está bien: cada uno lleva su
+    `?v=` y cambia de dirección cuando cambia.
+    """
+    return FileResponse(os.path.join(ESTATICOS, "index.html"),
+                        headers={"Cache-Control": "no-store, must-revalidate"})
 
 

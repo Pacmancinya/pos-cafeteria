@@ -84,3 +84,22 @@ def test_la_caja_ya_no_sirve_las_pantallas(cliente):
     assert cliente.get("/pantallas").status_code == 404
     assert cliente.get("/pantallas/simple").status_code == 404
     assert "pantallas_url" not in cliente.get("/api/v1/salud").json()
+
+
+def test_la_pantalla_del_cajero_nunca_se_guarda_en_cache(cliente):
+    """index.html es el único archivo sin `?v=` en su dirección, porque es el
+    que LLEVA los `?v=` de todos los demás. Sin esta cabecera, el navegador
+    puede quedarse con su copia sin preguntar: la caja se actualiza, el número
+    de versión sube, y la pantalla sigue siendo la anterior porque el HTML viejo
+    sigue pidiendo los archivos viejos. Pasó de verdad."""
+    r = cliente.get("/")
+    assert r.status_code == 200
+    assert "no-store" in (r.headers.get("cache-control") or "")
+
+
+def test_los_demas_archivos_si_se_pueden_guardar(cliente):
+    """Y está bien que se guarden: cada uno lleva su `?v=` y cambia de dirección
+    cuando cambia. Si tampoco se guardaran, cada arranque bajaría todo de nuevo."""
+    r = cliente.get("/static/app.js")
+    assert r.status_code == 200
+    assert "no-store" not in (r.headers.get("cache-control") or "")
