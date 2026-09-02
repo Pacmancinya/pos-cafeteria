@@ -108,6 +108,16 @@ class Turno(SQLModel, table=True):
     # entre lo que dice el POS y lo que dice Transbank es su propia pregunta.
     conteo_medios: str = ""
 
+    # Lo que la MÁQUINA dice que fueron las propinas, por medio de pago. Es otro
+    # número que el que registró la caja: el cliente puede haber dejado propina
+    # en el pinpad sin que el cajero la anotara.
+    propinas_medios: str = ""
+
+    # Cuánto de esas propinas se pagó al equipo EN EFECTIVO, del cajón, esa
+    # misma noche. Es plata que salió del cajón y que el banco todavía no
+    # deposita, así que sin esto aparece como un faltante que no existe.
+    propinas_pagadas: int = 0
+
 
 class Venta(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

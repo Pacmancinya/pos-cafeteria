@@ -1,6 +1,6 @@
 {
-  "version": "2.7",
-  "nombre": "Dónde mirar",
-  "novedades": "Cuando la caja no cuadra, ahora te dice DÓNDE MIRAR en vez de dejarte con «sobran $1.450» y nada más. Si la diferencia calza exacta con una venta, te la muestra marcada: es el caso que más se repite en tarjeta, cuando el sistema tiene más que la vida real porque la máquina rechazó una venta y quedó registrada igual. Y al ABRIR la caja te muestra con cuánto quedó anoche y va comparando mientras cuentas: si el cajón se cuenta de menos en la mañana, el sobrante aparece recién doce horas después y parece salido de la nada. Ese es el momento barato de encontrarlo.",
+  "version": "2.8",
+  "nombre": "De vuelta a una sola app",
+  "novedades": "ARREGLO URGENTE: escribir rápido borraba lo escrito. El lector de códigos confundía dos dígitos seguidos con un escaneo y le devolvía al campo su valor anterior — escribir 3400 en un precio borraba el 3 y perdía el resto. Ahora las teclas entran normal y solo se limpia cuando de verdad fue un escaneo. Las pantallas del menú VUELVEN a la caja: se abren en /pantallas y las direcciones de cada televisor salen otra vez en la pestaña Carta con botón de copiar; se acabó la ventana negra aparte. Además: el botón + del pedido ya no deja pasar el tope de stock, se ve cuántos quedan en cada producto, crear un producto ya no deja «Producto nuevo» sueltos y siempre lleva su cuenta en la bodega, la ficha del producto queda en dos columnas, y en el cierre se puede anotar la propina que dice la máquina y la que se pagó en efectivo del cajón.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }

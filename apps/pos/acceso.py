@@ -26,7 +26,7 @@ GALLETA = "pos_acceso"
 # —que desde la 2.2 corre aparte— saca la carta: si pidiera el PIN de red, cada
 # TV del local necesitaría que alguien lo escribiera, y un TV colgado en la pared
 # no tiene teclado.
-LIBRES = ("/api/v1/carta", "/api/v1/salud", "/static/",
+LIBRES = ("/api/v1/carta", "/api/v1/salud", "/pantallas", "/static/",
           "/entrar", "/favicon.ico")
 LOCALES = {"127.0.0.1", "::1", "localhost"}
 

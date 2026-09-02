@@ -194,8 +194,8 @@ function sumarAlPedido(p) {
   if (p.stock != null && pide > p.stock && !avisado.has(p.id)) {
     avisado.add(p.id);
     avisar(p.stock > 0
-      ? `Quedan ${p.stock} de ${p.nombre}. Si igual los tienes, sigue agregando.`
-      : `${p.nombre} está en cero. Si igual lo tienes, sigue agregando.`, true);
+      ? `Quedan ${p.stock} de ${p.nombre}. Toca otra vez para vender igual.`
+      : `${p.nombre} está en cero. Toca otra vez para vender igual.`, true);
     return;                                  // el primer toque avisa y no suma
   }
 
@@ -210,9 +210,29 @@ function sumarAlPedido(p) {
 function cambiarCantidad(id, delta) {
   const l = carrito.find((x) => x.id === id);
   if (!l) return;
+
+  // El + del pedido tiene que respetar el mismo tope que el azulejo. No lo
+  // hacía: sumaba directo. Así se llegaba a 30 de algo que tenía 0, tocando +
+  // treinta veces sin que nada dijera nada — el aviso solo salía al tocar el
+  // producto en la grilla.
+  if (delta > 0) {
+    const p = productoDeLaCarta(id) || l;
+    return sumarAlPedido(p);
+  }
+
   l.cantidad += delta;
   if (l.cantidad <= 0) carrito = carrito.filter((x) => x.id !== id);
   pintarCarrito();
+}
+
+/* El producto como está en la carta, con su saldo al día. Lo del carrito trae
+   una copia del saldo de cuando se agregó. */
+function productoDeLaCarta(id) {
+  for (const c of CATEGORIAS) {
+    const p = c.productos.find((x) => x.id === id);
+    if (p) return p;
+  }
+  return null;
 }
 
 const totalCarrito = () => carrito.reduce((s, l) => s + l.precio * l.cantidad, 0);
@@ -266,15 +286,15 @@ async function alEscanear(codigo) {
    escribe a mano y ya está — que es lo que se haría igual.
 
    El precio nunca viene de ninguna parte: ese es del local. */
-async function dialogoProductoNuevoPorCodigo(codigo) {
+async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
   const cats = CATEGORIAS.filter((c) => c.activa);
-  const cual = cats.find((c) => c.id === catActiva) || cats[0];
+  const cual = cats.find((c) => c.id === (categoriaId || catActiva)) || cats[0];
 
   $("#dialogoCodigo").innerHTML = `
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Producto nuevo</h2>
-    <div class="codigo-leido">${esc(codigo)}</div>
-    <p class="ayuda" id="cdDe">Buscando cómo se llama…</p>
+    ${codigo ? `<div class="codigo-leido">${esc(codigo)}</div>
+    <p class="ayuda" id="cdDe">Buscando cómo se llama…</p>` : ""}
     <label class="campo"><span>¿Qué es?</span>
       <input id="cdNombre" type="text" placeholder="Escríbelo" autocomplete="off"></label>
     <div class="fila2">
@@ -289,15 +309,17 @@ async function dialogoProductoNuevoPorCodigo(codigo) {
         `<option value="${c.id}"${cual && c.id === cual.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>
     <label class="campo"><span>¿Cuántos tienes ahora?</span>
       <input id="cdStock" type="text" inputmode="numeric" placeholder="0"></label>
-    <p class="ayuda" style="margin-bottom:0">Queda guardado con su código: la próxima vez
-      que lo pases por el lector, entra solo al pedido.</p>
+    <p class="ayuda" style="margin-bottom:0">${codigo
+      ? "Queda guardado con su código: la próxima vez que lo pases por el lector, entra solo al pedido."
+      : "Con los que tienes anotados, la caja te avisa cuando se están acabando y no te deja vender de más sin darte cuenta."}</p>
     <div class="dialogo__pie">
-      <button class="btn btn--fantasma" data-cerrar-capa>Ahora no</button>
-      <button class="btn btn--cobrar" data-guardar-codigo="${esc(codigo)}"
-              style="width:auto">Guardar y cobrar</button>
+      <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
+      <button class="btn btn--cobrar" data-guardar-codigo="${esc(codigo || "")}"
+              style="width:auto">${codigo ? "Guardar y cobrar" : "Guardar"}</button>
     </div>`;
   $("#capaCodigo").classList.add("is-on");
   setTimeout(() => $("#cdNombre").focus(), 60);
+  if (!codigo) return;                    // sin código no hay a quién preguntarle el nombre
 
   // El sugerido de precio se mueve solo con lo que cuesta.
   $("#cdCosto").addEventListener("input", () => {
@@ -339,15 +361,22 @@ async function guardarProductoDelCodigo(codigo) {
   try {
     const p = await api("/productos", { method: "POST", body: JSON.stringify({
       categoria_id: +$("#cdCat").value,
-      nombre, precio, codigo,
-      // Lo que viene del escáner se compra y se vende tal cual, siempre: es una
-      // botella, una lata, un paquete. Por eso no se pregunta.
+      nombre, precio, codigo: codigo || "",
+      // SIEMPRE con inventario. Antes había que entrar a la ficha y apretar un
+      // botón que decía "se vende tal cual" —jerga que no significaba nada para
+      // nadie— y hasta entonces el producto no existía en la Bodega y se podía
+      // vender sin límite. Un producto que se compra hecho y se vende igual es
+      // el caso normal de un almacén: no se pregunta, se hace.
       tal_cual: true, costo, stock_inicial: stock,
     }) });
     $("#capaCodigo").classList.remove("is-on");
     await cargarCarta();
-    agregarPorId(p);
-    avisar(`${nombre} queda guardado. Ya está en el pedido.`);
+    if (codigo) {
+      agregarPorId(p);
+      avisar(`${nombre} queda guardado. Ya está en el pedido.`);
+    } else {
+      avisar(`${nombre} queda guardado, con ${stock || 0} en la bodega.`);
+    }
   } catch (e) { avisar(e.message, true); }
 }
 
@@ -766,44 +795,65 @@ function abrirFichaProducto(id) {
   const cats = CATEGORIAS
     .map((c) => `<option value="${c.id}"${c.id === cat.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("");
 
+  // Dos columnas, como el cobro y el cierre. A la izquierda lo que ES el
+  // producto —nombre, precio, códigos, cuántos hay—; a la derecha cómo SE VE en
+  // las pantallas del local. El selector de dibujos es lo más alto de todo y
+  // ocupaba media pantalla en medio del formulario: puesto en su propia columna
+  // deja de empujar todo lo demás para abajo.
+  $("#dialogoProducto").className = "dialogo dialogo--ficha";
   $("#dialogoProducto").innerHTML = `
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>${esc(p.nombre)}</h2>
-    <div class="fila2">
-      <label class="campo"><span>Nombre</span><input id="fNombre" type="text" value="${esc(p.nombre)}"></label>
-      <label class="campo"><span>Precio</span><input id="fPrecio" type="text" inputmode="numeric" value="${p.precio}"></label>
-    </div>
-    <label class="campo"><span>Descripción (se ve en la pantalla del menú)</span>
-      <input id="fDesc" type="text" value="${esc(p.descripcion)}"></label>
-    <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
-    <div class="campo">
-      <span>Códigos de barra</span>
-      <div id="fCodigos"></div>
-      <div class="codigo-poner">
-        <!-- inputmode="none" a propósito: con "numeric" el teclado en pantalla
-             se abre encima cada vez que el lector "escribe" acá. -->
-        <input id="fCodigo" type="text" inputmode="none" autocomplete="off"
-               placeholder="Pasa el producto por el lector">
-        <button class="btn btn--chico" data-pegar-codigo="${p.id}">Agregar</button>
-      </div>
-      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Un producto puede tener
-        varios: la lata suelta y el pack de 6 traen códigos distintos.</p>
-    </div>
-    ${selectorDeDibujo(p.dibujo)}
-    <div class="fila2">
-      <label class="campo"><span>Etiqueta (opcional)</span>
-        <input id="fEtiqueta" type="text" value="${esc(p.etiqueta)}" placeholder="Nuevo, Sin lactosa..."></label>
-      <label class="campo"><span>Precio antes (oferta)</span>
-        <input id="fAntes" type="text" inputmode="numeric" value="${p.antes || ""}" placeholder="vacío si no hay"></label>
-    </div>
-    <label class="marca" style="margin-bottom:12px">
-      <input type="checkbox" id="fDestacado" ${p.destacado ? "checked" : ""}>
-      Mostrar en el recuadro grande de la pantalla</label>
-    <label class="campo"><span>Texto del recuadro grande</span>
-      <input id="fBadge" type="text" value="${esc(p.badge)}" placeholder="Recomendado de hoy"></label>
-    <label class="marca"><input type="checkbox" id="fActivo" ${p.activo ? "checked" : ""}> A la venta</label>
 
-    <div class="tal-cual" id="zonaTalCual" data-producto="${p.id}"></div>
+    <div class="ficha">
+      <div class="ficha__col">
+        <div class="fila2">
+          <label class="campo"><span>Nombre</span>
+            <input id="fNombre" type="text" value="${esc(p.nombre)}"></label>
+          <label class="campo"><span>Precio</span>
+            <input id="fPrecio" type="text" inputmode="numeric" value="${p.precio}"></label>
+        </div>
+        <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
+        <label class="campo"><span>Descripción (se ve en la pantalla del menú)</span>
+          <input id="fDesc" type="text" value="${esc(p.descripcion)}"></label>
+
+        <div class="campo">
+          <span>Códigos de barra</span>
+          <div id="fCodigos"></div>
+          <div class="codigo-poner">
+            <!-- inputmode="none" a propósito: con "numeric" el teclado en
+                 pantalla se abre encima cada vez que el lector "escribe" acá. -->
+            <input id="fCodigo" type="text" inputmode="none" autocomplete="off"
+                   placeholder="Pasa el producto por el lector">
+            <button class="btn btn--chico" data-pegar-codigo="${p.id}">Agregar</button>
+          </div>
+          <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Un producto puede
+            tener varios: la lata suelta y el pack de 6 traen códigos distintos.</p>
+        </div>
+
+        <div class="tal-cual" id="zonaTalCual" data-producto="${p.id}"></div>
+      </div>
+
+      <div class="ficha__col">
+        ${selectorDeDibujo(p.dibujo)}
+        <div class="fila2">
+          <label class="campo"><span>Etiqueta (opcional)</span>
+            <input id="fEtiqueta" type="text" value="${esc(p.etiqueta)}"
+                   placeholder="Nuevo, Sin lactosa..."></label>
+          <label class="campo"><span>Precio antes (oferta)</span>
+            <input id="fAntes" type="text" inputmode="numeric" value="${p.antes || ""}"
+                   placeholder="vacío si no hay"></label>
+        </div>
+        <label class="marca" style="margin-bottom:10px">
+          <input type="checkbox" id="fDestacado" ${p.destacado ? "checked" : ""}>
+          Mostrar en el recuadro grande de la pantalla</label>
+        <label class="campo"><span>Texto del recuadro grande</span>
+          <input id="fBadge" type="text" value="${esc(p.badge)}"
+                 placeholder="Recomendado de hoy"></label>
+        <label class="marca"><input type="checkbox" id="fActivo"
+          ${p.activo ? "checked" : ""}> A la venta</label>
+      </div>
+    </div>
 
     <div class="dialogo__pie">
       <button class="btn btn--peligro" id="fBorrar">Sacar de la carta</button>
@@ -848,15 +898,19 @@ function abrirFichaProducto(id) {
   };
 }
 
-async function nuevoProducto(catId) {
-  try {
-    const p = await api("/productos", { method: "POST", body: JSON.stringify({
-      categoria_id: catId, nombre: "Producto nuevo", descripcion: "", precio: 1000,
-      activo: true, orden: 99, destacado: false, badge: "", antes: null,
-      etiqueta: "", dibujo: "mug", color: "" }) });
-    await cargarCarta();
-    abrirFichaProducto(p.id);
-  } catch (e) { avisar(e.message, true); }
+/* Preguntar PRIMERO, crear después.
+
+   Antes creaba un producto llamado "Producto nuevo" a $1.000 y recién ahí abría
+   la ficha. Si alguien cerraba la ficha, el producto quedaba igual: en la carta
+   del local quedaron NUEVE productos llamados "Producto nuevo" a $1.000, todos
+   sin stock, todos vendibles sin límite.
+
+   Ahora no existe nada hasta que se aprieta Guardar. */
+function nuevoProducto(catId) {
+  if (!CATEGORIAS.filter((c) => c.activa).length) {
+    return avisar("Primero crea una categoría", true);
+  }
+  dialogoProductoNuevoPorCodigo("", catId);
 }
 
 async function nuevaCategoria() {
@@ -891,42 +945,49 @@ async function guardarProducto(id) {
 
 /* Dirección que hay que pegar en las pantallas del local. La mostramos acá para
    que nadie tenga que ir a buscar la IP del computador. */
-/* El recuadro de la pestaña Carta.
-
-   Muestra la dirección de ESTA caja en la red —que sirve para abrirla desde un
-   tablet o desde otro computador del local— y avisa que las pantallas del menú
-   son otro programa desde la 2.2.
-
-   Las direcciones de las PANTALLAS no se muestran acá a propósito: esta caja no
-   sabe si ese programa está instalado en este computador, ni en qué puerto
-   quedó. Escribir una dirección que capaz no existe es peor que no escribir
-   ninguna — el dueño la pega en el televisor, no anda, y no sabe si el problema
-   es el TV, la red o el programa. Esas direcciones las muestra el programa de
-   las pantallas, que sí las conoce. */
+/* El recuadro de la pestaña Carta: la dirección de esta caja en la red, y las
+   de cada televisor. Las pantallas volvieron a vivir acá adentro en la 2.8, así
+   que la caja SÍ sabe en qué dirección están y puede mostrarlas con su botón de
+   copiar — que es lo que había que hacer a mano mientras fueron un programa
+   aparte. */
 function pintarConectar(salud) {
   const caja = $("#conectar");
   if (!caja) return;
   if (!salud.en_la_red) { caja.hidden = true; return; }
   const mia = (salud.carta_url || "").replace("/api/v1/carta", "");
+  const p = salud.pantallas_url || (mia + "/pantallas");
+  const fila = (cual, url) => `
+    <div class="conectar__url">
+      <span class="conectar__cual">${cual}</span>
+      <code>${url}</code>
+      <button class="btn btn--chico" data-copiar="${url}">Copiar</button>
+    </div>`;
+
   caja.innerHTML = `
-    <b>Esta caja en la red del local</b><br>
-    Para abrirla desde un tablet o desde otro computador, en el mismo wifi.
-    ${mia ? `<div class="conectar__url">
-      <span class="conectar__cual">La caja</span>
-      <code>${mia}</code>
-      <button class="btn btn--chico" data-copiar="${mia}">Copiar</button>
-    </div>` : ""}
+    <b>Las pantallas del local</b><br>
+    En cada televisor, abre el navegador y entra a la dirección que le toca. No
+    hay que instalar ni copiar nada: la carta le llega de esta caja sola.
+    ${fila("Vitrina", p + "?p=1")}
+    ${fila("Carta con precios", p + "?p=2")}
+    ${fila("Las dos turnándose", p + "?tv=1")}
     <div class="conectar__url conectar__url--simple">
-      <span class="conectar__cual">Las pantallas del menú</span>
-      <span style="font-size:13.5px;line-height:1.6">Son un programa aparte.
-        Se abren con su propio icono, <b>Pantallas del menú</b>, y ahí salen las
-        direcciones de cada televisor.</span>
+      <span class="conectar__cual">Si el TV se ve mal</span>
+      <code>${p}/simple</code>
+      <button class="btn btn--chico" data-copiar="${p}/simple">Copiar</button>
     </div>
     <p style="margin:10px 0 0;font-size:13px;line-height:1.6">
-      La carta le llega sola a los televisores: la vienen a buscar acá. Eso sí,
-      esta caja tiene que estar abierta — si el computador se apaga, se quedan
-      con la última que alcanzaron a leer.
-    </p>`;
+      El navegador que traen algunos televisores es muy viejo y muestra la
+      pantalla en blanco con letras negras. Si te pasa, usa la última dirección:
+      es la misma carta, más sobria, y anda en cualquier televisor. La normal se
+      cambia sola cuando se da cuenta.
+    </p>
+    ${mia ? `<div class="conectar__url conectar__url--simple">
+      <span class="conectar__cual">Esta caja</span>
+      <code>${mia}</code>
+      <button class="btn btn--chico" data-copiar="${mia}">Copiar</button>
+    </div>
+    <p style="margin:8px 0 0;font-size:13px;line-height:1.6">Esa es para abrir la
+      caja desde un tablet o desde otro computador del local.</p>` : ""}`;
 }
 
 /* ---------------- actualizaciones ----------------
@@ -1286,9 +1347,16 @@ function pintarCerrarCaja(tu) {
   $("#verCuadre").onclick = () => mostrarCuadre(tu);
 }
 
+const propinasPorPagar = (tu) => (tu.propinas && tu.propinas.tarjeta) || 0;
+
 function mostrarCuadre(tu) {
   const contado = totalConteo();
-  const dif = contado - tu.efectivo_esperado;
+  // Lo que se pagó de propina en efectivo salió del cajón: el cajón tiene que
+  // tener menos, y no es un faltante.
+  const pagadas = $("#tPropinasPagadas")
+    ? Math.min(soloNumeros($("#tPropinasPagadas").value), propinasPorPagar(tu)) : 0;
+  const esperado = tu.efectivo_esperado - pagadas;
+  const dif = contado - esperado;
   const ok = dif === 0;
   const zona = $("#zonaCuadre");
   zona.dataset.visto = "1";
@@ -1298,6 +1366,7 @@ function mostrarCuadre(tu) {
   // cada tecla del arqueo.
   const fondoPrevio = $("#tFondo") ? soloNumeros($("#tFondo").value) : tu.monto_inicial;
   const notaPrevia = $("#tNota") ? $("#tNota").value : "";
+  const propPrevia = $("#tPropinasPagadas") ? $("#tPropinasPagadas").value : "";
 
   // Ya contó: destapar el efectivo ya no arruina nada.
   $("#resumenTurno").innerHTML = resumenDelTurno(tu);
@@ -1309,7 +1378,9 @@ function mostrarCuadre(tu) {
         <div class="cuadre ${ok ? "cuadre--ok" : "cuadre--mal"}">
           <div class="cuadre__linea"><span>Fondo con el que abrió</span><span>${clp(tu.monto_inicial)}</span></div>
           <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(tu.ventas_efectivo)}</span></div>
-          <div class="cuadre__linea"><span>Debería haber</span><span>${clp(tu.efectivo_esperado)}</span></div>
+          ${pagadas ? `<div class="cuadre__linea"><span>Propinas que pagaste en efectivo</span>
+            <span>−${clp(pagadas)}</span></div>` : ""}
+          <div class="cuadre__linea"><span>Debería haber</span><span>${clp(esperado)}</span></div>
           <div class="cuadre__linea"><span>Contaste</span><span>${clp(contado)}</span></div>
           <div class="cuadre__linea cuadre__dif">
             <span>${ok ? "Cuadra exacto" : dif > 0 ? "Sobra" : "Falta"}</span>
@@ -1320,6 +1391,15 @@ function mostrarCuadre(tu) {
         <div id="pistaEfectivo"></div>
       </div>
       <div class="cierre__col">
+        ${propinasPorPagar(tu) ? `
+        <label class="campo"><span>¿Cuánta propina de tarjeta pagaste en efectivo?</span>
+          <input id="tPropinasPagadas" type="text" inputmode="numeric"
+                 value="${esc(propPrevia || tu.propinas_pagadas || "")}"
+                 placeholder="0 · la caja anotó ${clp(propinasPorPagar(tu))} de propina en tarjeta"></label>
+        <p class="ayuda" style="margin:-6px 0 12px;font-size:12.5px">Si le pasaste al
+          equipo su propina sacándola del cajón, ponla acá: esa plata salió del
+          cajón y el banco todavía no la deposita, así que si no la anotas
+          aparece como si faltara.</p>` : ""}
         <label class="campo"><span>¿Cuánto dejas de fondo para mañana?</span>
           <input id="tFondo" type="text" inputmode="numeric" value="${fondoPrevio || ""}" placeholder="0"></label>
         <div class="medios-turno" id="tRetiro"></div>
@@ -1335,6 +1415,17 @@ function mostrarCuadre(tu) {
   };
   $("#tFondo").addEventListener("input", pintarRetiro);
   pintarRetiro();
+  const campoProp = $("#tPropinasPagadas");
+  if (campoProp) {
+    campoProp.addEventListener("input", () => {
+      // mostrarCuadre rehace esta zona entera, así que hay que devolverle el
+      // foco y el cursor: si no, escribir "1500" pierde el campo en el "1".
+      const donde = campoProp.selectionStart;
+      mostrarCuadre(tu);
+      const nuevo = $("#tPropinasPagadas");
+      if (nuevo) { nuevo.focus(); try { nuevo.setSelectionRange(donde, donde); } catch (e) {} }
+    });
+  }
   if (dif !== 0) buscarElDescuadre(tu, dif);
 
   const pie = document.querySelector("#dialogoTurno .dialogo__pie");
@@ -1708,8 +1799,9 @@ async function cargarBodega() {
 
   $("#tablaInsumos").innerHTML = !BODEGA.insumos.length ? `
     <tr><td class="vacio" style="padding:34px">Todavía no hay nada en la bodega.<br>
-      Agrega un insumo, o entra a un producto de la Carta y usa
-      <b>“se vende tal cual”</b>.</td></tr>` : `
+      Los productos que crees desde ahora llevan su cuenta solos.<br>
+      Para los que ya estaban: entra al producto en la <b>Carta</b> y abajo usa
+      <b>«Llevar la cuenta de este producto»</b>.</td></tr>` : `
     <tr><th>Insumo</th><th class="num">Queda</th><th class="num">Mínimo</th>
         <th class="num">Vale</th><th>Cómo se compra</th><th></th></tr>
     ${BODEGA.insumos.map((i) => `
@@ -2133,6 +2225,13 @@ function bloqueTarjetas(tu) {
           <input type="text" inputmode="numeric" data-dice="${m.medio}"
                  value="${m.declarado != null ? m.declarado : ""}" placeholder="0">
           <div class="tarjetas__dif" data-dif="${m.medio}"></div>
+          <div class="tarjetas__propina">
+            <span>De eso, propina</span>
+            <input type="text" inputmode="numeric" data-propina-dice="${m.medio}"
+                   value="${m.propina_dicha != null ? m.propina_dicha : ""}"
+                   placeholder="${m.propinas || 0}">
+            <small>la caja anotó ${clp(m.propinas || 0)}</small>
+          </div>
           <div class="tarjetas__pista" data-pista="${m.medio}"></div>
         </div>`).join("")}
     </div>`;
@@ -2291,6 +2390,17 @@ function conectarTarjetas(tu) {
     campo.addEventListener("input", pintar);
     pintar();
   });
+}
+
+/* La propina según la máquina, por medio. Puede no ser la que anotó la caja:
+   el cliente la deja en el pinpad y el cajero no siempre la registra. */
+function propinasDeclaradas() {
+  const salida = {};
+  $$("[data-propina-dice]").forEach((c) => {
+    const v = (c.value || "").trim();
+    if (v) salida[c.dataset.propinaDice] = soloNumeros(v);
+  });
+  return salida;
 }
 
 function mediosDeclarados() {
@@ -2629,9 +2739,9 @@ async function pintarTalCual(p) {
 
   zona.innerHTML = `
     <div class="tal-cual__tit">Bodega</div>
-    <p class="ayuda" style="margin:0 0 10px">Este producto todavía no descuenta
-      nada al venderse. Si es algo que compras hecho y vendes tal cual —un
-      pastel, una botella, un alfajor— acá se resuelve de un toque.</p>
+    <p class="ayuda" style="margin:0 0 10px">De este producto <b>no se lleva la
+      cuenta</b>: se puede vender sin límite y no aparece en la Bodega. Anota
+      cuántos tienes y empieza a llevarla.</p>
     <div class="tal-cual__campos">
       <label class="campo"><span>¿Cuántos tienes?</span>
         <input id="tcStock" type="text" inputmode="numeric" placeholder="0"></label>
@@ -2641,7 +2751,8 @@ async function pintarTalCual(p) {
         <input id="tcMinimo" type="text" inputmode="numeric" placeholder="0"></label>
     </div>
     <div id="zonaSugerido"></div>
-    <button class="btn" data-tal-cual="${p.id}">Se vende tal cual</button>`;
+    <button class="btn btn--cobrar" data-tal-cual="${p.id}"
+            style="width:auto">Llevar la cuenta de este producto</button>`;
 
   // El sugerido aparece en cuanto hay un costo escrito, y se recalcula solo.
   const costo = $("#tcCosto");
@@ -2773,6 +2884,8 @@ document.addEventListener("click", (e) => {
       efectivo_contado: totalConteo(),
       fondo_siguiente: soloNumeros(($("#tFondo") || {}).value || 0),
       medios: mediosDeclarados(),
+      propinas_medios: propinasDeclaradas(),
+      propinas_pagadas: soloNumeros(($("#tPropinasPagadas") || {}).value || 0),
       nota: (($("#tNota") || {}).value || "").trim() }) })
       .then((r) => { olvidarConteo();
         $("#capaTurno").classList.remove("is-on"); cargarTurno();

@@ -41,9 +41,8 @@ PLAN = [
     # Las pantallas son OTRO programa desde la 2.2: acá va su guía, para que el
     # dueño encuentre las dos cosas en el mismo lugar aunque sean dos programas.
     ("5 - Pantallas del menú", [
-        ("../pantallas-cafeteria/LEEME.md", "Cómo se usan las pantallas.md"),
-        ("../pantallas-cafeteria/VERSIONES.md", "Qué cambió en cada versión.md"),
-        ("../pantallas-cafeteria/pantallas-simple.html",
+        ("apps/pos/static/pantallas.html", "Pantalla del local (respaldo).html"),
+        ("apps/pos/static/pantallas-simple.html",
          "Pantalla para TV viejo (respaldo).html"),
     ]),
     ("6 - Para el que programa", [
@@ -87,12 +86,11 @@ Qué hay en cada carpeta
       ESTA CARPETA ES TUYA: no se borra ni se reordena.
 
   5 - Pantallas del menú
-      Los televisores que muestran la carta. Desde la 2.2 son OTRO
-      PROGRAMA, con su propio icono: la caja ya no los sirve. Se
-      separaron porque un almacén o una botillería no tienen televisores
-      y no tienen por qué cargar ese código.
-      Acá está su guía, y una copia de la pantalla para televisores
-      viejos por si alguna vez hay que abrirla a mano.
+      Los televisores que muestran la carta. Los sirve la propia caja:
+      cada TV abre una dirección de la red y listo. Las direcciones
+      salen en la pestaña Carta, con botón de copiar.
+      Acá hay una copia de las dos pantallas, por si alguna vez hay que
+      abrirlas a mano sin la caja.
 
   6 - Para el que programa
       Cómo está construido y las decisiones que no se cambian sin pensar.
@@ -100,9 +98,8 @@ Qué hay en cada carpeta
 El código
 ---------
 
-Los dos programas viven en:
+El programa vive en:
     {codigo}
-    {codigo_pantallas}
 
 Es un repositorio de git conectado a GitHub. No se mueve de ahí: si se
 cambia de lugar, se rompen el repositorio y las rutas.
@@ -190,10 +187,8 @@ def ordenar() -> tuple[int, list[str], list[str], list[str]]:
                 "'Descargar para el contador'.\n")
 
     with open(os.path.join(DESTINO, "LEEME PRIMERO.txt"), "w", encoding="utf-8") as f:
-        f.write(LEEME.format(
-            version=APP_VERSION, nombre=APP_NOMBRE,
-            fecha=f"{datetime.now():%d-%m-%Y}", codigo=RAIZ,
-            codigo_pantallas=os.path.join(os.path.dirname(RAIZ), "pantallas-cafeteria")))
+        f.write(LEEME.format(version=APP_VERSION, nombre=APP_NOMBRE,
+                             fecha=f"{datetime.now():%d-%m-%Y}", codigo=RAIZ))
     return copiados, faltantes, intactas, barridas
 
 

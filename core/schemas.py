@@ -57,6 +57,11 @@ class CerrarTurnoIn(BaseModel):
     # Lo que dice el comprobante de cierre de la máquina y la app del banco,
     # por medio de pago: {"debito": 123400, "transferencia": 20000}.
     medios: dict[str, int] = Field(default_factory=dict)
+    # Lo que la máquina dice que fueron las PROPINAS, por medio de pago.
+    propinas_medios: dict[str, int] = Field(default_factory=dict)
+    # Cuánto de la propina de tarjeta se le pagó al equipo en efectivo, sacado
+    # del cajón esta misma noche.
+    propinas_pagadas: int = Field(default=0, ge=0)
 
 
 class ProductoIn(BaseModel):

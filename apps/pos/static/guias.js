@@ -386,16 +386,13 @@ window.GUIAS = [
   titulo: "Las pantallas del menú",
   resumen: "Son otro programa. Cómo se conectan y cómo se arreglan.",
   html: `
-    <p>Las pantallas del menú son un <b>programa aparte</b> de esta caja. Se
-       abren con su propio icono: <b>Pantallas del menú</b>.</p>
-    <div class="ayuda">Están separadas porque no todos los locales tienen
-      televisores. Un almacén o una botillería instalan solo la caja y no cargan
-      ni actualizan código que nunca van a usar.</div>
+    <p>Las pantallas del local <b>las sirve esta misma caja</b>. No hay que
+       instalar ni copiar nada en el televisor: solo abrir una dirección.</p>
 
     <h3>Conectar un televisor</h3>
     <ol>
-      <li>Abre el programa <b>Pantallas del menú</b> en este mismo computador.
-          Se abre una ventana negra con las direcciones escritas.</li>
+      <li>Pestaña <b>Carta</b>: ahí están las direcciones, con su botón de
+          copiar.</li>
       <li>En el televisor, abre el navegador y entra a la que le toca:
         <ul>
           <li><b>?p=1</b> — la vitrina, la que invita a elegir.</li>
@@ -404,9 +401,6 @@ window.GUIAS = [
         </ul>
       </li>
     </ol>
-    <p>Esa ventana negra <b>tiene que quedarse abierta</b>: es la que sirve las
-       pantallas. Cerrarla las apaga. No es como la caja, que se abre sola y sin
-       ventana — acá la ventana es el programa.</p>
 
     <h3>La carta le llega sola</h3>
     <p>Cada precio que cambies acá se ve en los televisores en la siguiente

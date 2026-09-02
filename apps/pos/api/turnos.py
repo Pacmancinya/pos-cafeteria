@@ -74,6 +74,7 @@ def _cuadre_de_medios(s: Session, t: Turno) -> list[dict]:
     `declarado` y `diferencia` quedan en None — no se inventa un cuadre.
     """
     declarado = _conteo(t.conteo_medios)
+    propinas_dichas = _conteo(t.propinas_medios)
     filas = []
     for medio, d in _por_medio(s, t).items():
         if medio == "efectivo":
@@ -92,6 +93,10 @@ def _cuadre_de_medios(s: Session, t: Turno) -> list[dict]:
             "esperado": d["cobrado"],          # con propina: es lo que se cobró
             "declarado": dicho,
             "diferencia": None if dicho is None else dicho - d["cobrado"],
+            # La propina según la MÁQUINA, que puede no ser la que registró la
+            # caja: el cliente la deja en el pinpad y el cajero no siempre la
+            # anota.
+            "propina_dicha": propinas_dichas.get(medio),
         })
     return sorted(filas, key=lambda f: -f["esperado"])
 
@@ -124,7 +129,7 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         "cerrado_at": a_local(t.cerrado_at).isoformat() if t.cerrado_at else None,
         "monto_inicial": t.monto_inicial,
         "ventas_efectivo": ventas_efectivo,
-        "efectivo_esperado": t.monto_inicial + ventas_efectivo,
+        "efectivo_esperado": t.monto_inicial + ventas_efectivo - t.propinas_pagadas,
         "efectivo_contado": t.efectivo_contado,
         "diferencia": t.diferencia,
         "retiro": t.retiro,
@@ -146,6 +151,9 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         # mañana se contó de menos, el sobrante aparece recién en la noche y
         # parece salido de la nada.
         "fondo_anterior": _fondo_que_quedo(s, t),
+        # Propinas de tarjeta pagadas en efectivo del cajón: salieron de ahí, así
+        # que el cajón tiene que tener menos.
+        "propinas_pagadas": t.propinas_pagadas,
         # Quiénes pasaron por la caja durante el turno. Es la respuesta a
         # "¿quién estuvo?", que no es lo mismo que "¿quién vendió?".
         "estuvieron": _estuvieron(s, t),
@@ -348,7 +356,14 @@ def cerrar(datos: CerrarTurnoIn, s: Session = Depends(get_session),
     if dueno_del_turno and dueno_del_turno != quien.get("id")             and not puede(quien.get("rol", ""), "turno_cerrar_ajeno"):
         raise HTTPException(403, _no_es_tuya(s, t))
 
-    esperado = t.monto_inicial + _efectivo_del_turno(s, t)
+    # Las propinas de tarjeta que se pagaron al equipo EN EFECTIVO salieron del
+    # cajón, y el banco todavía no las deposita. Sin restarlas, esa plata
+    # aparece como un faltante que no existe — y es plata que se reparte casi
+    # todas las noches.
+    pagadas = min(datos.propinas_pagadas, _propinas(s, t)["tarjeta"])
+    t.propinas_pagadas = pagadas
+
+    esperado = t.monto_inicial + _efectivo_del_turno(s, t) - pagadas
     contado = total_del_conteo(datos.conteo) if datos.conteo else datos.efectivo_contado
 
     t.efectivo_contado = contado
@@ -363,6 +378,9 @@ def cerrar(datos: CerrarTurnoIn, s: Session = Depends(get_session),
     medios = {m: int(v) for m, v in (datos.medios or {}).items()
               if m in MEDIOS_PAGO and m != "efectivo" and str(v).strip() != ""}
     t.conteo_medios = json.dumps(medios) if medios else ""
+    propinas = {m: int(v) for m, v in (datos.propinas_medios or {}).items()
+                if m in MEDIOS_PAGO and m != "efectivo" and str(v).strip() != ""}
+    t.propinas_medios = json.dumps(propinas) if propinas else ""
     t.cerrado_at = ahora()
     t.cerrado_por_id = quien.get("id")
     s.add(t)

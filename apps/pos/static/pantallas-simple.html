@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carta</title>
+<!--
+  LA CARTA PARA TELEVISORES VIEJOS
+  ===============================================================
+
+  Esta pagina existe porque el navegador que traen los smart TV no es un
+  navegador moderno. En el televisor del local, `pantallas.html` se vio SIN
+  NINGUN ESTILO: fondo blanco, texto negro y los botones grises del sistema.
+
+  Asi que aca no se usa NADA de lo que ese navegador podria no entender:
+
+    · Nada de variables CSS (var(--x)).
+    · Nada de CSS Grid ni de "gap" en flex. El diseno se arma con <table>,
+      que es lo unico que dibuja igual en todos los navegadores desde 1997.
+    · Nada de "inset", que recien llego en 2020.
+    · Nada de @font-face: fuentes del sistema y punto. La otra pagina lleva
+      65 KB de fuente en base64 y eso solo es un motivo mas para que falle.
+    · JavaScript de 2009: var, function, XMLHttpRequest, concatenar textos.
+      Ni funciones flecha, ni template literals, ni fetch, ni const.
+    · Los tamanos se calculan en pixeles con JavaScript y no con vh/vw, para
+      no depender de que el televisor sepa cuanto mide su propia pantalla.
+
+  Si tocas este archivo, MANTENELO ASI. Es fea de escribir a proposito: es la
+  que tiene que funcionar cuando la bonita no funciona.
+
+  Direcciones:
+    /simple            la carta entera, rotando por categoria.
+                                 Aca NO hay vitrina y menu por separado: en un
+                                 televisor que no da para la pantalla bonita, dos
+                                 modos serian dos formas de mostrar lo mismo.
+    /simple?diag=1     que entiende este navegador, en grande
+-->
+<style>
+/* Colores escritos a mano, sin variables: si el navegador no entiende var(),
+   una pagina con variables se ve en blanco y negro. */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #22110A;
+  color: #F4E2CC;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+  height: 100%;
+}
+/* El marco compensa el recorte de bordes que hace casi todo televisor por
+   HDMI: si el contenido llega al borde, el TV se come un 3% por lado. */
+#marco { padding: 3% 4%; }
+
+#cabeza { border-bottom: 3px solid #C9552B; padding-bottom: 10px; }
+#local  { color: #C9552B; font-weight: bold; letter-spacing: 2px; }
+#cat    { color: #F4E2CC; font-weight: bold; }
+
+#lista { width: 100%; border-collapse: collapse; margin-top: 18px; }
+#lista td { padding: 10px 0; border-bottom: 1px solid #3A1D10; vertical-align: baseline; }
+.nom  { color: #FFF8EF; }
+.des  { color: #A98A6E; }
+.pre  { color: #F0A94A; font-weight: bold; text-align: right; white-space: nowrap; }
+.ant  { color: #A98A6E; text-decoration: line-through; font-weight: normal; }
+.eti  { color: #22110A; background: #F0A94A; padding: 2px 10px; border-radius: 20px; }
+
+/* El destacado del dia. Sin sombras ni degradados: en un panel de TV barato
+   se ven como manchas. */
+#destacado { background: #3A1D10; border-left: 8px solid #C9552B; padding: 14px 20px; margin-top: 16px; }
+#dnom { color: #FFF8EF; font-weight: bold; }
+#dpre { color: #F0A94A; font-weight: bold; }
+
+#pie { color: #A98A6E; margin-top: 16px; }
+#aviso { color: #E4794A; }
+
+#diag { color: #F4E2CC; padding: 4%; line-height: 1.7; }
+#diag b { color: #F0A94A; }
+</style>
+</head>
+<body>
+
+<div id="marco">
+  <div id="cabeza"><span id="local">&nbsp;</span> <span id="cat"></span></div>
+  <table id="lista"><tbody id="cuerpo"></tbody></table>
+  <div id="destacado" style="display:none">
+    <div id="deti"></div>
+    <div id="dnom"></div>
+    <div id="dpre"></div>
+  </div>
+  <div id="pie"><span id="aviso"></span></div>
+</div>
+
+<div id="diag" style="display:none"></div>
+
+<script>
+/* Todo en ES5. Nada de const, let, =>, `plantillas` ni fetch. */
+(function () {
+  "use strict";
+
+  var CADA_CATEGORIA = 12000;   // ms que se muestra cada categoria
+  var CADA_RECARGA   = 60000;   // ms entre consultas de la carta al punto de venta
+  var POR_PANTALLA   = 7;       // items por vuelta, para que quepan grandes
+
+  var carta = null;
+  var cat = 0;        // categoria que se esta mostrando
+  var pagina = 0;     // pagina dentro de esa categoria
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(t) {
+    if (t === null || typeof t === "undefined") { return ""; }
+    return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  /* Los pesos chilenos con punto de miles, a mano. toLocaleString("es-CL")
+     existe hace mucho pero en algunos televisores devuelve el numero pelado. */
+  function clp(n) {
+    n = Math.round(Number(n) || 0);
+    var s = String(Math.abs(n)), sal = "", c = 0, i;
+    for (i = s.length - 1; i >= 0; i--) {
+      sal = s.charAt(i) + sal;
+      c++;
+      if (c % 3 === 0 && i > 0) { sal = "." + sal; }
+    }
+    return (n < 0 ? "-$" : "$") + sal;
+  }
+
+  /* Donde esta la caja. El servidor de las pantallas rellena el hueco de abajo
+     con la direccion de verdad antes de mandar esta pagina, deducida del host
+     que uso este mismo televisor. Si no lo rellena nadie, se deduce aca. */
+  /* La sirve la propia caja: la carta esta en el mismo origen. */
+  function donde() {
+    return "/api/v1/carta";
+  }
+
+
+  function param(nombre) {
+    var m = new RegExp("[?&]" + nombre + "=([^&]*)").exec(window.location.search);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  /* ---- los tamanos ----
+     Se calculan en pixeles a partir del alto real de la ventana, y no con vh,
+     porque un televisor puede mentir sobre cuanto mide. Se aplican por estilo
+     en linea, que es lo que ningun navegador puede ignorar. */
+  function medir() {
+    var alto = window.innerHeight || document.documentElement.clientHeight || 720;
+    var u = alto / 100;                 // 1 unidad = 1% del alto
+    function px(k) { return Math.round(k * u) + "px"; }
+
+    $("local").style.fontSize = px(4.2);
+    $("cat").style.fontSize = px(6.5);
+    $("pie").style.fontSize = px(3);
+    $("destacado").style.fontSize = px(3.4);
+    $("dnom").style.fontSize = px(5);
+    $("dpre").style.fontSize = px(5.6);
+
+    var filas = document.getElementsByClassName("nom"), i;
+    for (i = 0; i < filas.length; i++) { filas[i].style.fontSize = px(5); }
+    filas = document.getElementsByClassName("des");
+    for (i = 0; i < filas.length; i++) { filas[i].style.fontSize = px(2.9); }
+    filas = document.getElementsByClassName("pre");
+    for (i = 0; i < filas.length; i++) { filas[i].style.fontSize = px(5.6); }
+    filas = document.getElementsByClassName("eti");
+    for (i = 0; i < filas.length; i++) { filas[i].style.fontSize = px(2.6); }
+  }
+
+  /* ---- pedir la carta ----
+     XMLHttpRequest y no fetch: fetch llego en 2015 y hay televisores en los
+     locales que son mas viejos que eso. */
+  function pedirCarta(alLlegar) {
+    var x = new XMLHttpRequest();
+    // La hora al final es para que el televisor no sirva una copia guardada:
+    // hay navegadores de TV que ignoran las cabeceras de cache.
+    x.open("GET", donde() + "?t=" + (new Date()).getTime(), true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) { return; }
+      if (x.status === 200) {
+        try { alLlegar(JSON.parse(x.responseText)); }
+        catch (e) { fallo("La carta llego rota."); }
+      } else {
+        fallo("No se pudo hablar con la caja (" + x.status + ").");
+      }
+    };
+    x.onerror = function () { fallo("No se pudo hablar con la caja."); };
+    x.send();
+  }
+
+  function fallo(texto) {
+    // Si ya hay una carta en pantalla NO se borra: mas vale la carta de hace
+    // un rato que un cartel de error donde estaba el menu.
+    if (carta) { return; }
+    $("local").innerHTML = "Kofe";
+    $("cat").innerHTML = "Un momento";
+    $("cuerpo").innerHTML = '<tr><td class="nom">' + esc(texto) +
+      "<br>Revisa que la caja este abierta en el computador.</td></tr>";
+    medir();
+  }
+
+  /* ---- dibujar ---- */
+  function pintar() {
+    if (!carta || !carta.categorias || !carta.categorias.length) { return; }
+    if (cat >= carta.categorias.length) { cat = 0; }
+
+    var c = carta.categorias[cat];
+    var items = c.productos || [];
+    var paginas = Math.max(1, Math.ceil(items.length / POR_PANTALLA));
+    if (pagina >= paginas) { pagina = 0; }
+
+    $("local").innerHTML = esc(carta.local || "");
+    $("cat").innerHTML = esc(c.nombre || "") +
+      (paginas > 1 ? ' <span style="color:#A98A6E">' + (pagina + 1) + "/" + paginas + "</span>" : "");
+
+    var desde = pagina * POR_PANTALLA;
+    var html = "", i, p, precio;
+    for (i = desde; i < desde + POR_PANTALLA && i < items.length; i++) {
+      p = items[i];
+      precio = clp(p.precio);
+      if (p.antes) { precio = '<span class="ant">' + clp(p.antes) + "</span> " + precio; }
+      html += "<tr><td>" +
+        '<span class="nom">' + esc(p.nombre) + "</span>" +
+        (p.etiqueta ? ' <span class="eti">' + esc(p.etiqueta) + "</span>" : "") +
+        (p.descripcion ? '<br><span class="des">' + esc(p.descripcion) + "</span>" : "") +
+        '</td><td class="pre">' + precio + "</td></tr>";
+    }
+    $("cuerpo").innerHTML = html;
+
+    // El destacado solo en la primera vuelta de la categoria: si se repitiera
+    // en todas, ocuparia la mitad de la pantalla sin decir nada nuevo.
+    var d = c.destacado;
+    if (d && pagina === 0) {
+      $("deti").innerHTML = '<span class="eti">' + esc(d.etiqueta || "Recomendado") + "</span>";
+      $("dnom").innerHTML = esc(d.nombre);
+      $("dpre").innerHTML = clp(d.precio) +
+        (d.descripcion ? ' <span class="des">' + esc(d.descripcion) + "</span>" : "");
+      $("destacado").style.display = "block";
+    } else {
+      $("destacado").style.display = "none";
+    }
+
+    var avisos = carta.avisos || [];
+    $("aviso").innerHTML = avisos.length ? esc(avisos[(cat + pagina) % avisos.length]) : "";
+
+    medir();
+  }
+
+  /* ---- pasar de pagina y de categoria ---- */
+  function avanzar() {
+    if (!carta || !carta.categorias || !carta.categorias.length) { return; }
+    var items = carta.categorias[cat].productos || [];
+    var paginas = Math.max(1, Math.ceil(items.length / POR_PANTALLA));
+    pagina++;
+    if (pagina >= paginas) {
+      pagina = 0;
+      cat = (cat + 1) % carta.categorias.length;
+    }
+    pintar();
+  }
+
+  /* ---- que entiende este navegador ----
+     Con ?diag=1. Es para poder arreglar a distancia: se saca una foto de la
+     pantalla y ahi esta escrito por que la otra pagina no funciono. */
+  function diagnostico() {
+    function si(v) { return v ? "<b>SI</b>" : "no"; }
+    var d = document.createElement("div");
+    var vars = false, grid = false, ins = false, hueco = false;
+    try {
+      vars = !!(window.CSS && CSS.supports && CSS.supports("--x", "1"));
+      grid = !!(window.CSS && CSS.supports && CSS.supports("display", "grid"));
+      hueco = !!(window.CSS && CSS.supports && CSS.supports("gap", "1px"));
+      ins = !!(window.CSS && CSS.supports && CSS.supports("inset", "0"));
+    } catch (e) { }
+
+    $("marco").style.display = "none";
+    $("diag").style.display = "block";
+    $("diag").style.fontSize = Math.round((window.innerHeight || 720) / 38) + "px";
+    $("diag").innerHTML =
+      "<b>QUE ENTIENDE ESTE TELEVISOR</b><br><br>" +
+      "Variables CSS: " + si(vars) + "  (Chromium 49, ano 2016)<br>" +
+      "CSS Grid: " + si(grid) + "  (Chromium 57, ano 2017)<br>" +
+      'Separacion "gap": ' + si(hueco) + "  (Chromium 84, ano 2020)<br>" +
+      'Propiedad "inset": ' + si(ins) + "  (Chromium 87, ano 2020)<br>" +
+      "fetch: " + si(window.fetch) + "  (Chromium 42, ano 2015)<br>" +
+      "<br>La pantalla bonita necesita las CUATRO de arriba.<br>" +
+      "Esta pagina no necesita ninguna.<br>" +
+      "Pantalla: " + (window.innerWidth || 0) + " x " + (window.innerHeight || 0) + "<br><br>" +
+      "<b>Navegador</b><br>" + esc(navigator.userAgent);
+    return true;
+  }
+
+  /* ---- arrancar ---- */
+  function empezar() {
+    if (param("diag")) { diagnostico(); return; }
+
+    pedirCarta(function (datos) { carta = datos; cat = 0; pagina = 0; pintar(); });
+    setInterval(avanzar, CADA_CATEGORIA);
+
+    // La carta se vuelve a pedir sola: si el dueno cambia un precio en la caja,
+    // el televisor se entera sin que nadie toque nada.
+    setInterval(function () {
+      pedirCarta(function (datos) {
+        carta = datos;
+        if (cat >= (datos.categorias || []).length) { cat = 0; pagina = 0; }
+        pintar();
+      });
+    }, CADA_RECARGA);
+
+    // Tocar la pantalla o apretar cualquier tecla del control pasa a lo
+    // siguiente: en un TV no hay mouse, pero el control manda teclas.
+    document.onclick = avanzar;
+    document.onkeydown = avanzar;
+  }
+
+  if (window.addEventListener) {
+    window.addEventListener("resize", function () { pintar(); }, false);
+  }
+  empezar();
+}());
+</script>
+</body>
+</html>

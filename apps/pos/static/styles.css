@@ -1128,3 +1128,51 @@ html,body{overscroll-behavior:none}
 }
 .fondo-anoche.es-ok{border-color:#BFE3CE;background:#EAF6EF}
 .fondo-anoche.es-mal{border-color:#E8C9C6;background:#FBECEA}
+
+/* Cuántos quedan, a la vista ANTES de agregar. Sin esto el tope solo se
+   descubría al chocar con él, y con el + del pedido ni siquiera eso. */
+.prod__quedan{
+  position:absolute;top:8px;left:8px;z-index:1;
+  background:rgba(42,21,11,.72);color:#fff;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;padding:3px 8px;border-radius:99px;
+  font-variant-numeric:tabular-nums;
+}
+.prod__quedan.es-cero{background:var(--rojo)}
+/* Cuando el pedido pasa lo que había, se dice en la línea y no solo en un
+   aviso que ya desapareció. */
+.linea__sobra{
+  display:block;font-size:11px;font-weight:700;color:var(--rojo);
+  margin-top:2px;letter-spacing:.02em;
+}
+
+/* ---------- la ficha del producto, en dos columnas ----------
+   Era la pantalla más larga del programa: nombre, precio, descripción,
+   categoría, códigos, el selector de 93 dibujos, etiqueta, oferta, destacado,
+   texto del destacado, a la venta y la bodega — todo en una sola columna. El
+   selector de dibujos solo ya ocupa media pantalla, y quedaba en el medio
+   empujando la mitad del formulario fuera de la vista.
+
+   A la izquierda lo que ES el producto; a la derecha cómo SE VE. */
+.dialogo--ficha{width:min(1000px,100%)}
+.ficha{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 26px;align-items:start}
+.ficha__col{min-width:0}
+.ficha .tal-cual{margin:6px 0 0}
+@media (max-width:900px){
+  .dialogo--ficha{width:min(620px,100%)}
+  .ficha{grid-template-columns:1fr;gap:0}
+}
+
+/* La propina que dice la máquina, debajo del total de ese medio. */
+.tarjetas__propina{
+  grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-top:8px;margin-top:2px;border-top:1px dashed var(--linea);
+}
+.tarjetas__propina>span{font-size:12.5px;color:var(--suave);font-weight:600}
+.tarjetas__propina input{
+  width:110px;height:var(--toque);text-align:right;padding:0 10px;
+  border:1px solid var(--linea);border-radius:9px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:15px;
+  font-variant-numeric:tabular-nums;
+}
+.tarjetas__propina input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.tarjetas__propina small{font-size:12px;color:var(--suave)}

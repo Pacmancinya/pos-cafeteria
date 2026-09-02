@@ -42,11 +42,21 @@
    falso positivo alguien tendría que escribir seis dígitos seguidos a más de 25
    por segundo.
 
-   Lo honesto: no se puede saber que empezó una ráfaga hasta la SEGUNDA tecla,
-   así que el primer dígito alcanza a filtrarse al campo que tuviera el foco.
-   Se limpia después. Si el lector permite programarle un prefijo —casi todos—
-   eso sería 100% confiable y esta heurística sobraría; se deja porque no se
-   puede suponer qué lector compró el local.
+   LO QUE NO HACE, Y ES IMPORTANTE: no se traga las teclas mientras las junta.
+   Las deja pasar al campo como siempre, y recién cuando ya SABE que fue un
+   escaneo —seis o más dígitos, todos seguidos a menos de 40 ms— le devuelve al
+   campo el valor que tenía antes.
+
+   La primera versión hacía lo contrario: tragaba desde la segunda tecla y
+   limpiaba el campo SIEMPRE. Resultado: escribir "3400" en un precio borraba el
+   3 y perdía el resto. En el local se vio así — «se me borra al momento lo que
+   escribo, pero si espameo el teclado sí escribe alguna que otra cosa», que es
+   exactamente lo que pasa cuando los huecos irregulares del machaqueo rompen la
+   detección de ráfaga. Escribir rápido no puede costar lo escrito.
+
+   Si el lector permite programarle un prefijo —casi todos— eso sería 100%
+   confiable y esta heurística sobraría; se deja porque no se puede suponer qué
+   lector compró el local.
    ========================================================== */
 (function () {
   "use strict";
@@ -57,6 +67,7 @@
   var MS_SIN_ENTER = 80;       // red por si el lector no manda Enter
 
   var buf = "";
+  var rafagaEntera = true;      // ¿todas las teclas vinieron seguidas?
   var ultima = 0;
   var reloj = null;
   var campoTocado = null;      // dónde se filtró el primer dígito
@@ -84,13 +95,26 @@
     valorAntes = null;
   }
 
+  /* ¿Lo que se juntó parece un código y no una persona escribiendo? */
+  function pareceUnEscaneo() {
+    return buf.length >= LARGO_MINIMO && rafagaEntera;
+  }
+
   function soltar() {
     var codigo = buf;
+    var fueEscaneo = pareceUnEscaneo();
     buf = "";
+    rafagaEntera = true;
     clearTimeout(reloj);
     reloj = null;
-    limpiarLoQueSeFiltro();
-    if (codigo.length < LARGO_MINIMO) return;
+
+    // Solo se le devuelve el valor viejo al campo si de verdad fue un escaneo.
+    // Esto es lo que estaba mal y borraba lo que la gente escribía: se limpiaba
+    // SIEMPRE, también cuando eran dos dígitos tecleados rápido.
+    if (fueEscaneo) limpiarLoQueSeFiltro();
+    campoTocado = null;
+    valorAntes = null;
+    if (!fueEscaneo) return;
 
     // Frente al candado se consume y no se hace nada. Un código de barras no es
     // el PIN de nadie, y dejarlo pasar convierte cada escaneo en intentos de
@@ -112,40 +136,37 @@
     ultima = t;
 
     if (e.key === "Enter") {
-      if (buf.length >= LARGO_MINIMO && rapido) {
+      if (pareceUnEscaneo() && rapido) {
         // Este Enter es del lector. Que NO llegue a app.js: allá abre el cobro
         // o confirma la venta.
         e.preventDefault();
         e.stopPropagation();
-        soltar();
-      } else {
-        buf = "";
-        limpiarLoQueSeFiltro();
       }
+      soltar();
       return;
     }
 
     if (e.key.length !== 1) return;              // Shift, Tab, F1, muertas
     if (!/[0-9]/.test(e.key)) {                  // los códigos son puros dígitos
       buf = "";
-      limpiarLoQueSeFiltro();
+      campoTocado = null;
+      valorAntes = null;
       return;
     }
 
-    if (rapido && buf.length) {
-      // Segunda tecla en adelante: es una ráfaga. Se traga.
-      e.preventDefault();
-      e.stopPropagation();
-      if (buf.length === 1) {
-        // Recién ahora se sabe. Se cierra el teclado en pantalla, que si no se
-        // come el resto o confirma un PIN a los 4 dígitos.
-        if (window.Teclado && window.Teclado.abierto) window.Teclado.cerrar();
-      }
-      if (buf.length < LARGO_MAXIMO) buf += e.key;
+    // NO se hace preventDefault: las teclas siguen entrando al campo como
+    // siempre. Antes se tragaban desde la segunda, y como al final se le
+    // devolvía al campo su valor anterior, escribir "3400" en un precio
+    // terminaba borrando el 3 y perdiendo el resto. Escribir rápido no puede
+    // costar lo escrito.
+    //
+    // Un escaneo de verdad se limpia DESPUÉS, cuando ya se sabe que lo fue:
+    // seis o más dígitos, todos seguidos a menos de 40 ms. Una persona no
+    // sostiene eso ni escribiendo un precio de seis cifras.
+    if (buf.length) {
+      if (!rapido) rafagaEntera = false;
     } else {
-      // Primera tecla: todavía no se sabe si es el lector o una persona. Se deja
-      // pasar, y se guarda dónde cayó para poder devolverlo.
-      buf = e.key;
+      rafagaEntera = true;
       var f = document.activeElement;
       if (f && typeof f.value === "string" && f.tagName === "INPUT") {
         campoTocado = f;
@@ -154,6 +175,13 @@
         campoTocado = null;
         valorAntes = null;
       }
+    }
+    if (buf.length < LARGO_MAXIMO) buf += e.key;
+
+    // El teclado en pantalla se cierra solo si esto ya parece un escaneo: si no,
+    // se cerraba en cuanto alguien escribía dos dígitos seguidos.
+    if (pareceUnEscaneo() && window.Teclado && window.Teclado.abierto) {
+      window.Teclado.cerrar();
     }
 
     clearTimeout(reloj);

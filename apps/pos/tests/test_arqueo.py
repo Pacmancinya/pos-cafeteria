@@ -304,3 +304,51 @@ def test_una_venta_anulada_se_marca_para_no_confundir(cliente, carta, caja):
     t = cliente.get("/api/v1/turnos/actual").json()["turno"]
     listada = cliente.get(f"/api/v1/turnos/{t['id']}/ventas").json()[0]
     assert listada["anulada"] is True
+
+
+# ------------------------- la propina de tarjeta pagada en efectivo
+def test_la_propina_pagada_en_efectivo_sale_del_cajon(cliente, carta):
+    """Si se le paga al equipo su propina de tarjeta sacándola del cajón, esa
+    plata salió de ahí y el banco todavía no la deposita. Sin restarla aparece
+    como un faltante que no existe — y se reparte casi todas las noches."""
+    # Con un fondo de verdad: la propina se paga SACÁNDOLA de ahí.
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "P", "monto_inicial": 10000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito", "propina": 2000})
+
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    assert t["propinas"]["tarjeta"] == 2000
+    # Sin ventas en efectivo, el cajón debería tener solo el fondo.
+    assert t["efectivo_esperado"] == t["monto_inicial"]
+
+    # Se paga la propina del cajón y se cuenta lo que queda.
+    r = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": t["monto_inicial"] - 2000,
+        "propinas_pagadas": 2000}).json()
+    assert r["diferencia"] == 0, "pagar la propina del cajón no es un descuadre"
+    assert r["propinas_pagadas"] == 2000
+
+
+def test_no_se_puede_decir_que_se_pago_mas_propina_de_la_que_hubo(cliente, carta, caja):
+    """El tope es la propina de tarjeta del turno: más que eso no salió de acá."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito", "propina": 500})
+    r = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 0, "propinas_pagadas": 99999}).json()
+    assert r["propinas_pagadas"] == 500
+
+
+def test_se_guarda_la_propina_que_dice_la_maquina(cliente, carta, caja):
+    """Puede no ser la que anotó la caja: el cliente la deja en el pinpad y el
+    cajero no siempre la registra."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito", "propina": 500})
+    r = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 0,
+        "propinas_medios": {"debito": 800}}).json()
+    debito = [m for m in r["medios"] if m["medio"] == "debito"][0]
+    assert debito["propinas"] == 500, "lo que anotó la caja"
+    assert debito["propina_dicha"] == 800, "lo que dice la máquina"

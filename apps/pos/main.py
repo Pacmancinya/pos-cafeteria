@@ -98,11 +98,9 @@ def salud():
     return {
         "ok": True, "version": VERSION, "local": NOMBRE_LOCAL,
         "turno_abierto": bool(t),
-        # De acá saca la carta el programa de las PANTALLAS DEL MENÚ, que desde
-        # la 2.2 es una aplicación aparte: un almacén o una botillería no tienen
-        # televisores y no tienen por qué cargar, actualizar ni arrancar ese
-        # código. Esta dirección es el único contrato entre los dos programas.
+        # Lo que hay que abrir en cada televisor del local.
         "carta_url": f"http://{ip}:{PUERTO}/api/v1/carta",
+        "pantallas_url": f"http://{ip}:{PUERTO}/pantallas",
         "en_la_red": HOST == "0.0.0.0",
     }
 
@@ -144,5 +142,42 @@ def caja():
     """
     return FileResponse(os.path.join(ESTATICOS, "index.html"),
                         headers={"Cache-Control": "no-store, must-revalidate"})
+
+
+@app.get("/pantallas")
+def pantallas():
+    """Las pantallas del menú del local, servidas por la propia caja.
+
+    Cada TV abre una dirección de la red y la carta le llega del MISMO origen:
+    no hay archivo que copiar, ni IP que escribir, ni CORS que pelear.
+
+        http://<ip-de-la-caja>:8090/pantallas?p=1   → la vitrina
+        http://<ip-de-la-caja>:8090/pantallas?p=2   → la carta con precios
+        http://<ip-de-la-caja>:8090/pantallas?tv=1  → las dos turnándose
+
+    Vivieron acá desde la 1.8, se sacaron a un programa aparte en la 2.2 y
+    volvieron en la 2.8. La razón de sacarlas —que un almacén sin televisores no
+    cargara este código— no aguantaba: son 184 KB de archivos estáticos que
+    nadie pide si nadie los abre, y a cambio la cafetería tenía que dejar una
+    ventana negra más abierta todo el día. Se cambió algo que costaba nada por
+    algo que costaba todos los días.
+    """
+    return FileResponse(os.path.join(ESTATICOS, "pantallas.html"),
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/pantallas/simple")
+def pantallas_simple():
+    """La misma carta, para el navegador que trae el televisor.
+
+    El "Opera" de un smart TV es un Chromium congelado en el firmware: hay
+    equipos en venta con uno de 2014. Esta versión no usa nada que ese navegador
+    pueda no entender. `pantallas.html` manda para acá sola cuando se da cuenta.
+
+        http://<ip-de-la-caja>:8090/pantallas/simple
+        http://<ip-de-la-caja>:8090/pantallas/simple?diag=1
+    """
+    return FileResponse(os.path.join(ESTATICOS, "pantallas-simple.html"),
+                        headers={"Cache-Control": "no-store"})
 
 
