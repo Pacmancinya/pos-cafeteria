@@ -948,3 +948,76 @@ html,body{overscroll-behavior:none}
   font-size:12.5px;font-weight:700;color:#14603A;background:#EAF6EF;
   border-radius:99px;padding:3px 10px;
 }
+
+/* ==========================================================
+   CELULAR (hasta 620 px)
+
+   La caja se pensó para un notebook y para un tablet. Pero se puede abrir
+   desde el celular —es la misma dirección de la red— y ahí se veía mal, no
+   "apretado": DIMINUTO, con la mitad derecha de la pantalla vacía.
+
+   La causa no era el diseño de la venta: era la BARRA DE ARRIBA. Medía 914 px
+   —cinco pestañas más cuatro chips, en una fila que no se doblaba— contra los
+   375 px de un celular. Chrome, para que quepa lo más ancho de la página,
+   achica TODO. El contenido, que sí cabía, quedaba entonces dibujado a escala
+   de 914 px en el borde izquierdo.
+
+   O sea: un solo elemento que no se dobla arruina la página entera. Por eso
+   acá lo primero es que la barra se doble.
+   ========================================================== */
+@media (max-width:620px){
+  .barra{flex-wrap:wrap;row-gap:8px;column-gap:8px;padding:8px 12px}
+  .barra__marca{order:1}
+  .barra__der{order:2;margin-left:auto;gap:8px}
+
+  /* Las pestañas pasan a una fila propia y se desplazan de lado. Cinco no
+     caben en 375 px, y hacerlas más chicas las deja imposibles de tocar. */
+  .tabs{
+    order:3;width:100%;overflow-x:auto;overscroll-behavior-x:contain;
+    scrollbar-width:none;-ms-overflow-style:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:none;white-space:nowrap}
+
+  /* El reloj sobra: el celular tiene el suyo arriba, más grande. */
+  .reloj{display:none}
+  .quien,.turno{padding:0 11px;font-size:14px}
+  .version{padding:0 8px;font-size:12px}
+
+  /* ---- el pedido, en un celular ----
+     Al lado no cabe, así que va abajo. Pero "abajo" con la pantalla de venta
+     sin scroll significaba a 1.037 px en una ventana de 812: el botón Cobrar
+     quedaba fuera de alcance y no había forma de llegar. La caja se podía
+     armar y no se podía cobrar.
+
+     Se arregla en dos partes: la vista entera pasa a desplazarse como una
+     página normal, y el total con su botón quedan PEGADOS abajo. Así el
+     Cobrar está siempre a la vista, que es lo que uno busca con el cliente
+     enfrente. */
+  .vista[data-vista="caja"]{flex-direction:column;overflow-y:auto;flex-wrap:nowrap}
+  .grilla{overflow:visible;flex:none}
+  .productos{flex:none}
+  .lineas{overflow:visible;max-height:none}
+
+  .pedido{
+    width:100%;flex:none;border-left:0;border-top:1px solid var(--linea);
+    position:sticky;bottom:0;z-index:5;
+  }
+  /* La sombra es para que se lea como una capa por encima de la grilla y no
+     como el final de la lista. */
+  .pedido__pie{box-shadow:0 -10px 24px rgba(42,21,11,.10)}
+  .productos{padding:10px 12px}
+  .buscador{margin-bottom:10px}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:10px}
+
+  /* Los diálogos ocupan la pantalla: en 375 px, un diálogo "centrado con
+     márgenes" deja el contenido en una columna de 300 px. */
+  .capa{padding:0}
+  .dialogo{
+    width:100%;max-width:none;border-radius:0;min-height:100%;
+    padding:20px 16px;margin:0;
+  }
+  .dialogo--ancho,.dialogo--cierre{width:100%}
+  .fila2{grid-template-columns:1fr}
+  .panel{padding:12px}
+}

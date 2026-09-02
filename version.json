@@ -1,6 +1,6 @@
 {
-  "version": "2.3",
-  "nombre": "Se arma sola",
-  "novedades": "Lector de códigos de barra. Se enchufa una pistola USB —no hay nada que instalar— y pasar un producto lo agrega al pedido. Si la caja no lo conoce, te pregunta ahí mismo qué es y a cuánto lo vendes, y queda guardado con su código para siempre: el catálogo se arma solo, un producto por vez, sin sentarse una tarde a escribirlo todo. El nombre a veces llega escrito desde una base pública y gratis. Y se acabó tener que agregar un producto en dos lados: un solo formulario deja la ficha, el stock y el costo. Se arregló también el bug de la bodega: crear algo con un nombre que ya existía creaba otro igual en silencio, y quedaban dos saldos con la mitad de la verdad cada uno.",
+  "version": "2.4",
+  "nombre": "También en el celular",
+  "novedades": "La caja ahora se puede usar desde el celular. Se abría —es la misma dirección de la red— pero se veía diminuta y con media pantalla vacía, y no se llegaba al botón de cobrar. La culpa era de la barra de arriba: medía 914 píxeles contra los 375 de un celular, y para que cupiera, el navegador achicaba la página entera. Ahora la barra se dobla, las pestañas se deslizan de lado, y el total con el botón Cobrar quedan pegados abajo, siempre a la vista. Los diálogos —cobrar, cerrar caja, productos— ocupan la pantalla completa en vez de una columna angosta.",
   "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/heads/main.zip"
 }
