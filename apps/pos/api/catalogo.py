@@ -13,6 +13,7 @@ from apps.pos.db.models import Categoria, CodigoBarra, Insumo, Producto, Receta
 from apps.pos import sesion
 from apps.pos.db.session import get_session
 from core.codigos import normalizar, por_que_no_sirve
+from core.planilla import sin_tildes
 from core.config import AVISOS, NOMBRE_LOCAL
 from core.schemas import CategoriaIn, ProductoIn
 
@@ -133,6 +134,24 @@ def editar_categoria(cat_id: int, datos: CategoriaIn, s: Session = Depends(get_s
     return c
 
 
+def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Producto | None:
+    """El producto que ya se llama así, o None. Sin tildes ni mayúsculas.
+
+    En la carta del local quedaron NUEVE productos llamados "Producto nuevo", y
+    dos productos con el mismo nombre no son un detalle estético: el cajero no
+    sabe cuál tocar, el informe de "lo más vendido" los cuenta por separado, y
+    el stock de uno no dice nada del otro.
+
+    Mira solo los ACTIVOS: uno sacado de la carta ya no se puede tocar ni
+    vender, así que su nombre puede volver a usarse.
+    """
+    objetivo = sin_tildes(nombre)
+    for otro in s.exec(select(Producto).where(Producto.activo == True)).all():  # noqa: E712
+        if otro.id != salvo_id and sin_tildes(otro.nombre) == objetivo:
+            return otro
+    return None
+
+
 # Lo que ProductoIn trae de más y no es columna de Producto: son las cosas que
 # antes obligaban a ir a la Bodega a escribir todo de nuevo.
 EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo"}
@@ -155,6 +174,10 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
     """
     if not s.get(Categoria, datos.categoria_id):
         raise HTTPException(404, "No existe esa categoría")
+    repetido = _producto_repetido(s, datos.nombre, None)
+    if repetido:
+        raise HTTPException(409, f"Ya hay un producto que se llama «{repetido.nombre}». "
+                                 "Dos con el mismo nombre no se distinguen en la caja.")
 
     codigo = ""
     if datos.codigo:
@@ -203,6 +226,20 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
     p = s.get(Producto, prod_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")
+    # OJO: solo si le están CAMBIANDO el nombre.
+    #
+    # En la carta del local hay nueve productos llamados "Producto nuevo" desde
+    # antes de esta regla. Si acá se validara siempre, guardarle el precio a uno
+    # de esos —sin tocarle el nombre— daría 409 y quedarían congelados: no se
+    # podrían arreglar ni renombrar, que es justo lo que hay que hacer con
+    # ellos. La regla es para no CREAR colisiones nuevas, no para castigar las
+    # que ya están.
+    if sin_tildes(datos.nombre) != sin_tildes(p.nombre):
+        repetido = _producto_repetido(s, datos.nombre, prod_id)
+        if repetido:
+            raise HTTPException(409, f"Ya hay un producto que se llama «{repetido.nombre}». "
+                                     "Dos con el mismo nombre no se distinguen en la caja.")
+
     antes = p.nombre
     for k, v in datos.model_dump(exclude=EXTRAS).items():
         setattr(p, k, v)

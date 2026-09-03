@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=37">
+<link rel="stylesheet" href="/static/styles.css?v=38">
 </head>
 <body>
 
@@ -118,8 +118,9 @@
     <div class="barra-dia">
       <div>
         <h3 style="margin-bottom:4px">Lo que hay en la bodega</h3>
-        <p class="ayuda" style="margin:0">Se descuenta solo al vender, según la receta de
-          cada producto. El stock nunca impide cobrar: avisa, no bloquea.</p>
+        <p class="ayuda" style="margin:0">Se descuenta solo al vender. Si vas a pasar
+          de lo que hay, la caja pregunta antes: se puede vender igual, pero
+          diciendo que sí.</p>
       </div>
       <div class="barra-dia__acc">
         <button class="btn" id="btnCompra">Llegó mercadería</button>
@@ -128,6 +129,9 @@
         <button class="btn" id="btnNuevoInsumo">+ Insumo</button>
       </div>
     </div>
+    <!-- Los productos que todavía no llevan cuenta: sin inventario no hay tope
+         y se pueden vender sin límite. -->
+    <div id="sinCuenta"></div>
     <div class="kpis" id="kpisBodega"></div>
     <div id="avisoBodega"></div>
     <div class="tabla-wrap"><table class="tabla" id="tablaInsumos"></table></div>
@@ -281,9 +285,9 @@
 <div class="aviso" id="aviso"></div>
 
 <script src="/static/dibujos.js?v=5"></script>
-<script src="/static/guias.js?v=10"></script>
+<script src="/static/guias.js?v=11"></script>
 <script src="/static/teclado.js?v=3"></script>
 <script src="/static/escaner.js?v=3"></script>
-<script src="/static/app.js?v=34"></script>
+<script src="/static/app.js?v=35"></script>
 </body>
 </html>

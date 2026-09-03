@@ -470,6 +470,43 @@ def borrar_receta(producto_id: int, s: Session = Depends(get_session),
     return {"ok": True}
 
 
+@router.post("/inventario/llevar-la-cuenta-de-todo")
+def llevar_la_cuenta_de_todo(s: Session = Depends(get_session),
+                             quien: dict = Depends(sesion.exige("inventario"))):
+    """Le da inventario a TODOS los productos que todavía no lo llevan.
+
+    Existe por un agujero que se vio en video: un producto sin inventario no
+    tiene tope, así que se vendieron 27 unidades de algo que no existía. Desde
+    la 2.8 los productos nuevos llevan cuenta solos, pero los que ya estaban
+    quedaron sin ella, y arreglarlos de a uno son 30 clics.
+
+    NO toca los que ya llevan cuenta ni los que tienen receta de verdad: un
+    capuchino no "es" un insumo, se hace con leche y café. Los deja en cero, que
+    es la verdad hasta que alguien cuente.
+    """
+    hechos = []
+    con_receta = {r.producto_id for r in s.exec(select(Receta)).all()}
+    ya_tienen = {i.producto_id for i in s.exec(
+        select(Insumo).where(Insumo.producto_id != None)).all()}          # noqa: E711
+
+    for p in s.exec(select(Producto).where(Producto.activo == True)).all():  # noqa: E712
+        if p.id in con_receta or p.id in ya_tienen:
+            continue
+        s.add(Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
+                     compra_contenido=1, producto_id=p.id))
+        hechos.append(p.nombre)
+    s.commit()
+
+    # Las recetas se escriben después, con los insumos ya con id.
+    for nombre in hechos:
+        i = s.exec(select(Insumo).where(Insumo.nombre == nombre)).first()
+        if i and i.producto_id:
+            s.add(Receta(producto_id=i.producto_id, insumo_id=i.id, cantidad=1))
+    s.commit()
+
+    return {"ok": True, "cuantos": len(hechos), "productos": hechos}
+
+
 @router.post("/productos/{producto_id}/receta/tal-cual")
 def receta_tal_cual(producto_id: int, datos: TalCualIn, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("inventario"))):

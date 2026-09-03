@@ -170,13 +170,22 @@ function buscar(texto) {
    El tope se puede pasar a propósito, y eso es a propósito: el saldo de la
    bodega es lo que dice el programa, no lo que hay en la repisa. Si llegó
    mercadería y nadie la anotó, negarse a vender sería peor que descuadrar el
-   inventario — el cliente está ahí con la plata en la mano. Ver CONTRATO,
-   decisión 7: el stock avisa. Ahora avisa MEJOR: una vez, y deja seguir.
+   inventario — el cliente está ahí con la plata en la mano.
+
+   Pero pasarlo hay que DECIRLO. Antes salía un cartel que se iba solo en tres
+   segundos y el toque siguiente pasaba igual: eso no es un tope, es un adorno.
+   Así se vendieron 27 de algo que estaba en cero. Ahora es una pregunta que
+   hay que contestar. Ver CONTRATO, decisión 7.
 
    Solo topea lo que se vende TAL CUAL. Un capuchino no tiene "cuántos quedan":
    tiene leche y café. */
-/* De qué productos ya se avisó en este pedido. Avisar en cada toque sería un
-   cartel que nadie lee; avisar una vez y dejar pasar, es un tope de verdad. */
+/* De qué productos ya se dijo que sí en este pedido.
+
+   El sí vale para el producto y para el pedido, no para siempre: se olvida al
+   cobrar y al limpiar el carrito. Preguntar en cada toque sería insoportable
+   —el cajero terminaría apretando Aceptar sin leer, que es como se llega otra
+   vez a 27— y no preguntar nunca es lo que estaba mal. Una vez por producto y
+   por venta es el punto donde la pregunta todavía se lee. */
 const avisado = new Set();
 const olvidarAvisos = () => avisado.clear();
 
@@ -192,11 +201,18 @@ function sumarAlPedido(p) {
   const pide = (ya ? ya.cantidad : 0) + 1;
 
   if (p.stock != null && pide > p.stock && !avisado.has(p.id)) {
-    avisado.add(p.id);
-    avisar(p.stock > 0
-      ? `Quedan ${p.stock} de ${p.nombre}. Toca otra vez para vender igual.`
-      : `${p.nombre} está en cero. Toca otra vez para vender igual.`, true);
-    return;                                  // el primer toque avisa y no suma
+    // Un ALTO de verdad, con una salida visible. Antes bastaba tocar de nuevo,
+    // y eso no es un tope: el aviso se iba solo en tres segundos y el siguiente
+    // toque pasaba. Se vendieron 27 unidades de algo que no existía.
+    //
+    // Sigue habiendo salida —el saldo es lo que dice el programa, no lo que hay
+    // en la repisa— pero hay que decir que sí a propósito.
+    const seguir = confirm(
+      (p.stock > 0 ? `Quedan ${p.stock} de ${p.nombre}.` : `${p.nombre} está en cero.`)
+      + `\n\nEstás poniendo ${pide}. Si igual los tienes, se venden y el inventario`
+      + ` queda en ${p.stock - pide}.\n\n¿Vender igual?`);
+    if (!seguir) return;
+    avisado.add(p.id);                       // ya dijo que sí: no se pregunta más
   }
 
   if (ya) ya.cantidad += 1;
@@ -1783,6 +1799,22 @@ async function cargarBodega() {
   } catch (e) { return avisar(e.message, true); }
 
   const faltan = BODEGA.por_comprar || [];
+  // Los productos que todavía no llevan cuenta. Sin inventario NO HAY TOPE: de
+  // uno de esos se vendieron 27 unidades que no existían.
+  const sinCuenta = BODEGA.productos_totales - BODEGA.productos_con_receta;
+  const caja = $("#sinCuenta");
+  if (caja) {
+    caja.innerHTML = sinCuenta > 0 ? `
+      <div class="pista" style="margin:0 0 14px">
+        <b>Hay ${sinCuenta} producto${sinCuenta === 1 ? "" : "s"} sin cuenta en la bodega.</b>
+        <p class="ayuda" style="margin:6px 0 10px;font-size:13px">De esos se puede
+          vender sin límite: la caja no sabe cuántos hay, así que no tiene con qué
+          compararte. Los que crees desde ahora llevan cuenta solos.</p>
+        <button class="btn btn--cobrar" id="btnLlevarCuenta" style="width:auto">
+          Empezar a llevar la cuenta de todos</button>
+      </div>` : "";
+  }
+
   $("#kpisBodega").innerHTML = `
     <div class="kpi"><span>Insumos</span><b>${BODEGA.insumos.length}</b>
       <small>${BODEGA.productos_con_receta} de ${BODEGA.productos_totales} productos con receta</small></div>
@@ -2897,6 +2929,16 @@ document.addEventListener("click", (e) => {
   // ---- candado ----
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
   if (cerca("data-otro-usuario")) return mostrarCandado();
+  if (t.id === "btnLlevarCuenta") {
+    if (!confirm("Se le va a dar inventario a todos los productos que todavía no lo "
+                 + "llevan, empezando en cero.\n\nDespués anota cuántos tienes de cada "
+                 + "uno con «Llegó mercadería» o «Contar la bodega».")) return;
+    return api("/inventario/llevar-la-cuenta-de-todo", { method: "POST" })
+      .then(async (r) => { await cargarBodega(); await cargarCarta();
+        avisar(r.cuantos ? `Listo: ${r.cuantos} producto${r.cuantos === 1 ? "" : "s"} `
+                           + "ahora llevan cuenta." : "Ya todos llevaban cuenta."); })
+      .catch((e) => avisar(e.message, true));
+  }
   if (t.id === "ajTeclado") return guardarTeclado(t.checked);
   if (t.id === "abrirLaCaja") return dialogoTurno();
   if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");

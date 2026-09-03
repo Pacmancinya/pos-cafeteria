@@ -6,6 +6,7 @@ Las dos reglas que estos tests defienden, porque son las que se olvidan:
      de hoy diría que consume.
 """
 import pytest
+from sqlmodel import select
 
 from core.config import costo_de, mostrar_cantidad
 
@@ -381,3 +382,121 @@ def test_la_migracion_no_toca_una_receta_de_verdad(cliente, carta):
     _amarrar_insumos_a_su_producto()
     with Session(engine) as s:
         assert s.exec(select(Insumo).where(Insumo.id == leche["id"])).first().producto_id is None
+
+
+# ------------------------------- productos sin cuenta: el agujero del video
+def test_no_se_pueden_crear_dos_productos_con_el_mismo_nombre(cliente, carta):
+    """En la carta del local quedaron NUEVE llamados «Producto nuevo». Dos con
+    el mismo nombre no es estético: el cajero no sabe cuál tocar, «lo más
+    vendido» los cuenta por separado, y el stock de uno no dice nada del otro."""
+    r = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Latte", "precio": 3400})
+    assert r.status_code == 409
+    assert "Latte" in r.json()["detail"]
+
+
+def test_las_tildes_no_hacen_un_producto_distinto(cliente, carta):
+    r = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "LATTE", "precio": 1})
+    assert r.status_code == 409
+
+
+def test_renombrar_encima_de_otro_tampoco(cliente, carta):
+    r = cliente.put(f"/api/v1/productos/{carta['espresso']['id']}", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Latte", "precio": 1900})
+    assert r.status_code == 409
+
+
+def test_un_producto_sacado_de_la_carta_libera_su_nombre(cliente, carta):
+    """Ya no se puede tocar ni vender: su nombre puede volver a usarse."""
+    cliente.delete(f"/api/v1/productos/{carta['latte']['id']}")
+    assert cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Latte",
+        "precio": 3600}).status_code == 200
+
+
+def test_llevar_la_cuenta_de_todo_le_da_inventario_a_los_que_no_tienen(cliente, carta):
+    """El agujero que se vio en video: un producto sin inventario NO TIENE TOPE,
+    y se vendieron 27 unidades de algo que no existía. Arreglarlos de a uno son
+    treinta clics."""
+    antes = cliente.get("/api/v1/inventario").json()
+    assert antes["productos_con_receta"] == 0
+
+    r = cliente.post("/api/v1/inventario/llevar-la-cuenta-de-todo").json()
+    assert r["cuantos"] == 4                      # los cuatro de la carta de prueba
+
+    inv = cliente.get("/api/v1/inventario").json()
+    assert inv["productos_con_receta"] == 4
+    # Y ahora la carta dice cuántos quedan: cero, que es la verdad.
+    cats = cliente.get("/api/v1/categorias").json()
+    for c in cats:
+        for p in c["productos"]:
+            assert p["stock"] == 0
+
+
+def test_no_le_toca_el_inventario_a_los_que_ya_lo_llevaban(cliente, carta):
+    p = cliente.post("/api/v1/productos", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Botella",
+        "precio": 1000, "tal_cual": True, "stock_inicial": 12}).json()
+
+    cliente.post("/api/v1/inventario/llevar-la-cuenta-de-todo")
+    inv = cliente.get("/api/v1/inventario").json()
+    suyos = [i for i in inv["insumos"] if i["producto_id"] == p["id"]]
+    assert len(suyos) == 1, "no se le crea un segundo insumo"
+    assert suyos[0]["stock"] == 12, "y no se le pisa el saldo"
+
+
+def test_no_le_toca_el_inventario_a_lo_que_tiene_receta_de_verdad(cliente, carta):
+    """Un capuchino no ES un insumo: se hace con leche y café."""
+    from sqlmodel import Session
+
+    from apps.pos.db.models import Receta
+    from apps.pos.db.session import engine
+    leche = cliente.post("/api/v1/inventario/insumos",
+                         json={"nombre": "Leche", "unidad": "ml"}).json()
+    with Session(engine) as s:
+        s.add(Receta(producto_id=carta["latte"]["id"], insumo_id=leche["id"], cantidad=200))
+        s.commit()
+
+    cliente.post("/api/v1/inventario/llevar-la-cuenta-de-todo")
+    inv = cliente.get("/api/v1/inventario").json()
+    suyos = [i for i in inv["insumos"] if i["producto_id"] == carta["latte"]["id"]]
+    assert not suyos, "el latte no se convierte en su propio insumo"
+
+
+def test_los_duplicados_que_ya_estaban_se_pueden_seguir_editando(cliente, carta):
+    """La regla nueva no puede congelar la carta que ya existe.
+
+    En el local hay NUEVE «Producto nuevo» de antes de esta versión. Si validar
+    el nombre repetido pasara también cuando no lo cambian, guardarles el precio
+    daría 409 y quedarían inarreglables — justo lo contrario de lo que se busca.
+    """
+    from sqlmodel import Session
+
+    from apps.pos.db.models import Producto
+    from apps.pos.db.session import engine
+    with Session(engine) as s:                      # dos gemelos, como en el local
+        s.add(Producto(categoria_id=carta["cafe"]["id"], nombre="Producto nuevo",
+                       precio=1000, activo=True))
+        s.add(Producto(categoria_id=carta["cafe"]["id"], nombre="Producto nuevo",
+                       precio=1000, activo=True))
+        s.commit()
+        gemelos = [p.id for p in s.exec(
+            select(Producto).where(Producto.nombre == "Producto nuevo")).all()]
+    assert len(gemelos) == 2
+
+    # Cambiarle el precio sin tocar el nombre: tiene que dejar.
+    r = cliente.put(f"/api/v1/productos/{gemelos[0]}", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Producto nuevo", "precio": 2500})
+    assert r.status_code == 200, r.text
+    assert r.json()["precio"] == 2500
+
+    # Y renombrarlo a algo libre —que es lo que hay que hacer— también.
+    assert cliente.put(f"/api/v1/productos/{gemelos[1]}", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Red Bull 250",
+        "precio": 2500}).status_code == 200
+
+    # Lo que sigue prohibido es CREAR una colisión nueva.
+    assert cliente.put(f"/api/v1/productos/{gemelos[0]}", json={
+        "categoria_id": carta["cafe"]["id"], "nombre": "Red Bull 250",
+        "precio": 2500}).status_code == 409

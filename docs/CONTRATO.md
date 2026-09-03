@@ -61,6 +61,26 @@ puede impedir cobrar una venta. Ver la sección de inventario.
 > que hay en la repisa: si llegó mercadería y nadie la anotó, negarse a vender sería peor
 > que descuadrar el inventario — el cliente está ahí con la plata en la mano. Solo aplica a
 > lo que se vende TAL CUAL: un capuchino no tiene "cuántos quedan", tiene leche y café.
+>
+> **Corregido en la 2.9. "Avisa" no era lo que decía ser, y hay video.** Lo de la 2.5 se
+> escribió como si el segundo toque fuera una confirmación. No lo era: el aviso se iba solo
+> a los tres segundos y el toque siguiente pasaba igual, viniera un segundo después o un
+> minuto. Con eso se vendieron 27 unidades de un producto que estaba en cero, y el local lo
+> reclamó tres veces —"me deja vender 30 que no existen"— antes de que quedara arreglado.
+>
+> Ahora es una PREGUNTA: dice cuántos quedan, cuántos se están poniendo y en cuánto va a
+> quedar el inventario, y hay que contestar que sí. El sí vale para ese producto y ese
+> pedido; se olvida al cobrar. Preguntar en cada toque sería peor —el cajero terminaría
+> apretando Aceptar sin leer, que es como se llega otra vez a 27.
+>
+> **Y había un agujero más grande abajo:** un producto sin inventario no tenía tope
+> NINGUNO. No es que el aviso fallara; es que `p.stock` venía nulo y la comparación no
+> existía. Un producto creado sin insumo se vendía sin límite y en silencio. La 2.9 agrega
+> `POST /inventario/llevar-la-cuenta-de-todo` y un panel en la Bodega que lo dice con esas
+> palabras, para no arreglarlos de a uno.
+>
+> **La lección, que es la misma de la decisión 12:** un aviso que se va solo no es un tope,
+> es un adorno. Si la regla importa, tiene que costar algo pasarla.
 
 **8. Reiniciar el programa pide el PIN de nuevo, pero no pierde nada.** Las galletas
 emitidas antes de que arrancara el proceso (`sesion.ARRANQUE`) no valen. Es la única
@@ -203,6 +223,31 @@ nada. Una venta que no pertenece a ningún turno es plata sin dueño.
 > no puede cerrarla —decisión 10— así que si tampoco pudiera cambiar de usuario, no habría
 > forma de que Javi volviera a entrar a cerrar la suya. El bloqueo por inactividad no cuenta
 > como salir: bloquea la pantalla y deja el turno donde está.
+
+**19. Dos productos activos no pueden llamarse igual, y "igual" ignora tildes y
+mayúsculas.** `POST` y `PUT /api/v1/productos` responden 409 con el nombre del que ya
+existe. No es prolijidad: el nombre es lo ÚNICO con que cuenta el cajero para elegir. En la
+carta del local llegaron a quedar **nueve** productos llamados «Producto nuevo», y con eso
+el cajero no sabe cuál tocar, "lo más vendido" los cuenta por separado, y el saldo de uno no
+dice nada del otro aunque sean la misma botella.
+
+La comparación normaliza tildes y mayúsculas porque «Té» y «TE» tecleados con apuro son el
+mismo producto para quien mira la pantalla, y una regla que el ojo no puede verificar no
+sirve de nada.
+
+**Solo entre productos ACTIVOS.** Uno sacado de la carta libera su nombre: ya no se puede
+tocar ni vender, así que no hay con qué confundirlo. Y la unicidad NO es una restricción de
+la base: hay locales con duplicados de antes, y convertirlos en un error dejaría la caja sin
+arrancar. Se valida al escribir, que es donde se puede explicar.
+
+**Al editar solo se valida si el nombre CAMBIA**, y eso no es una concesión: los nueve
+«Producto nuevo» del local existen. Si se validara siempre, guardarles el precio daría 409 y
+quedarían congelados — inarreglables e irrenombrables, que es exactamente lo que hay que
+poder hacer con ellos. La regla existe para no crear colisiones nuevas, no para castigar las
+que ya están.
+
+> **Esto no reemplaza a la decisión 14.** El amarre sigue siendo por ID. Que los nombres no
+> se repitan es para la PERSONA que mira la pantalla, no para el programa.
 
 ---
 
@@ -502,6 +547,7 @@ POST /api/v1/inventario/conteo   {conteos:{"3":4000}, nota}
 POST /api/v1/inventario/recalcular
 GET/PUT/DELETE /api/v1/productos/{id}/receta
 POST /api/v1/productos/{id}/receta/tal-cual  {stock_inicial, minimo, compra_costo}
+POST /api/v1/inventario/llevar-la-cuenta-de-todo  -> {cuantos}
 ```
 
 **Un solo modelo para los dos casos.** El alfajor que se vende tal cual también es un
@@ -509,6 +555,14 @@ Insumo (unidad `un`) y su producto tiene una receta de una línea. Con dos mecan
 columna `stock` en Producto para lo simple y recetas para lo preparado— habría dos verdades
 y dos códigos que descontar, y el día que exista el combo "café + alfajor" el alfajor
 saldría de los dos lados y los números dejarían de cuadrar.
+
+**`llevar-la-cuenta-de-todo` existe porque un producto sin inventario no tiene tope.** No
+es un atajo de comodidad: es el arreglo de un agujero. Le da su propio insumo y una receta
+de 1 —al costo y con el saldo en cero— a cada producto activo que no tenga ninguna. **No
+toca a los que ya llevan cuenta ni a los que tienen receta de verdad:** un capuchino no
+"es" un insumo, se hace con leche y café, y convertirlo en su propio insumo descontaría dos
+veces. Empieza en cero a propósito: cero es la verdad hasta que alguien cuente la bodega, y
+un número inventado sería peor que ninguno.
 
 **El libro es la verdad; `Insumo.stock` es una copia rápida.** El saldo existe para que
 cobrar sea un UPDATE y no un SUM sobre todo el historial de la leche. Si alguna vez se

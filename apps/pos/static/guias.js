@@ -215,10 +215,23 @@ window.GUIAS = [
           final, igual que el arqueo de caja.</li>
     </ul>
 
-    <div class="ayuda"><b>El stock nunca te impide cobrar.</b> Si el sistema
-      cree que no queda leche y tú sabes que sí, vendes igual y el número queda
-      en negativo. Ese negativo no es un error: te está avisando que hay una
-      compra que nadie anotó.</div>`,
+    <h3>«Hay X productos sin cuenta en la bodega»</h3>
+    <p>Si te sale ese cartel arriba, léelo: esos productos <b>no tienen tope</b>.
+       La caja no sabe cuántos hay, así que no tiene con qué compararte y te deja
+       vender los que quieras. Así se vendieron 27 unidades de algo que estaba
+       en cero.</p>
+    <p>El botón <b>Empezar a llevar la cuenta de todos</b> los deja a todos
+       contando, <b>partiendo de cero</b>. Después anota lo que tienes de verdad
+       con <b>Llegó mercadería</b> o <b>Contar la bodega</b>. No toca los que ya
+       llevaban cuenta ni los que tienen receta: un capuchino no se cuenta, se
+       hace con leche y café.</p>
+
+    <div class="ayuda"><b>El stock nunca te impide cobrar, pero ahora te
+      pregunta.</b> Si vas a pasarte de lo que hay, sale una pregunta con
+      cuántos quedan y en cuánto va a quedar el inventario. Dices que sí y
+      vendes igual: el número queda en negativo y ese negativo no es un error,
+      te está avisando que hay una compra que nadie anotó. Se pregunta una vez
+      por producto en cada venta, no en cada toque.</div>`,
 },
 {
   id: "abrir-cerrar-caja",
