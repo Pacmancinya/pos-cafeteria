@@ -386,8 +386,13 @@ button{font-family:inherit;cursor:pointer}
 }
 
 /* ---------- aviso flotante ---------- */
+/* z-index 85 y no 40: en 40 quedaba DEBAJO del candado y de la puerta de la
+   caja (los dos en 80), que tienen fondo opaco. O sea que justo donde más se
+   necesita —"PIN incorrecto", "no se pudo abrir la caja"— el mensaje se
+   escribía atrás y nadie lo leía nunca. Debajo del teclado en pantalla (90) sí:
+   ese ocupa el borde de abajo, que es donde se para el aviso. */
 .aviso{
-  position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:40;
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:85;
   background:var(--tinta);color:#FFF8EF;padding:13px 22px;border-radius:99px;
   font-size:15px;font-weight:600;opacity:0;pointer-events:none;
   transition:opacity .2s ease,transform .2s ease;box-shadow:0 14px 34px rgba(42,21,11,.35);

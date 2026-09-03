@@ -1114,7 +1114,16 @@ function pintarPuertaDeLaCaja(t) {
   if (nombre) nombre.textContent = NOMBRE_DEL_LOCAL;
   // Con el candado arriba manda el candado: primero se sabe quién está.
   const hayCandado = !$("#candado").hidden;
-  puerta.hidden = !SESION.entrado || SESION.provisorio || t.abierto || hayCandado;
+  // Y la puerta se corre sola mientras se cuenta el fondo. Esto NO es cosmético:
+  // la puerta va en z-index 80 con fondo opaco y los diálogos en 20, así que
+  // tapaba el arqueo entero. El cajero apretaba «Abrir caja», el diálogo se
+  // dibujaba DETRÁS, no pasaba nada a la vista, y quedaba encerrado: la única
+  // salida era salir de su cuenta, volver a marcar el PIN y llegar a la misma
+  // puerta. Solo le pasaba a los locales CON usuarios creados: sin usuarios la
+  // sesión es provisoria y la puerta no aparece, que es por qué no se vio antes.
+  const contandoElFondo = $("#capaTurno").classList.contains("is-on");
+  puerta.hidden = !SESION.entrado || SESION.provisorio || t.abierto || hayCandado
+                  || contandoElFondo;
 }
 
 async function cargarTurno() {
@@ -1236,6 +1245,7 @@ async function dialogoTurno() {
   if (!t.abierto) pintarAbrirCaja();
   else pintarCerrarCaja(t.turno);
   $("#capaTurno").classList.add("is-on");
+  pintarPuertaDeLaCaja(t);      // recién ahora la puerta se corre y se ve el arqueo
 }
 
 /* ---- abrir: contar el fondo que queda en el cajón ---- */
@@ -2873,7 +2883,13 @@ document.addEventListener("click", (e) => {
     actualizarCobro();
     return;
   }
-  if (cerca("data-cerrar-capa")) return $$(".capa").forEach((c) => c.classList.remove("is-on"));
+  if (cerca("data-cerrar-capa")) {
+    $$(".capa").forEach((c) => c.classList.remove("is-on"));
+    // La puerta vuelve si se cerró el arqueo sin abrir la caja. Sin esto el
+    // programa quedaría usable con la caja cerrada, que es justo lo que la
+    // puerta existe para impedir.
+    return pintarPuertaDeLaCaja(TURNO);
+  }
 
   if (t.closest("#medios .medio")) {
     medioPago = t.closest(".medio").dataset.medio;

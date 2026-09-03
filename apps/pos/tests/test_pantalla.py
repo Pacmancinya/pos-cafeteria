@@ -208,3 +208,80 @@ def test_index_pide_todos_los_js_que_existen():
     index = io.open(ESTATICOS / "index.html", encoding="utf-8").read()
     for js in archivos_js():
         assert js.name in index, f"{js.name} está en static/ y nadie lo carga"
+
+
+# ---------------------------------------------------------------------------
+# La puerta de la caja no puede tapar el arqueo
+# ---------------------------------------------------------------------------
+"""El cliente apretaba «Abrir caja» y no pasaba nada.
+
+Pasaba de verdad: el diálogo del arqueo se armaba entero, pero la puerta
+(`#cajaCerrada`, z-index 80, fondo opaco) lo tapaba porque los diálogos van en
+z-index 20. Y como la puerta ocupa la pantalla completa, no quedaba ni por
+dónde salir: el único otro botón es «Salir de mi cuenta», que devuelve al PIN y
+después a la misma puerta.
+
+No se vio antes porque un local SIN usuarios creados entra en modo provisorio y
+la puerta nunca aparece. Solo se encerraban los que sí crearon usuarios.
+"""
+
+
+def _z_index(css: str, regla: str) -> int | None:
+    """El z-index de un selector, leyendo su bloque `{...}`."""
+    i = css.find(regla + "{")
+    if i == -1:
+        return None
+    bloque = css[i:css.find("}", i)]
+    j = bloque.find("z-index:")
+    if j == -1:
+        return None
+    return int(bloque[j + 8:].split(";")[0].strip())
+
+
+def test_la_puerta_de_la_caja_se_corre_para_dejar_ver_el_arqueo():
+    css = io.open(ESTATICOS / "styles.css", encoding="utf-8").read()
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+
+    puerta = _z_index(css, ".candado")      # #cajaCerrada y #candado
+    dialogo = _z_index(css, ".capa")        # #capaTurno
+    assert puerta is not None and dialogo is not None
+
+    if dialogo > puerta:
+        return          # si algún día el diálogo va arriba, no hace falta correr nada
+
+    # Está abajo: entonces la puerta TIENE que esconderse mientras el arqueo
+    # está abierto, o el cajero queda encerrado.
+    ini = js.find("function pintarPuertaDeLaCaja")
+    assert ini != -1, "se renombró pintarPuertaDeLaCaja: revisa esta prueba"
+    cuerpo = js[ini:js.find("\n}", ini)]
+    assert "capaTurno" in cuerpo, (
+        f"La puerta va en z-index {puerta} y el arqueo en {dialogo}: la puerta lo "
+        "tapa. pintarPuertaDeLaCaja tiene que mirar si #capaTurno está abierta y "
+        "esconderse. Sin eso, «Abrir caja» no hace nada y no hay cómo salir.")
+
+
+def test_al_abrir_el_arqueo_se_repinta_la_puerta():
+    """Esconderla no sirve si nadie vuelve a mirarla justo cuando se abre."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    ini = js.find("async function dialogoTurno")
+    assert ini != -1
+    cuerpo = js[ini:js.find("\n}", ini)]
+    assert "pintarPuertaDeLaCaja" in cuerpo, (
+        "dialogoTurno abre #capaTurno pero no repinta la puerta: se queda tapando.")
+
+
+def test_al_cerrar_el_arqueo_la_puerta_vuelve():
+    """Y al revés: cancelar el arqueo no puede dejar el programa usable con la
+    caja cerrada, que es lo único que la puerta existe para impedir."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    ini = js.find('cerca("data-cerrar-capa")')
+    assert ini != -1
+    assert "pintarPuertaDeLaCaja" in js[ini:ini + 400], (
+        "al cerrar las capas nadie repinta la puerta: queda escondida y se puede "
+        "vender con la caja cerrada.")
+
+
+def test_el_aviso_se_ve_por_encima_de_las_pantallas_que_tapan_todo():
+    """Un «PIN incorrecto» que se dibuja detrás del candado no lo lee nadie."""
+    css = io.open(ESTATICOS / "styles.css", encoding="utf-8").read()
+    assert _z_index(css, ".aviso") > _z_index(css, ".candado")
