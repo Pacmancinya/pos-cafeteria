@@ -169,6 +169,11 @@ def aplicar(datos: AplicarImportacionIn, s: Session = Depends(get_session),
                 sacados += 1
 
     s.commit()
+    # Inventario obligatorio: los productos recién importados también llevan
+    # cuenta. Sin esto, una carta traída de un Excel entraba entera sin tope y el
+    # agujero de las 27 unidades volvía por la importación.
+    from apps.pos.api.inventario import dar_cuenta_a_los_que_faltan
+    dar_cuenta_a_los_que_faltan(s)
     return {
         "ok": True,
         "creados": creados,

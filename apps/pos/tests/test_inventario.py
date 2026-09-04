@@ -1,7 +1,10 @@
 """Inventario: insumos, recetas y el libro de movimientos.
 
-Las dos reglas que estos tests defienden, porque son las que se olvidan:
-  1. El stock NUNCA impide cobrar.
+Las reglas que estos tests defienden, porque son las que se olvidan:
+  1. El stock de un producto de RECETA (leche + café) nunca impide cobrar: puede
+     quedar negativo, y ese negativo es información. Desde la 2.12 lo que se vende
+     TAL CUAL y ya se contó sí topea —no se vende lo que no hay—, pero un producto
+     nunca contado se sigue vendiendo libre: ver la sección "Tope DURO".
   2. Anular devuelve lo que la venta descontó DE VERDAD, no lo que la receta
      de hoy diría que consume.
 """
@@ -427,11 +430,15 @@ def test_llevar_la_cuenta_de_todo_le_da_inventario_a_los_que_no_tienen(cliente, 
 
     inv = cliente.get("/api/v1/inventario").json()
     assert inv["productos_con_receta"] == 4
-    # Y ahora la carta dice cuántos quedan: cero, que es la verdad.
+    # Ahora LLEVAN cuenta (tienen su insumo y aparecen en la bodega), pero
+    # todavía nadie los contó: la carta manda `stock` nulo y el tope no los toca.
+    # Es a propósito: darle stock 0 y tope a productos nunca contados dejaría la
+    # carta entera invendible el día que se actualiza. Muerden recién cuando el
+    # dueño cuenta la bodega.
     cats = cliente.get("/api/v1/categorias").json()
     for c in cats:
         for p in c["productos"]:
-            assert p["stock"] == 0
+            assert p["stock"] is None
 
 
 def test_no_le_toca_el_inventario_a_los_que_ya_lo_llevaban(cliente, carta):
@@ -500,3 +507,124 @@ def test_los_duplicados_que_ya_estaban_se_pueden_seguir_editando(cliente, carta)
     assert cliente.put(f"/api/v1/productos/{gemelos[0]}", json={
         "categoria_id": carta["cafe"]["id"], "nombre": "Red Bull 250",
         "precio": 2500}).status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Tope DURO de stock (2.12)
+# ---------------------------------------------------------------------------
+"""Ya no se vende lo que no hay. Hasta la 2.11 pasarse del stock era una pregunta
+que se podía contestar que sí; ahora el producto no entra si no alcanza. Pero
+solo topea lo CONTADO: darle tope a los productos que nunca se contaron dejaría
+la carta entera invendible el día de la actualización."""
+
+
+def _tal_cual(cliente, cat_id, nombre, precio, stock):
+    """Crea un producto que se vende tal cual, con stock inicial CONTADO."""
+    return cliente.post("/api/v1/productos", json={
+        "categoria_id": cat_id, "nombre": nombre, "precio": precio,
+        "tal_cual": True, "stock_inicial": stock}).json()
+
+
+def test_no_se_vende_mas_de_lo_que_hay(cliente, caja, carta):
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Botella", 1500, 3)
+    # Vender 3 pasa; vender 4 se rechaza.
+    assert cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 3}],
+        "medio_pago": "efectivo"}).status_code == 200
+    # Ya no queda: otra de 1 se rechaza.
+    r = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+    assert r.status_code == 409
+    assert "cero" in r.json()["detail"].lower() or "quedan" in r.json()["detail"].lower()
+
+
+def test_el_tope_suma_las_lineas_del_mismo_producto(cliente, caja, carta):
+    """Dos líneas del mismo producto no pueden colarse sumando más que el stock."""
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Lata", 1200, 5)
+    r = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 3},
+                   {"producto_id": p["id"], "cantidad": 3}],   # 6 > 5
+        "medio_pago": "efectivo"})
+    assert r.status_code == 409
+
+
+def test_un_producto_sin_contar_no_tiene_tope(cliente, caja, carta):
+    """El fixture crea productos SIN tal_cual: no llevan cuenta, no se topean.
+    Se venden sin límite, como antes: es lo que evita el desastre del lunes."""
+    r = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 999}],
+        "medio_pago": "efectivo"})
+    assert r.status_code == 200
+
+
+def test_un_producto_que_lleva_cuenta_pero_no_se_conto_no_topea(cliente, caja, carta):
+    """Un tal_cual creado SIN stock inicial lleva cuenta pero no está contado:
+    hasta que alguien lo cuente, se vende sin tope."""
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Jugo", 900, 0)   # stock_inicial 0 = no contado
+    r = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 10}],
+        "medio_pago": "efectivo"})
+    assert r.status_code == 200, "sin contar no debe topear"
+
+
+def test_contar_la_bodega_activa_el_tope(cliente, caja, carta):
+    """Un producto sin contar se vende libre; después de contarlo, topea."""
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Agua", 800, 0)   # no contado
+    insumo_id = next(i["id"] for i in cliente.get("/api/v1/inventario").json()["insumos"]
+                     if i["nombre"] == "Agua")
+    # El dueño cuenta: hay 2. El conteo es un dict {id: contado}.
+    cliente.post("/api/v1/inventario/conteo", json={"conteos": {str(insumo_id): 2}})
+    # Ahora sí topea: 3 no pasan.
+    r = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 3}],
+        "medio_pago": "efectivo"})
+    assert r.status_code == 409
+
+
+def test_la_carta_solo_manda_stock_de_lo_contado(cliente, carta):
+    contado = _tal_cual(cliente, carta["cafe"]["id"], "Cerveza", 2000, 6)
+    sin_contar = _tal_cual(cliente, carta["cafe"]["id"], "Vino", 5000, 0)
+    prods = {p["nombre"]: p for c in cliente.get("/api/v1/categorias").json()
+             for p in c["productos"]}
+    assert prods["Cerveza"]["stock"] == 6        # contado: viaja el saldo
+    assert prods["Vino"]["stock"] is None        # sin contar: nulo, no topea
+
+
+def test_los_insumos_viejos_quedan_contados_en_la_migracion():
+    """Una base que YA tenía insumos (con saldo de compras reales) tiene que
+    quedar con esos insumos contados, o el tope no los tomaría en cuenta."""
+    import os, tempfile
+    from sqlalchemy import create_engine, text
+    ruta = os.path.join(tempfile.gettempdir(), "pos_mig_contado.db")
+    if os.path.exists(ruta):
+        os.remove(ruta)
+    # Una base vieja: tabla insumo SIN la columna contado, con una fila.
+    viejo = create_engine(f"sqlite:///{ruta}")
+    with viejo.begin() as con:
+        con.execute(text("CREATE TABLE insumo (id INTEGER PRIMARY KEY, nombre TEXT, "
+                         "unidad TEXT, stock INTEGER, minimo INTEGER, activo INTEGER, "
+                         "orden INTEGER, formato TEXT, compra_contenido INTEGER, "
+                         "compra_costo INTEGER, producto_id INTEGER)"))
+        con.execute(text("INSERT INTO insumo (id, nombre, stock, activo) VALUES (1, 'Leche', 20, 1)"))
+    viejo.dispose()
+
+    # Ponerla al día con el motor apuntando a esa base.
+    import apps.pos.db.session as sess
+    original = sess.engine
+    try:
+        sess.engine = create_engine(f"sqlite:///{ruta}")
+        import apps.pos.db.migraciones as mig
+        mig.engine = sess.engine
+        sess.crear_tablas()
+        with sess.engine.connect() as con:
+            fila = con.execute(text("SELECT contado FROM insumo WHERE id = 1")).first()
+        assert fila[0] == 1, "el insumo viejo tiene que quedar contado"
+        sess.engine.dispose()
+    finally:
+        sess.engine = original
+        import apps.pos.db.migraciones as mig
+        mig.engine = original
+        if os.path.exists(ruta):
+            try: os.remove(ruta)
+            except OSError: pass

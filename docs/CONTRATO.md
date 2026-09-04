@@ -51,9 +51,22 @@ alturas distintas sin que nadie lo decidiera. Los campos numéricos usan el tecl
 > quedan: no estorban con mouse y sirven el día que llegue la pantalla. El código del teclado
 > tampoco se borró — se prende desde los ajustes.
 
-**7. El stock avisa, no bloquea.** Nunca, bajo ninguna configuración, la falta de stock
-puede impedir cobrar una venta. Ver la sección de inventario.
+**7. El stock de lo que se vende TAL CUAL, ya contado, SÍ bloquea. Lo demás avisa.**
+Desde la 2.12 no se vende lo que no hay: si un producto que se vende tal cual ya se contó y
+el saldo no alcanza, la venta se rechaza (en la pantalla y en el servidor). Lo que NO
+bloquea: los productos de receta (un capuchino puede quedar en negativo, y ese negativo es
+información) y los productos que todavía nadie contó. Ver la sección de inventario.
 
+> **Dado vuelta en la 2.12, y a propósito.** El dueño lo pidió después de ver, otra vez, que
+> se podía vender de más: ahora el tope es DURO. Pero revertir esta decisión sin cuidado
+> habría sido el peor error posible —dejar al local sin cobrar el lunes— así que el tope
+> solo muerde lo CONTADO (ver `Insumo.contado`): un producto que lleva cuenta pero que nadie
+> contó todavía se sigue vendiendo libre, como antes, hasta que alguien cuente la bodega. Y
+> el inventario pasó a ser obligatorio: todo producto lleva cuenta, los nuevos al crearse,
+> los importados al importar, y los viejos se ponen al día solos al arrancar. Lo que sigue
+> abajo es la historia de cómo se llegó hasta acá; se deja porque explica por qué el tope es
+> como es.
+>
 > **Matizado en la 2.5.** Sigue sin bloquear, pero ahora AVISA DE VERDAD: al pasar de lo
 > que queda, el primer toque no suma y dice cuántos hay. El segundo sí suma. Antes se podía
 > poner 12 de algo que tenía 3 sin que nada dijera nada, y el inventario quedaba en −9 hasta
@@ -281,12 +294,20 @@ Venta(id, numero, turno_id→Turno, creada_at, estado,
     # numero    = correlativo global, empieza en 1
     # estado    = pagada | anulada
     # total     = suma de las líneas (SIN propina)
-    # medio_pago= efectivo | debito | credito | transferencia
+    # medio_pago= efectivo | debito | credito | transferencia | mixto
+    #             "mixto" = se pagó en dos formas; el detalle va en Pago, y una
+    #             venta mixta no lleva propina.
 
 VentaLinea(id, venta_id→Venta, producto_id→Producto,
            nombre, precio_unitario, cantidad, subtotal)
     # nombre y precio_unitario son COPIAS congeladas (ver decisión 2)
     # subtotal = precio_unitario * cantidad
+
+Pago(id, venta_id→Venta, medio, monto)
+    # Una parte de un pago MIXTO: cuánto se pagó con cada medio. Solo existe para
+    # las ventas mixtas; una venta de un solo medio NO escribe filas acá y usa su
+    # medio_pago. El cuadre, cuando no encuentra Pago, trata la venta como un pago
+    # único — así las ventas viejas cuadran sin migración. Suma = lo cobrado.
 
 Usuario(id, nombre, rol, pin_hash, activo, color, orden,
         creado_at, ultimo_ingreso_at)
@@ -304,11 +325,16 @@ Presencia(id, usuario_id→Usuario, turno_id→Turno,
     # salio_at nulo = está adentro ahora mismo
     # salida_por    = cambio | bloqueo | salir
 
-Insumo(id, nombre, unidad, stock, minimo, activo, orden,
-       formato, compra_contenido, compra_costo)
+Insumo(id, nombre, unidad, stock, minimo, activo, orden, contado,
+       formato, compra_contenido, compra_costo, producto_id→Producto)
     # unidad = g | ml | un — la unidad BASE. Todo entero: 200 ml es 200.
     # stock  = saldo en unidad base. Es una COPIA rápida de la suma del libro,
     #          no la verdad. Puede quedar NEGATIVO y eso no es un error.
+    # contado= ¿el dueño ya dijo cuántos hay? El TOPE DURO solo bloquea lo
+    #          contado; un producto que lleva cuenta pero nadie contó se vende
+    #          libre. Sin esto, una actualización dejaría al local sin cobrar.
+    # producto_id = de qué producto es "el mismo" (tal cual). Nulo en un insumo
+    #          de verdad (leche), y nulo también cuando su producto se borró.
     # formato/compra_contenido/compra_costo = cómo se compra ("Caja 1 L", 1000,
     #          $1.200). El costo por mililitro NO se guarda: $1,2 redondeado a
     #          $1 le quita un 17% al valor del inventario. Ver core.config.costo_de().
@@ -333,13 +359,15 @@ Turno(... , abierto_por_id→Usuario, cerrado_por_id→Usuario)
 Venta(... , usuario_id→Usuario, anulada_por_id→Usuario)
     # NULL en las filas anteriores al login: a esas no se les inventa un autor.
 
-RetiroCaja(id, turno_id→Turno, monto, motivo, creado_at,
+RetiroCaja(id, turno_id→Turno, tipo, monto, motivo, creado_at,
            usuario_id→Usuario, hecho_por, anulado, anulado_at, anulado_por)
-    # La plata que sale del cajón EN MEDIO del turno, para comprar cosas sin
-    # cerrar la caja. Libro de solo-agregar, como Movimiento, pero de PLATA y no
-    # de inventario. El motivo nunca va vacío. Se resta del efectivo esperado.
-    # Se corrige anulando (la fila queda), no borrando. NO es Turno.retiro, que
-    # es lo que se lleva el dueño al cerrar.
+    # La plata que se mueve a mano EN MEDIO del turno, sin cerrar la caja.
+    # tipo = "retiro" (sale, para comprar) | "ingreso" (entra, cambio que se
+    #        repone). El monto siempre es positivo; el signo lo pone el tipo.
+    # Libro de solo-agregar, como Movimiento, pero de PLATA. El motivo nunca va
+    # vacío. El retiro se aplica al efectivo esperado (retiro resta, ingreso suma)
+    # y NO se puede retirar más de lo que hay. Se corrige anulando (la fila
+    # queda), no borrando. NO es Turno.retiro, que es lo que se lleva al cerrar.
 ```
 
 ### Reglas de integridad
@@ -447,10 +475,12 @@ GET  /api/v1/turnos/denominaciones
 POST /api/v1/turnos/abrir              {cajero, conteo}
 POST /api/v1/turnos/cerrar             {conteo, fondo_siguiente, medios, nota}
 POST /api/v1/turnos/retiro             {monto, motivo}      ← sacar plata en medio del turno
+POST /api/v1/turnos/ingreso            {monto, motivo}      ← meter plata en medio del turno
 POST /api/v1/turnos/retiro/{id}/anular
 ```
 El cierre calcula: `esperado = monto_inicial + ventas en efectivo − propinas de tarjeta
-pagadas en efectivo − retiros del turno`, y guarda la `diferencia` (contado − esperado).
+pagadas en efectivo − retiros del turno + ingresos del turno`, y guarda la `diferencia`
+(contado − esperado).
 **Se guarda aunque descuadre** — ocultar el descuadre sería justamente lo contrario a lo
 que sirve. Esa cuenta vive en **una sola función** (`turnos._efectivo_esperado`): la
 pantalla, el cierre y el papel de 80 mm la llaman a ella. Antes cada uno la calculaba por
@@ -465,7 +495,17 @@ es el que está solo en la mañana, y lo que cuida la plata no es un permiso sin
 retiro queda firmado. Se corrige anulando, no borrando: la fila queda, con quién la anuló.
 Y el cuadre lo resta solo del efectivo esperado, o esa plata aparecería de noche como un
 faltante que no existe. **No es** el `retiro` del cierre, que es lo que se lleva el dueño al
-final del día.
+final del día. **No se puede sacar más de lo que hay** en el cajón: sacar plata que no está
+es imposible de verdad (no es como el stock, donde la repisa puede tener más que el papel).
+También se puede **meter plata** (`/ingreso`, mismo libro con `tipo="ingreso"`): cambio que
+se repone, un vuelto que vuelve. El ingreso no tiene tope y suma al efectivo esperado.
+
+**Pago mixto** (`Pago`): una venta se puede pagar en dos formas —parte efectivo, parte
+tarjeta—. La venta llega con `pagos: [{medio, monto}]` en vez de un solo `medio_pago`; la
+suma tiene que dar EXACTO lo cobrado (sin propina: un pago mixto va sin propina). Se guarda
+cada parte como una fila de `Pago`, la venta queda con `medio_pago="mixto"`, y el cuadre lee
+las partes: la de efectivo va al cajón, la de tarjeta se cuadra contra la máquina. Una venta
+de un solo medio no escribe `Pago` y sigue igual que siempre.
 
 **El arqueo se cuenta por denominación**, no se escribe un total. `conteo` es
 `{"10000": 2, "500": 6}` y el servidor lo suma con `total_del_conteo()`, que ignora
@@ -580,27 +620,37 @@ columna `stock` en Producto para lo simple y recetas para lo preparado— habrí
 y dos códigos que descontar, y el día que exista el combo "café + alfajor" el alfajor
 saldría de los dos lados y los números dejarían de cuadrar.
 
-**`llevar-la-cuenta-de-todo` existe porque un producto sin inventario no tiene tope.** No
-es un atajo de comodidad: es el arreglo de un agujero. Le da su propio insumo y una receta
-de 1 —al costo y con el saldo en cero— a cada producto activo que no tenga ninguna. **No
-toca a los que ya llevan cuenta ni a los que tienen receta de verdad:** un capuchino no
-"es" un insumo, se hace con leche y café, y convertirlo en su propio insumo descontaría dos
-veces. Empieza en cero a propósito: cero es la verdad hasta que alguien cuente la bodega, y
-un número inventado sería peor que ninguno.
+**Inventario obligatorio (2.12): todo producto lleva cuenta.** Los nuevos reciben su insumo
+al crearse, los importados al importar, y los que venían de antes se ponen al día solos al
+arrancar (la función `dar_cuenta_a_los_que_faltan`, idempotente). El botón manual quedó de
+respaldo. **No toca a los que tienen receta de verdad:** un capuchino no "es" un insumo, se
+hace con leche y café, y convertirlo en su propio insumo descontaría dos veces. Empieza en
+cero: cero es la verdad hasta que alguien cuente, y un número inventado sería peor que
+ninguno. Se amarra por **id**, nunca por nombre —con dos "Cortado" en la base, buscar el
+insumo de vuelta por nombre le daba la receta dos veces al mismo y dejaba al otro sin ella.
+
+**`Insumo.contado`: el tope duro solo muerde lo que el dueño ya contó.** Sin esto,
+"inventario obligatorio" sería un desastre: al actualizar, los 30 productos que nunca se
+contaron pasarían a stock 0 y el lunes no se podría vender nada. Así que todo LLEVA cuenta
+(tiene insumo, aparece en la bodega, recibe mercadería) pero el tope recién bloquea cuando
+alguien contó —una compra, un conteo, o un stock inicial al crear—. Hasta entonces se vende
+como antes. La migración deja `contado=true` en los insumos que ya existían, porque su
+saldo venía de compras y conteos de verdad. En `GET /categorias`, `stock` viaja solo para
+los contados: un producto sin contar llega con `stock` nulo y no se topea.
 
 **El libro es la verdad; `Insumo.stock` es una copia rápida.** El saldo existe para que
 cobrar sea un UPDATE y no un SUM sobre todo el historial de la leche. Si alguna vez se
 despegan, manda el libro: `/recalcular` lo reconstruye y **reporta** las diferencias en vez
 de arreglarlas calladamente.
 
-**El stock nunca bloquea una venta, y no existe la opción de configurarlo para que lo
-haga.** Hay cola en el mostrador y el cliente muchas veces ya pagó en la máquina del banco;
-si el POS se negara, el cajero solo podría mentirle al cliente o anotar la venta en un
-papel. Además el número siempre está algo equivocado, porque sale de recetas que son
-estimaciones. Y un saldo negativo es la señal más valiosa que da el sistema: −4 L dice
-"vendiste más lattes que la leche que tus papeles decían que tenías", o sea hay una compra
-sin registrar. Bloquear destruiría esa señal, porque obligaría al cajero a inventar un
-ajuste falso para poder vender.
+**El stock de un producto de RECETA nunca bloquea una venta.** Un capuchino se hace con
+leche y café: su saldo sale de recetas que son estimaciones y siempre está algo equivocado.
+Y un saldo negativo es la señal más valiosa que da el sistema: −4 L dice "vendiste más
+lattes que la leche que tus papeles decían que tenías", o sea hay una compra sin registrar.
+Bloquear eso destruiría la señal, porque obligaría al cajero a inventar un ajuste falso para
+poder vender. Por eso el tope duro de la 2.12 **no** toca a los productos de receta ni a los
+que nadie contó todavía: solo a lo que se vende TAL CUAL y ya se contó, donde el saldo es un
+número exacto —"quedan 3 botellas"— y vender una cuarta es vender algo que no existe.
 
 **Anular devuelve el stock leyendo el libro, no la receta.** Si entremedio alguien cambió
 el latte de 200 a 180 ml, recalcular devolvería 180 y se perderían 20 ml para siempre sin
@@ -643,8 +693,21 @@ si alguien los ajustó a mano, esa decisión vale más que lo que adivinó el im
 GET/POST/PUT/DELETE /api/v1/productos[/{id}]
 GET/POST/PUT/DELETE /api/v1/categorias[/{id}]
 ```
-`DELETE` sobre un producto lo marca `activo=false` (borrado lógico), no lo elimina: las
-ventas viejas tienen que seguir cuadrando.
+**Dos formas de sacar un producto, distintas a propósito** (desde la 2.12):
+- **Apagarlo** (`PUT` con `activo=false`, la casilla «A la venta») lo esconde de la carta
+  pero lo deja en la base. Es reversible y es lo que usa el importador cuando algo no vino.
+- **Borrarlo** (`DELETE`) elimina la fila DE VERDAD. La historia de ventas no se toca:
+  `VentaLinea` guarda nombre y precio copiados, así que se le suelta el vínculo
+  (`producto_id` a nulo) y la venta vieja sigue cuadrando. La `Receta` y los `CodigoBarra`
+  se borran (su `producto_id` no acepta nulo); el `Insumo` propio se queda —con su stock y
+  su libro— y solo se le suelta el vínculo, porque la mercadería sigue en la repisa y el
+  libro de movimientos no se toca. **Todo en una transacción:** SQLite recicla los id, así
+  que una fila huérfana se le pegaría al próximo producto que tome ese id.
+
+**Borrar una categoría** (`DELETE`) solo se deja si está VACÍA. Un producto no puede quedar
+sin categoría (`categoria_id` no acepta nulo) y SQLite no lo impediría solo, así que la
+guarda es código: se cuentan TODOS los productos, activos y apagados, y si hay alguno se
+niega con un mensaje que dice cuántos. `PUT` sobre una categoría cambia nombre y orden.
 
 ---
 

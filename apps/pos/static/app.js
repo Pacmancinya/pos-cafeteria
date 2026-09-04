@@ -107,6 +107,26 @@ async function cargarCarta() {
   }).join("");
   pintarGrilla();
   pintarEditorCarta();
+  limpiarCarritoDeBorrados();
+}
+
+/* Un producto borrado no puede quedar en un pedido a medio armar: al cobrar, el
+   servidor daría 404 y se caería la venta ENTERA, no la línea, con el cliente
+   esperando. El carrito vive en el navegador y puede tener adentro algo que el
+   dueño borró desde otra pantalla, así que se limpia cada vez que llega la carta. */
+function limpiarCarritoDeBorrados() {
+  if (!carrito.length) return;
+  const vivos = new Set();
+  CATEGORIAS.forEach((c) => c.productos.forEach((p) => vivos.add(p.id)));
+  const antes = carrito.length;
+  const sacados = carrito.filter((l) => !vivos.has(l.id)).map((l) => l.nombre);
+  if (!sacados.length) return;
+  carrito = carrito.filter((l) => vivos.has(l.id));
+  pintarCarrito();
+  if (antes !== carrito.length) {
+    avisar(`Saqué del pedido ${sacados.length === 1 ? "un producto que ya no existe"
+      : "productos que ya no existen"}: ${sacados.join(", ")}`, true);
+  }
 }
 
 /* Un azulejo: el dibujo manda, el precio se lee de reojo. */
@@ -167,27 +187,16 @@ function buscar(texto) {
    Con TOPE en lo que queda. Antes se podía poner 12 de algo que tenía 3, y el
    inventario quedaba en −9 sin que nadie lo notara hasta el conteo.
 
-   El tope se puede pasar a propósito, y eso es a propósito: el saldo de la
-   bodega es lo que dice el programa, no lo que hay en la repisa. Si llegó
-   mercadería y nadie la anotó, negarse a vender sería peor que descuadrar el
-   inventario — el cliente está ahí con la plata en la mano.
-
-   Pero pasarlo hay que DECIRLO. Antes salía un cartel que se iba solo en tres
-   segundos y el toque siguiente pasaba igual: eso no es un tope, es un adorno.
-   Así se vendieron 27 de algo que estaba en cero. Ahora es una pregunta que
-   hay que contestar. Ver CONTRATO, decisión 7.
+   El tope es DURO: no se vende lo que no hay. Si el saldo no alcanza, el
+   producto no entra al pedido y se dice cuántos quedan y qué hacer —anotar la
+   mercadería en Bodega—. Antes era un aviso que se iba solo en tres segundos y
+   el toque siguiente pasaba igual: así se vendieron 27 de algo que estaba en
+   cero. Ahora el muro no se cruza desde la caja; para vender más hay que anotar
+   que llegó. El servidor lo rechaza igual, porque hay tablets y dos pestañas.
 
    Solo topea lo que se vende TAL CUAL. Un capuchino no tiene "cuántos quedan":
-   tiene leche y café. */
-/* De qué productos ya se dijo que sí en este pedido.
-
-   El sí vale para el producto y para el pedido, no para siempre: se olvida al
-   cobrar y al limpiar el carrito. Preguntar en cada toque sería insoportable
-   —el cajero terminaría apretando Aceptar sin leer, que es como se llega otra
-   vez a 27— y no preguntar nunca es lo que estaba mal. Una vez por producto y
-   por venta es el punto donde la pregunta todavía se lee. */
-const avisado = new Set();
-const olvidarAvisos = () => avisado.clear();
+   tiene leche y café, y ése se descuenta, no se topea (`stock` viene nulo). */
+const olvidarAvisos = () => {};
 
 function agregar(id) {
   const cat = CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
@@ -200,24 +209,20 @@ function sumarAlPedido(p) {
   const ya = carrito.find((l) => l.id === p.id);
   const pide = (ya ? ya.cantidad : 0) + 1;
 
-  if (p.stock != null && pide > p.stock && !avisado.has(p.id)) {
-    // Un ALTO de verdad, con una salida visible. Antes bastaba tocar de nuevo,
-    // y eso no es un tope: el aviso se iba solo en tres segundos y el siguiente
-    // toque pasaba. Se vendieron 27 unidades de algo que no existía.
-    //
-    // Sigue habiendo salida —el saldo es lo que dice el programa, no lo que hay
-    // en la repisa— pero hay que decir que sí a propósito.
-    const seguir = confirm(
-      (p.stock > 0 ? `Quedan ${p.stock} de ${p.nombre}.` : `${p.nombre} está en cero.`)
-      + `\n\nEstás poniendo ${pide}. Si igual los tienes, se venden y el inventario`
-      + ` queda en ${p.stock - pide}.\n\n¿Vender igual?`);
-    if (!seguir) return;
-    avisado.add(p.id);                       // ya dijo que sí: no se pregunta más
+  // El saldo lo manda la carta (p.stock), que se refresca después de cada venta.
+  // `null` = no lleva cuenta como tal cual (o es de receta): no se topea.
+  const tope = productoDeLaCarta(p.id);
+  const stock = tope ? tope.stock : p.stock;
+  if (stock != null && pide > stock) {
+    avisar(stock > 0
+      ? `Solo quedan ${stock} de ${p.nombre}. Si llegó más, anótalo en Bodega.`
+      : `${p.nombre} está en cero. Anota la mercadería en Bodega para venderlo.`, true);
+    return;
   }
 
   if (ya) ya.cantidad += 1;
   else carrito.push({ id: p.id, nombre: p.nombre, precio: p.precio,
-                      cantidad: 1, stock: p.stock });
+                      cantidad: 1, stock: stock });
   pintarCarrito();
 }
 
@@ -474,9 +479,17 @@ function pintarCarrito() {
 }
 
 /* ---------------- cobro ---------------- */
+/* Pago mixto: cuánto se puso en cada medio. Vacío = pago de un solo medio. */
+let mixto = false;
+let mixtoMontos = {};
+
 function abrirCobro() {
   if (!carrito.length) return;
   medioPago = "efectivo";
+  mixto = false;
+  mixtoMontos = {};
+  $("#pagoMixto").checked = false;
+  $("#mixtoGrid").hidden = true;
   $$("#medios .medio").forEach((b) => b.classList.toggle("is-on", b.dataset.medio === "efectivo"));
   $("#bloqueEfectivo").style.display = "";
   $("#cobroTotal").textContent = clp(totalCarrito());
@@ -487,6 +500,60 @@ function abrirCobro() {
   pintarRapidos();
   $("#capaCobro").classList.add("is-on");
   setTimeout(() => $("#pagaCon").focus(), 50);
+}
+
+/* ---- pago mixto ----
+   Se reparte lo cobrado (total menos descuento) entre los medios. La propina no
+   se reparte —es una combinación rara que no vale la pena— así que en mixto no
+   hay propina. El botón de cobrar espera a que las partes sumen justo. */
+const NOMBRE_MEDIO_LARGO = { efectivo: "Efectivo", debito: "Débito",
+                             credito: "Crédito", transferencia: "Transferencia" };
+
+function cambiarAMixto(activar) {
+  mixto = activar;
+  $("#mixtoGrid").hidden = !activar;
+  // En mixto no aplican: el medio único, el vuelto y la propina.
+  $("#bloqueEfectivo").style.display = activar ? "none" : "";
+  $("#propina").disabled = activar;
+  $$("#medios .medio").forEach((b) => { b.disabled = activar; });
+  if (activar) { mixtoMontos = {}; pintarMixto(); }
+  else { actualizarCobro(); }
+}
+
+function pintarMixto() {
+  const caja = $("#mixtoGrid");
+  caja.innerHTML = `
+    <div class="mixto">
+      ${Object.keys(NOMBRE_MEDIO_LARGO).map((m) => `
+        <label class="mixto__fila">
+          <span>${NOMBRE_MEDIO_LARGO[m]}</span>
+          <input type="text" inputmode="numeric" data-mixto="${m}"
+                 value="${mixtoMontos[m] || ""}" placeholder="0" autocomplete="off">
+        </label>`).join("")}
+      <div class="mixto__resto" id="mixtoResto"></div>
+    </div>`;
+  pintarMixtoResto();
+}
+
+const sumaMixto = () =>
+  Object.values(mixtoMontos).reduce((s, v) => s + (v || 0), 0);
+
+function pintarMixtoResto() {
+  const objetivo = Math.max(0, totalCarrito() - soloNumeros($("#descuento").value));
+  const puesto = sumaMixto();
+  const falta = objetivo - puesto;
+  const caja = $("#mixtoResto");
+  if (!caja) return;
+  if (falta === 0) {
+    caja.className = "mixto__resto es-ok";
+    caja.innerHTML = `Listo: las partes suman <b>${clp(objetivo)}</b> ✓`;
+  } else if (falta > 0) {
+    caja.className = "mixto__resto";
+    caja.innerHTML = `Falta repartir <b>${clp(falta)}</b> de ${clp(objetivo)}`;
+  } else {
+    caja.className = "mixto__resto es-mal";
+    caja.innerHTML = `Te pasaste por <b>${clp(-falta)}</b> de ${clp(objetivo)}`;
+  }
 }
 
 const aCobrar = () =>
@@ -527,7 +594,24 @@ async function confirmarVenta() {
       propina: soloNumeros($("#propina").value),
     };
     const paga = soloNumeros($("#pagaCon").value);
-    if (medioPago === "efectivo" && paga) cuerpo.paga_con = paga;
+    if (medioPago === "efectivo" && paga && !mixto) cuerpo.paga_con = paga;
+
+    if (mixto) {
+      // Las partes que tienen algo, y que tienen que sumar lo cobrado sin propina.
+      const pagos = Object.entries(mixtoMontos)
+        .filter(([, monto]) => monto > 0)
+        .map(([medio, monto]) => ({ medio, monto }));
+      const objetivo = Math.max(0, totalCarrito() - soloNumeros($("#descuento").value));
+      const suma = pagos.reduce((s, p) => s + p.monto, 0);
+      if (pagos.length < 2) { boton.disabled = false;
+        return avisar("Un pago mixto necesita al menos dos formas. Si es una sola, "
+          + "desmarca «Paga en dos formas».", true); }
+      if (suma !== objetivo) { boton.disabled = false;
+        return avisar(`Las partes suman ${clp(suma)} y hay que cobrar ${clp(objetivo)}. `
+          + "Tienen que dar lo mismo.", true); }
+      cuerpo.pagos = pagos;
+      cuerpo.propina = 0;             // en mixto no hay propina
+    }
 
     const venta = await api("/ventas", { method: "POST", body: JSON.stringify(cuerpo) });
     carrito = [];
@@ -542,6 +626,11 @@ async function confirmarVenta() {
     );
     if (imprimirSiempre) imprimir(`/comprobante/${venta.id}`);
     cargarTurno();
+    // Refrescar el saldo: con el tope duro, el pedido siguiente tiene que ver el
+    // stock ya descontado. Sin esto, con 3 en bodega se vendían 3 y el toque
+    // siguiente seguía viendo 3 —y el servidor lo rechazaba, mostrando un error
+    // que la pantalla decía que no iba a pasar—.
+    cargarCarta();
   } catch (e) {
     avisar(e.message, true);
   } finally {
@@ -785,10 +874,16 @@ function selectorDeDibujo(elegido) {
 
 function pintarEditorCarta() {
   $("#editorCarta").innerHTML = CATEGORIAS.map((c) => `
-    <div class="grupo">
+    <div class="grupo" data-grupo="${c.id}">
       <div class="grupo__top">
         <h3>${esc(c.nombre)}</h3>
-        <button class="btn btn--chico" data-nuevo-en="${c.id}">+ Producto</button>
+        <div class="grupo__acc">
+          <button class="btn btn--chico btn--fantasma" data-cat-editar="${c.id}"
+                  data-permiso="editar_carta">Editar</button>
+          <button class="btn btn--chico btn--fantasma" data-cat-borrar="${c.id}"
+                  data-permiso="editar_carta">Borrar</button>
+          <button class="btn btn--chico" data-nuevo-en="${c.id}">+ Producto</button>
+        </div>
       </div>
       ${c.productos.map((p) => `
         <div class="fila${p.activo ? "" : " inactivo"}" data-fila="${p.id}">
@@ -801,6 +896,64 @@ function pintarEditorCarta() {
           </div>
         </div>`).join("") || `<p class="ayuda" style="margin:0 0 8px">Esta categoría todavía no tiene productos.</p>`}
     </div>`).join("");
+  // El editor se redibuja cada vez que cambia la carta, después de que
+  // pintarQuien ya corrió, así que los botones que solo puede el dueño hay que
+  // apagarlos acá o aparecen prendidos para el cajero hasta el próximo login.
+  $$("#editorCarta [data-permiso]").forEach((b) => {
+    const falta = !puedo(b.dataset.permiso);
+    b.disabled = falta;
+    b.title = falta ? "Esto lo hace el dueño" : "";
+  });
+}
+
+/* ---- editar y borrar una categoría ----
+   Hasta la 2.11 una categoría solo se podía crear: el nombre no se podía
+   corregir y borrarla no existía. Editar cambia el nombre (y de paso el orden,
+   que es en qué lugar del rail aparece). Borrar es de verdad —la fila se va—
+   pero solo si está vacía: un producto no puede quedar sin categoría. */
+function editarCategoria(id) {
+  const c = CATEGORIAS.find((x) => x.id === id);
+  if (!c) return;
+  const top = document.querySelector(`[data-grupo="${id}"] .grupo__top`);
+  if (!top) return;
+  top.innerHTML = `
+    <div class="grupo__editar">
+      <input type="text" id="catNombre" value="${esc(c.nombre)}" autocomplete="off"
+             style="font-size:17px;font-weight:700">
+      <label class="grupo__orden">Orden
+        <input type="text" inputmode="numeric" id="catOrden" value="${c.orden}"></label>
+      <button class="btn btn--chico btn--cobrar" data-cat-guardar="${id}">Guardar</button>
+      <button class="btn btn--chico btn--fantasma" data-cat-cancelar>Cancelar</button>
+    </div>`;
+  setTimeout(() => { const n = $("#catNombre"); if (n) { n.focus(); n.select(); } }, 40);
+}
+
+function guardarCategoria(id) {
+  const c = CATEGORIAS.find((x) => x.id === id);
+  if (!c) return;
+  const nombre = ($("#catNombre").value || "").trim();
+  if (!nombre) return avisar("Escribe un nombre para la categoría", true);
+  const orden = soloNumeros(($("#catOrden") || {}).value || 0);
+  // activa va tal como está: el PUT pisa todos los campos, así que si no lo
+  // mandáramos, una categoría apagada se prendería sola al cambiarle el nombre.
+  api(`/categorias/${id}`, { method: "PUT",
+    body: JSON.stringify({ nombre, orden, activa: c.activa }) })
+    .then(() => { avisar("Categoría guardada"); cargarCarta(); })
+    .catch((e) => avisar(e.message, true));
+}
+
+function borrarCategoria(id) {
+  const c = CATEGORIAS.find((x) => x.id === id);
+  if (!c) return;
+  const cuantos = (c.productos || []).length;
+  if (cuantos) {
+    return avisar(`«${c.nombre}» tiene ${cuantos} producto${cuantos === 1 ? "" : "s"} `
+      + "adentro. Muévelos a otra categoría o bórralos primero.", true);
+  }
+  if (!confirm(`¿Borrar la categoría «${c.nombre}»? Está vacía, así que no se pierde nada.`)) return;
+  api(`/categorias/${id}`, { method: "DELETE" })
+    .then(() => { avisar("Categoría borrada"); cargarCarta(); })
+    .catch((e) => avisar(e.message, true));
 }
 
 /* Ficha completa del producto: acá viven los datos que usan las PANTALLAS del
@@ -872,7 +1025,7 @@ function abrirFichaProducto(id) {
     </div>
 
     <div class="dialogo__pie">
-      <button class="btn btn--peligro" id="fBorrar">Sacar de la carta</button>
+      <button class="btn btn--peligro" id="fBorrar">Borrar para siempre</button>
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" id="fGuardar" style="width:auto">Guardar</button>
     </div>`;
@@ -904,12 +1057,19 @@ function abrirFichaProducto(id) {
   };
 
   $("#fBorrar").onclick = async () => {
-    if (!confirm("¿Sacar este producto de la carta? Las ventas viejas no se tocan.")) return;
+    // Borrar es para SIEMPRE y no es lo mismo que esconder. Si solo lo quieren
+    // sacar de la venta un rato, está la casilla «A la venta» de acá arriba, que
+    // se vuelve a marcar cuando quieran. Esto no.
+    if (!confirm(`¿Borrar «${p.nombre}» para siempre?\n\n`
+      + "Esto NO se puede deshacer. Las ventas viejas no se tocan (siguen "
+      + "cuadrando), pero el producto desaparece de la carta.\n\n"
+      + "¿Solo quieres dejar de venderlo por ahora? Cierra esto y desmarca "
+      + "«A la venta»: eso sí se puede deshacer.")) return;
     try {
       await api(`/productos/${id}`, { method: "DELETE" });
       $("#capaProducto").classList.remove("is-on");
       await cargarCarta();
-      avisar("Producto sacado de la carta");
+      avisar("Producto borrado");
     } catch (e) { avisar(e.message, true); }
   };
 }
@@ -1154,7 +1314,8 @@ async function cargarTurno() {
    calce, y ahí el arqueo deja de servir para lo único que sirve. */
 let DENOMINACIONES = [20000, 10000, 5000, 2000, 1000, 500, 100, 50, 10];
 const NOMBRE_MEDIO = { efectivo: "Efectivo", debito: "Débito",
-                       credito: "Crédito", transferencia: "Transferencia" };
+                       credito: "Crédito", transferencia: "Transferencia",
+                       mixto: "Pago mixto" };
 let conteoActual = {};
 
 async function cargarDenominaciones() {
@@ -1383,88 +1544,103 @@ function pintarCerrarCaja(tu) {
    Cualquiera puede sacar —el cajero es el que está solo en la mañana— y por eso
    lo que la cuida no es un permiso: es que cada retiro dice quién fue. */
 function retirosDelTurnoHTML(tu) {
-  const retiros = tu.retiros || [];
-  const vivos = retiros.filter((r) => !r.anulado);
-  const total = tu.retiros_total || 0;
+  const movs = tu.retiros || [];
+  const enCajon = tu.efectivo_esperado;
   return `
     <div class="retiros" id="retirosTurno">
       <div class="retiros__cab">
         <div>
-          <b>¿Sacaste plata del cajón?</b>
-          <p class="ayuda" style="margin:2px 0 0;font-size:12.5px">Para ir a comprar
-            algo sin cerrar la caja. Queda anotado quién y para qué.</p>
+          <b>¿Moviste plata del cajón?</b>
+          <p class="ayuda" style="margin:2px 0 0;font-size:12.5px">Sacar para ir a comprar,
+            o meter cambio, sin cerrar la caja. Queda anotado quién y para qué.</p>
         </div>
-        <button class="btn btn--fantasma btn--chico" data-sacar-plata>Sacar plata</button>
+        <div class="retiros__botones">
+          <button class="btn btn--fantasma btn--chico" data-sacar-plata>Sacar plata</button>
+          <button class="btn btn--fantasma btn--chico" data-meter-plata>Meter plata</button>
+        </div>
       </div>
       <div id="sacarPlataForm" hidden></div>
-      ${retiros.length ? `
+      ${movs.length ? `
         <div class="retiros__lista">
-          ${retiros.map((r) => `
+          ${movs.map((r) => {
+            const es = r.tipo === "ingreso";
+            return `
             <div class="retiros__fila ${r.anulado ? "es-anulado" : ""}">
               <div class="retiros__que">
-                <b>${clp(r.monto)}</b> · ${esc(r.motivo)}
-                <small>${esc(r.hora)}${r.hecho_por ? " · " + esc(r.hecho_por) : ""}${
+                <b>${es ? "+" : "−"}${clp(r.monto)}</b> · ${esc(r.motivo)}
+                <small>${es ? "entró" : "salió"} · ${esc(r.hora)}${
+                  r.hecho_por ? " · " + esc(r.hecho_por) : ""}${
                   r.anulado ? " · anulado" + (r.anulado_por ? " por " + esc(r.anulado_por) : "") : ""}</small>
               </div>
               ${r.anulado ? "" : `<button class="btn btn--fantasma btn--chico"
                 data-anular-retiro="${r.id}">Anular</button>`}
-            </div>`).join("")}
-        </div>
-        <div class="retiros__total">Salió del cajón en el turno: <b>${clp(total)}</b></div>
-      ` : ""}
+            </div>`; }).join("")}
+        </div>` : ""}
+      <div class="retiros__total">En el cajón hay ahora: <b>${clp(enCajon)}</b></div>
     </div>`;
 }
 
 /* El formulario chico se abre dentro del mismo panel: dos campos y confirmar.
-   No abre otra ventana porque se hace con el cliente esperando y una capa arriba
-   de otra en una pantalla chica es justo lo que enreda. */
-function abrirFormRetiro(tu) {
+   Sirve para sacar y para meter; cambia el texto y, al sacar, no deja pasar de
+   lo que hay. No abre otra ventana porque se hace con el cliente esperando y una
+   capa arriba de otra en una pantalla chica es justo lo que enreda. */
+function abrirFormRetiro(tu, tipo = "retiro") {
   const caja = $("#sacarPlataForm");
   if (!caja) return;
-  const esperado = tu.efectivo_esperado;
+  const esInar = tipo === "ingreso";
+  const hay = tu.efectivo_esperado;
   caja.hidden = false;
   caja.innerHTML = `
     <div class="retiros__form">
-      <label class="campo"><span>¿Cuánto sacas?</span>
+      <label class="campo"><span>${esInar ? "¿Cuánto metes?" : "¿Cuánto sacas?"}</span>
         <input id="rMonto" type="text" inputmode="numeric" placeholder="0" autocomplete="off"></label>
       <label class="campo"><span>¿Para qué?</span>
-        <input id="rMotivo" type="text" placeholder="Ej: gas, pan" autocomplete="off"></label>
-      <div id="rAviso" class="ayuda" style="margin:-4px 0 10px;font-size:12.5px"></div>
+        <input id="rMotivo" type="text"
+               placeholder="${esInar ? "Ej: traje cambio" : "Ej: gas, pan"}" autocomplete="off"></label>
+      <div id="rAviso" class="ayuda" style="margin:-4px 0 10px;font-size:12.5px">${
+        esInar ? "" : `En el cajón hay <b>${clp(hay)}</b>.`}</div>
       <div class="retiros__form-pie">
         <button class="btn btn--fantasma" data-cerrar-form-retiro>Cancelar</button>
-        <button class="btn btn--cobrar" id="rConfirmar" style="width:auto">Sacar del cajón</button>
+        <button class="btn btn--cobrar" id="rConfirmar" style="width:auto">${
+          esInar ? "Meter al cajón" : "Sacar del cajón"}</button>
       </div>
     </div>`;
   const monto = $("#rMonto");
   const aviso = $("#rAviso");
+  const boton = $("#rConfirmar");
   const revisar = () => {
     const m = soloNumeros(monto.value);
-    // El cajón es la verdad, no este número: por eso avisa y no bloquea. Pero si
-    // sacas más de lo que el programa cree que hay, conviene decirlo — casi
-    // siempre es un cero de más.
-    if (m > esperado && esperado >= 0) {
-      aviso.innerHTML = `Ojo: el programa cree que en el cajón hay <b>${clp(esperado)}</b>.
-        Si igual los tienes, sácalos.`;
-    } else { aviso.textContent = ""; }
+    if (esInar) return;
+    // Sacar plata que no está es imposible de verdad: se bloquea el botón y se
+    // dice cuánto hay. No es como el stock, donde la repisa puede tener más.
+    if (m > hay) {
+      aviso.innerHTML = `Solo hay <b>${clp(hay)}</b> en el cajón: no puedes sacar más.`;
+      boton.disabled = true;
+    } else {
+      aviso.innerHTML = `En el cajón hay <b>${clp(hay)}</b>.`;
+      boton.disabled = false;
+    }
   };
   monto.addEventListener("input", revisar);
   setTimeout(() => monto.focus(), 40);
-  $("#rConfirmar").onclick = () => {
+  boton.onclick = () => {
     const m = soloNumeros(monto.value);
     const motivo = ($("#rMotivo").value || "").trim();
-    if (!m) return avisar("Escribe cuánto sacas", true);
-    if (!motivo) return avisar("Escribe para qué sacas la plata", true);
-    api("/turnos/retiro", { method: "POST",
+    if (!m) return avisar(esInar ? "Escribe cuánto metes" : "Escribe cuánto sacas", true);
+    if (!motivo) return avisar("Escribe para qué", true);
+    if (!esInar && m > hay) return avisar(`Solo hay ${clp(hay)} en el cajón`, true);
+    api(`/turnos/${esInar ? "ingreso" : "retiro"}`, { method: "POST",
       body: JSON.stringify({ monto: m, motivo }) })
-      .then((t) => { avisar(`Sacaste ${clp(m)} del cajón`); refrescarCierre(t); })
+      .then((t) => { avisar(esInar ? `Metiste ${clp(m)} al cajón` : `Sacaste ${clp(m)} del cajón`);
+        refrescarCierre(t); })
       .catch((e) => avisar(e.message, true));
   };
 }
 
 function anularRetiro(id) {
-  if (!confirm("¿Anular este retiro? Vuelve a contar como plata que sigue en el cajón.")) return;
+  if (!confirm("¿Anular este movimiento? El cajón vuelve a como estaba antes.")) return;
   api(`/turnos/retiro/${id}/anular`, { method: "POST" })
-    .then((t) => { avisar("Retiro anulado"); refrescarCierre(t); })
+    .then((t) => { avisar("Movimiento anulado"); refrescarCierre(t); })
     .catch((e) => avisar(e.message, true));
 }
 
@@ -1510,6 +1686,8 @@ function mostrarCuadre(tu) {
           <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(tu.ventas_efectivo)}</span></div>
           ${tu.retiros_total ? `<div class="cuadre__linea"><span>Lo que sacaste del cajón</span>
             <span>−${clp(tu.retiros_total)}</span></div>` : ""}
+          ${tu.ingresos_total ? `<div class="cuadre__linea"><span>Lo que metiste al cajón</span>
+            <span>+${clp(tu.ingresos_total)}</span></div>` : ""}
           ${pagadas ? `<div class="cuadre__linea"><span>Propinas que pagaste en efectivo</span>
             <span>−${clp(pagadas)}</span></div>` : ""}
           <div class="cuadre__linea"><span>Debería haber</span><span>${clp(esperado)}</span></div>
@@ -1926,19 +2104,18 @@ async function cargarBodega() {
   } catch (e) { return avisar(e.message, true); }
 
   const faltan = BODEGA.por_comprar || [];
-  // Los productos que todavía no llevan cuenta. Sin inventario NO HAY TOPE: de
-  // uno de esos se vendieron 27 unidades que no existían.
+  // Desde que el inventario es obligatorio, todo producto lleva cuenta: los
+  // nuevos al crearse, los importados al importar, y los que venían de antes se
+  // pusieron al día solos al arrancar. Este cartel ya casi nunca aparece; si lo
+  // hace es porque alguien editó la base a mano, y se arregla solo al reiniciar.
   const sinCuenta = BODEGA.productos_totales - BODEGA.productos_con_receta;
   const caja = $("#sinCuenta");
   if (caja) {
     caja.innerHTML = sinCuenta > 0 ? `
       <div class="pista" style="margin:0 0 14px">
         <b>Hay ${sinCuenta} producto${sinCuenta === 1 ? "" : "s"} sin cuenta en la bodega.</b>
-        <p class="ayuda" style="margin:6px 0 10px;font-size:13px">De esos se puede
-          vender sin límite: la caja no sabe cuántos hay, así que no tiene con qué
-          compararte. Los que crees desde ahora llevan cuenta solos.</p>
-        <button class="btn btn--cobrar" id="btnLlevarCuenta" style="width:auto">
-          Empezar a llevar la cuenta de todos</button>
+        <p class="ayuda" style="margin:6px 0 0;font-size:13px">Se ponen al día solos
+          la próxima vez que se abra el programa.</p>
       </div>` : "";
   }
 
@@ -3029,6 +3206,10 @@ document.addEventListener("click", (e) => {
   if (cerca("data-guardar")) return guardarProducto(+cerca("data-guardar").dataset.guardar);
   if (cerca("data-editar")) return abrirFichaProducto(+cerca("data-editar").dataset.editar);
   if (cerca("data-nuevo-en")) return nuevoProducto(+cerca("data-nuevo-en").dataset.nuevoEn);
+  if (cerca("data-cat-editar")) return editarCategoria(+cerca("data-cat-editar").dataset.catEditar);
+  if (cerca("data-cat-guardar")) return guardarCategoria(+cerca("data-cat-guardar").dataset.catGuardar);
+  if (cerca("data-cat-cancelar")) return pintarEditorCarta();
+  if (cerca("data-cat-borrar")) return borrarCategoria(+cerca("data-cat-borrar").dataset.catBorrar);
   if (cerca("data-paga")) {
     const campo = $("#pagaCon");
     campo.value = cerca("data-paga").dataset.paga;
@@ -3044,7 +3225,8 @@ document.addEventListener("click", (e) => {
     actualizarCobro();
     return;
   }
-  if (cerca("data-sacar-plata")) return abrirFormRetiro(TURNO.turno);
+  if (cerca("data-sacar-plata")) return abrirFormRetiro(TURNO.turno, "retiro");
+  if (cerca("data-meter-plata")) return abrirFormRetiro(TURNO.turno, "ingreso");
   if (cerca("data-cerrar-form-retiro")) {
     const f = $("#sacarPlataForm");
     if (f) { f.hidden = true; f.innerHTML = ""; }
@@ -3113,16 +3295,6 @@ document.addEventListener("click", (e) => {
   // ---- candado ----
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
   if (cerca("data-otro-usuario")) return mostrarCandado();
-  if (t.id === "btnLlevarCuenta") {
-    if (!confirm("Se le va a dar inventario a todos los productos que todavía no lo "
-                 + "llevan, empezando en cero.\n\nDespués anota cuántos tienes de cada "
-                 + "uno con «Llegó mercadería» o «Contar la bodega».")) return;
-    return api("/inventario/llevar-la-cuenta-de-todo", { method: "POST" })
-      .then(async (r) => { await cargarBodega(); await cargarCarta();
-        avisar(r.cuantos ? `Listo: ${r.cuantos} producto${r.cuantos === 1 ? "" : "s"} `
-                           + "ahora llevan cuenta." : "Ya todos llevaban cuenta."); })
-      .catch((e) => avisar(e.message, true));
-  }
   if (t.id === "ajTeclado") return guardarTeclado(t.checked);
   if (t.id === "abrirLaCaja") return dialogoTurno();
   if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");
@@ -3251,7 +3423,17 @@ function actualizarCobro() {
     : clp(totalCarrito());
   pintarRapidos();
   calcularVuelto();
+  if (mixto) pintarMixtoResto();     // el descuento cambia lo que hay que repartir
 }
+
+// El interruptor de pago mixto y los montos de cada medio.
+$("#pagoMixto").addEventListener("change", (e) => cambiarAMixto(e.target.checked));
+$("#mixtoGrid").addEventListener("input", (e) => {
+  const campo = e.target.closest("[data-mixto]");
+  if (!campo) return;
+  mixtoMontos[campo.dataset.mixto] = soloNumeros(campo.value);
+  pintarMixtoResto();
+});
 
 $("#buscar").addEventListener("input", (e) => buscar(e.target.value));
 $("#buscar").addEventListener("keydown", (e) => {

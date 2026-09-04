@@ -15,7 +15,8 @@ from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
 from apps.pos.api.turnos import (_conteo, _cuadre_de_medios, _efectivo_esperado,
-                                 _propinas, _retiros_dict, _retiros_del_turno)
+                                 _ingresos_del_turno, _propinas, _retiros_dict,
+                                 _retiros_del_turno)
 from apps.pos.db.models import Turno, Venta
 from apps.pos.db.session import get_session
 from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_LOCAL, NOMBRE_MEDIO,
@@ -212,22 +213,26 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
             f"<tr class='total'><td>Total</td><td class='num'>{_plata(prop['total'])}</td></tr>"
             "</table>")
 
-    # La plata que salió del cajón durante el turno para ir a comprar. Cada una
-    # con su nombre y su motivo: es lo que hace que el efectivo esperado de
-    # arriba sea creíble y no un número que apareció más bajo sin explicación.
+    # La plata que se movió a mano en el turno: retiros (salió, para comprar) e
+    # ingresos (entró, cambio que se repuso). Cada uno con su motivo y su firma:
+    # es lo que hace que el efectivo esperado de arriba sea creíble y no un número
+    # que apareció distinto sin explicación.
     bloque_retiros_turno = ""
-    retiros = [r for r in _retiros_dict(s, t) if not r["anulado"]]
-    if retiros:
-        filas_r = "".join(
-            f"<tr><td>{r['hora']} {r['motivo']} ({r['hecho_por'] or '—'})</td>"
-            f"<td class='num'>-{_plata(r['monto'])}</td></tr>"
-            for r in retiros)
+    movs = [r for r in _retiros_dict(s, t) if not r["anulado"]]
+    if movs:
+        def _fila(r):
+            signo = "+" if r["tipo"] == "ingreso" else "-"
+            return (f"<tr><td>{r['hora']} {r['motivo']} ({r['hecho_por'] or '—'})</td>"
+                    f"<td class='num'>{signo}{_plata(r['monto'])}</td></tr>")
+        filas_r = "".join(_fila(r) for r in movs)
+        neto = _ingresos_del_turno(s, t) - _retiros_del_turno(s, t)
+        signo = "+" if neto >= 0 else "-"
         bloque_retiros_turno = (
             "<div class='raya'></div>"
-            "<div class='chico centro'>SALIÓ DEL CAJÓN EN EL TURNO</div>"
+            "<div class='chico centro'>PLATA MOVIDA EN EL TURNO</div>"
             "<table>" + filas_r +
-            f"<tr class='total'><td>Total sacado</td>"
-            f"<td class='num'>-{_plata(_retiros_del_turno(s, t))}</td></tr></table>")
+            f"<tr class='total'><td>Neto</td>"
+            f"<td class='num'>{signo}{_plata(abs(neto))}</td></tr></table>")
 
     # Lo que se lleva y lo que queda para mañana.
     bloque_retiro = ""

@@ -158,6 +158,25 @@ class VentaLinea(SQLModel, table=True):
     venta: Optional[Venta] = Relationship(back_populates="lineas")
 
 
+class Pago(SQLModel, table=True):
+    """Una parte de un pago MIXTO: cuánto de una venta se pagó con cada medio.
+
+    Existe para el caso "una parte en efectivo y otra con tarjeta". Una venta de
+    un solo medio NO escribe filas acá —sigue con su `medio_pago` de siempre— así
+    que las ventas viejas cuadran sin tocar nada: el cuadre, cuando no encuentra
+    filas de Pago, usa el `medio_pago` de la venta como el único pago.
+
+    El `monto` es lo COBRADO con ese medio (lo que entró al cajón o le cobró la
+    máquina). La suma de los pagos de una venta da lo cobrado. En un pago mixto no
+    se reparte la propina por medio: es una combinación rara y complicarla no
+    valía la pena, así que el pago mixto va sin propina.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    venta_id: int = Field(foreign_key="venta.id", index=True)
+    medio: str
+    monto: int = 0
+
+
 class RetiroCaja(SQLModel, table=True):
     """La plata que sale del cajón EN MEDIO del turno, para comprar cosas sin
     cerrar la caja: gas, pan, un insumo que faltó.
@@ -181,8 +200,13 @@ class RetiroCaja(SQLModel, table=True):
     """
     id: Optional[int] = Field(default=None, primary_key=True)
     turno_id: int = Field(foreign_key="turno.id", index=True)
+    # "retiro" = sale plata del cajón; "ingreso" = entra plata al cajón (un
+    # vuelto que se repone, plata que se mete para dar cambio). El `monto`
+    # siempre es positivo; el signo lo pone el tipo. Nace en "retiro" para las
+    # filas que ya existían, que eran todas retiros.
+    tipo: str = "retiro"
     monto: int = 0                        # CLP enteros, siempre > 0
-    motivo: str = ""                      # para qué salió; nunca vacío
+    motivo: str = ""                      # para qué salió/entró; nunca vacío
     creado_at: datetime = Field(default_factory=ahora, index=True)
     # Quién lo sacó. Nombre COPIADO además del id, igual que VentaLinea congela
     # el precio: si a la persona la renombran o la sacan, el retiro sigue
@@ -218,6 +242,20 @@ class Insumo(SQLModel, table=True):
     minimo: int = 0                       # bajo esto aparece en "Por comprar"
     activo: bool = True                   # borrado lógico: el libro lo referencia
     orden: int = 0
+
+    # ¿El dueño ya dijo cuántos hay? El TOPE DURO solo bloquea la venta de lo que
+    # está contado. Sin esto, "inventario obligatorio" sería un desastre: al
+    # actualizar, los 30 productos del local que nunca se contaron pasarían a
+    # stock 0 y el lunes en la mañana NO SE PODRÍA VENDER NADA hasta contar la
+    # bodega entera. La regla del CONTRATO es sagrada: una actualización no puede
+    # dejar al local sin cobrar.
+    #
+    # Así que todo producto LLEVA cuenta (tiene su insumo, aparece en la bodega,
+    # puede recibir mercadería), pero el tope recién muerde cuando alguien contó:
+    # una compra, un conteo, o un stock inicial al crearlo. Hasta entonces se
+    # vende como antes. Los insumos que ya existían quedan `contado=True` en la
+    # migración, porque su saldo venía de compras y conteos de verdad.
+    contado: bool = False
 
     # Cómo se compra. El costo por gramo NO se guarda: $1.200 la caja de 1 L de
     # leche son $1,2 el ml, y guardar "1" le quita un 17% al valor del

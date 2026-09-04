@@ -17,6 +17,45 @@ from core.schemas import AnularIn, VentaIn
 router = APIRouter(prefix="/api/v1", tags=["ventas"])
 
 
+def _lo_que_no_alcanza(s: Session, lineas: list) -> str:
+    """Mira si el stock alcanza para todo el pedido. Devuelve el mensaje del
+    primer producto que no alcance, o "" si todo alcanza.
+
+    Solo mira los productos que son su propio insumo (tal cual): a ésos el
+    `stock` es "cuántos quedan" y se puede comparar. Los de receta de verdad no
+    tienen un número así y no se topean. Suma las cantidades del mismo producto,
+    por si vinieran en dos líneas.
+    """
+    from apps.pos.db.models import Insumo
+
+    pedido: dict[int, int] = {}
+    for l in lineas:
+        if l.producto_id:
+            pedido[l.producto_id] = pedido.get(l.producto_id, 0) + l.cantidad
+
+    for producto_id, cantidad in pedido.items():
+        insumo = s.exec(
+            select(Insumo).where(
+                Insumo.producto_id == producto_id,
+                Insumo.activo == True,          # noqa: E712
+            )
+        ).first()
+        if not insumo:
+            continue                             # no lleva cuenta como tal cual: no se topea
+        if not insumo.contado:
+            continue                             # todavía nadie dijo cuántos hay: no se topea
+        if cantidad > insumo.stock:
+            p = s.get(Producto, producto_id)
+            nombre = p.nombre if p else "ese producto"
+            quedan = insumo.stock
+            if quedan <= 0:
+                return (f"«{nombre}» está en cero. Anota la mercadería que llegó en "
+                        "Bodega («Llegó mercadería») y vuelve a cobrar.")
+            return (f"De «{nombre}» quedan {quedan}. Estás vendiendo {cantidad}. "
+                    "Si llegó más, anótalo en Bodega («Llegó mercadería»).")
+    return ""
+
+
 def _turno_abierto(s: Session) -> Turno | None:
     return s.exec(select(Turno).where(Turno.cerrado_at == None)).first()  # noqa: E711
 
@@ -51,6 +90,13 @@ def _venta_dict(v: Venta, con_lineas: bool = False, s: Session | None = None) ->
         "usuario_id": v.usuario_id,
         "quien": _nombre(s, v.usuario_id),
     }
+    # Si fue pago mixto, el detalle de cada parte, para que El día lo muestre.
+    if s is not None and v.medio_pago == "mixto":
+        from apps.pos.db.models import Pago
+        d["pagos"] = [
+            {"medio": p.medio, "monto": p.monto}
+            for p in s.exec(select(Pago).where(Pago.venta_id == v.id)).all()
+        ]
     if con_lineas:
         d["lineas"] = [
             {"nombre": l.nombre, "precio_unitario": l.precio_unitario,
@@ -98,13 +144,50 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
         raise HTTPException(409, "La caja está cerrada. Ábrela antes de vender, "
                                  "contando el fondo con el que parte el cajón.")
 
+    # TOPE DURO: no se vende lo que no hay.
+    #
+    # Solo topea lo que se vende TAL CUAL —el producto que ES su propio insumo—,
+    # que es donde el saldo es un número comparable. Un capuchino se hace con
+    # leche y café y puede quedar en negativo a propósito (ver CONTRATO): a ése
+    # no se le pone tope, se le descuenta.
+    #
+    # Va en el SERVIDOR y no solo en la pantalla porque hay tablets y dos
+    # pestañas abriendo la misma caja: las dos ven "queda 1", las dos lo agregan,
+    # y lo único que puede impedir vender dos veces el mismo es esto. La pantalla
+    # topea antes para que no se llegue a intentar; el servidor es el que cumple.
+    #
+    # Se chequea ANTES de escribir un solo Movimiento: una venta rechazada a la
+    # mitad dejaría el libro con unos insumos descontados y otros no.
+    faltan = _lo_que_no_alcanza(s, lineas)
+    if faltan:
+        raise HTTPException(409, faltan)
+
+    # PAGO MIXTO: parte en efectivo, parte en otra forma.
+    #
+    # Si vienen `pagos`, la suma tiene que dar EXACTO lo cobrado (total menos
+    # descuento): no se puede cobrar de más ni de menos repartiendo. La venta
+    # queda con medio_pago "mixto" y sin propina —repartir una propina por medio
+    # es una combinación rara que no vale la pena—, y cada parte se guarda como
+    # una fila de Pago. Una venta de un solo medio no pasa por acá y no escribe
+    # ninguna fila de Pago: sigue igual que siempre.
+    medio_pago = datos.medio_pago
+    propina = datos.propina
+    if datos.pagos:
+        suma = sum(p.monto for p in datos.pagos)
+        if suma != total - descuento:
+            raise HTTPException(
+                422, f"Las partes suman {suma} y el total a cobrar es {total - descuento}. "
+                     "Tienen que dar lo mismo.")
+        medio_pago = "mixto"
+        propina = 0
+
     venta = Venta(
         numero=_siguiente_numero(s),
         turno_id=turno.id,
         total=total,
         descuento=descuento,
-        propina=datos.propina,
-        medio_pago=datos.medio_pago,
+        propina=propina,
+        medio_pago=medio_pago,
         nota=datos.nota,
         usuario_id=quien.get("id"),
     )
@@ -114,6 +197,10 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
     # la puedan apuntar, pero las dos cosas tienen que entrar juntas. O queda
     # registrada la venta con su descuento de inventario, o no queda nada.
     s.flush()
+    if datos.pagos:
+        from apps.pos.db.models import Pago
+        for p in datos.pagos:
+            s.add(Pago(venta_id=venta.id, medio=p.medio, monto=p.monto))
     avisos = inventario.descontar_venta(s, venta, quien)
     s.commit()
     s.refresh(venta)

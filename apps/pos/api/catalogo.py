@@ -85,10 +85,16 @@ def listar_categorias(s: Session = Depends(get_session)):
     #
     # Una consulta para todos y no una por producto: con 800 productos, N+1
     # consultas acá son la diferencia entre abrir la caja y esperarla.
+    # Solo los CONTADOS: el tope duro de la pantalla usa este número, y solo
+    # bloquea lo que el dueño ya contó. Un producto que lleva cuenta pero que
+    # todavía nadie contó llega con stock nulo y se vende como antes, hasta que
+    # se cuente. Así "inventario obligatorio" no deja la carta entera invendible
+    # el día que se actualiza.
     quedan = {i.producto_id: i.stock
               for i in s.exec(select(Insumo).where(
                   Insumo.producto_id != None,          # noqa: E711
-                  Insumo.activo == True)).all()}       # noqa: E712
+                  Insumo.activo == True,               # noqa: E712
+                  Insumo.contado == True)).all()}      # noqa: E712
 
     return [
         {
@@ -132,6 +138,39 @@ def editar_categoria(cat_id: int, datos: CategoriaIn, s: Session = Depends(get_s
     s.commit()
     s.refresh(c)
     return c
+
+
+@router.delete("/categorias/{cat_id}")
+def borrar_categoria(cat_id: int, s: Session = Depends(get_session),
+                     quien: dict = Depends(sesion.exige("editar_carta"))):
+    """Borra una categoría de verdad, PERO solo si está vacía.
+
+    Un producto no puede quedarse sin categoría —`Producto.categoria_id` no
+    acepta nulo— así que una categoría con productos adentro no se puede borrar
+    sin dejar filas apuntando a la nada. Y SQLite no lo impediría solo: no tiene
+    las llaves foráneas activadas, así que un borrado a lo bruto pasaría sin
+    error y dejaría productos huérfanos, invisibles en la carta pero vivos en la
+    base. Por eso la guarda es código y no confianza en la base.
+
+    Se cuentan TODOS los productos, no solo los que están a la venta: uno
+    apagado sigue apuntando a la categoría, y borrarla lo dejaría igual de
+    huérfano. El mensaje dice cuántos hay y qué hacer, porque "no se puede" sin
+    salida no le resuelve nada al dueño.
+    """
+    c = s.get(Categoria, cat_id)
+    if not c:
+        raise HTTPException(404, "No existe esa categoría")
+    productos = _productos_de(s, cat_id, solo_activos=False)
+    if productos:
+        n = len(productos)
+        raise HTTPException(
+            409,
+            f"«{c.nombre}» tiene {n} producto{'s' if n != 1 else ''} adentro. "
+            "Muévelos a otra categoría o bórralos primero (cada producto se "
+            "cambia de categoría en su ficha, con el botón ···).")
+    s.delete(c)
+    s.commit()
+    return {"ok": True, "id": cat_id}
 
 
 def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Producto | None:
@@ -200,15 +239,31 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
         s.add(CodigoBarra(codigo=codigo, producto_id=p.id, cuantos=1))
 
     if datos.tal_cual:
-        # El producto ES su propio insumo. Se amarra por id y no por nombre:
-        # comparar nombres es lo que dejó un insumo llamado "Producto nuevo"
-        # apuntando a un producto llamado "redbul 550ml" en la base real.
-        i = Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
-                   compra_contenido=1, compra_costo=datos.costo,
-                   minimo=datos.minimo, producto_id=p.id)
+        # El producto ES su propio insumo. Se ADOPTA un insumo huérfano del mismo
+        # nombre en vez de crear otro: al borrar un producto su insumo queda sin
+        # dueño (producto_id nulo) pero con su stock y su libro. Si se vuelve a
+        # crear el mismo producto y acá se creara OTRO insumo, quedarían dos con
+        # la mitad de la verdad cada uno — el bug de la decisión 14, entrando por
+        # la puerta del borrado. Se amarra por id, nunca por nombre.
+        from apps.pos.api.inventario import _insumo_repetido
+        huerfano = _insumo_repetido(s, p.nombre, None)
+        i = huerfano if (huerfano and not huerfano.producto_id) else None
+        if i:
+            i.producto_id = p.id
+            i.activo = True
+            if datos.costo:
+                i.compra_costo = datos.costo
+            if datos.minimo:
+                i.minimo = datos.minimo
+        else:
+            i = Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
+                       compra_contenido=1, compra_costo=datos.costo,
+                       minimo=datos.minimo, producto_id=p.id)
         s.add(i)
         s.commit()
         s.refresh(i)
+        for vieja in s.exec(select(Receta).where(Receta.producto_id == p.id)).all():
+            s.delete(vieja)                # el huérfano pudo traer una receta a sí mismo
         s.add(Receta(producto_id=p.id, insumo_id=i.id, cantidad=1))
         if datos.stock_inicial:
             from apps.pos.api.inventario import anotar
@@ -264,14 +319,51 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
 @router.delete("/productos/{prod_id}")
 def borrar_producto(prod_id: int, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("editar_carta"))):
-    """Borrado lógico: las ventas viejas tienen que seguir cuadrando."""
+    """Borra el producto DE VERDAD. La historia de ventas queda intacta.
+
+    Distinto de apagar «A la venta» (activo=False), que es reversible y es lo que
+    usa el importador. Esto no se puede deshacer, y por eso hay que hacer bien
+    dos cosas:
+
+    1. No dejar NI UNA fila huérfana. SQLite recicla los id —el próximo producto
+       toma el id que quedó libre— así que una receta o un código de barras que
+       queden apuntando a un id borrado se le pegan solos al siguiente producto
+       que se cree: su receta descontando insumos ajenos, ventas de octubre
+       diciendo ser de un producto de diciembre. Por eso se limpia todo en la
+       MISMA transacción, no a lo bruto.
+
+    2. Tratar cada tabla que apunta al producto según lo que ES:
+       · VentaLinea: se le SUELTA el vínculo (producto_id a nulo). La línea
+         guarda nombre y precio copiados, así que la venta vieja no cambia. Nunca
+         se borra una VentaLinea.
+       · Insumo propio: se le suelta el vínculo pero el insumo SE QUEDA, con su
+         stock y su libro. La mercadería sigue en la repisa aunque el producto ya
+         no esté en la carta; borrar el insumo le cambiaría el valor al inventario
+         y dejaría su libro de movimientos huérfano, y el libro no se toca.
+       · Receta y CodigoBarra: esas filas SÍ se borran. Su `producto_id` no
+         acepta nulo, así que no se les puede soltar el vínculo, y sin el producto
+         no significan nada. Borrar el código además lo libera para reusarlo.
+    """
+    from apps.pos.db.models import VentaLinea
+
     p = s.get(Producto, prod_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")
-    p.activo = False
-    s.add(p)
+
+    for linea in s.exec(select(VentaLinea).where(VentaLinea.producto_id == prod_id)).all():
+        linea.producto_id = None
+        s.add(linea)
+    for insumo in s.exec(select(Insumo).where(Insumo.producto_id == prod_id)).all():
+        insumo.producto_id = None          # deja de ser tal cual; su stock y libro quedan
+        s.add(insumo)
+    for receta in s.exec(select(Receta).where(Receta.producto_id == prod_id)).all():
+        s.delete(receta)
+    for codigo in s.exec(select(CodigoBarra).where(CodigoBarra.producto_id == prod_id)).all():
+        s.delete(codigo)
+
+    s.delete(p)
     s.commit()
-    return {"ok": True, "id": prod_id, "activo": False}
+    return {"ok": True, "id": prod_id, "borrado": True}
 
 
 def _un_solo_destacado(s: Session, p: Producto) -> None:

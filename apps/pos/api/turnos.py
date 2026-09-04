@@ -24,70 +24,107 @@ from core.schemas import AbrirTurnoIn, CerrarTurnoIn, RetiroCajaIn
 router = APIRouter(prefix="/api/v1/turnos", tags=["turnos"])
 
 
+def _clp(n: int) -> str:
+    """$1.234, para los mensajes que ve el cajero. En impresion.py está el mismo
+    con otro nombre, pero importarlo de allá sería un import circular."""
+    return "$" + f"{int(n):,}".replace(",", ".")
+
+
 def turno_abierto(s: Session) -> Turno | None:
     return s.exec(select(Turno).where(Turno.cerrado_at == None)).first()  # noqa: E711
 
 
+def _pagos_de(s: Session, v: Venta) -> list[tuple[str, int]]:
+    """Cómo se pagó una venta: [(medio, monto), ...], con el monto SIN propina.
+
+    Si la venta tiene filas de Pago (pago mixto), esas mandan. Si no —una venta
+    de un solo medio, o cualquiera anterior a que esto existiera— es un solo pago
+    con su `medio_pago` y lo cobrado sin propina. La propina se suma aparte, al
+    `medio_pago` de la venta, y por eso el pago mixto va sin propina.
+    """
+    from apps.pos.db.models import Pago
+    filas = s.exec(select(Pago).where(Pago.venta_id == v.id)).all()
+    if filas:
+        return [(p.medio, p.monto) for p in filas]
+    return [(v.medio_pago, v.total - v.descuento)]
+
+
 def _efectivo_del_turno(s: Session, turno: Turno) -> int:
+    """Lo que quedó en el cajón por las ventas: la parte pagada en efectivo, con
+    su propina si la propina fue en efectivo. Recorre TODAS las ventas pagadas,
+    no solo las de medio_pago efectivo, porque un pago mixto tiene una parte en
+    efectivo aunque su medio_pago sea 'mixto'."""
     ventas = s.exec(
-        select(Venta).where(
-            Venta.turno_id == turno.id,
-            Venta.estado == "pagada",
-            Venta.medio_pago == "efectivo",
-        )
+        select(Venta).where(Venta.turno_id == turno.id, Venta.estado == "pagada")
     ).all()
-    # Lo que quedó en el cajón: lo cobrado (ya con el descuento aplicado) más la propina.
-    return sum(v.total - v.descuento + v.propina for v in ventas)
+    total = 0
+    for v in ventas:
+        for medio, monto in _pagos_de(s, v):
+            if medio == "efectivo":
+                total += monto
+        if v.propina and v.medio_pago == "efectivo":
+            total += v.propina
+    return total
 
 
-def _retiros_del_turno(s: Session, turno: Turno) -> int:
-    """La plata que salió del cajón DURANTE el turno para ir a comprar cosas.
+def _movimientos_caja(s: Session, turno: Turno, tipo: str) -> int:
+    """Suma la plata que se movió a mano en el turno, de un tipo (retiro/ingreso).
 
     Los anulados no cuentan: quedan en el libro para que se vea que existieron,
-    pero no salieron de verdad, así que no se restan del efectivo.
+    pero no se movieron de verdad, así que no tocan el efectivo.
     """
-    retiros = s.exec(
+    filas = s.exec(
         select(RetiroCaja).where(
             RetiroCaja.turno_id == turno.id,
+            RetiroCaja.tipo == tipo,
             RetiroCaja.anulado == False,          # noqa: E712
         )
     ).all()
-    return sum(r.monto for r in retiros)
+    return sum(r.monto for r in filas)
+
+
+def _retiros_del_turno(s: Session, turno: Turno) -> int:
+    return _movimientos_caja(s, turno, "retiro")
+
+
+def _ingresos_del_turno(s: Session, turno: Turno) -> int:
+    return _movimientos_caja(s, turno, "ingreso")
 
 
 def _efectivo_esperado(s: Session, turno: Turno) -> int:
     """Lo que DEBERÍA haber en el cajón, en un solo lugar.
 
-    Es fondo + lo que entró en efectivo − lo que salió del cajón. Y "salió" son
-    dos cosas: las propinas de tarjeta que se pagaron en efectivo (el banco no
-    las depositó todavía) y los retiros de medio turno (el pan, el gas). Sin
-    restar los retiros, esa plata aparece en la noche como un faltante que no
-    existe — que es justo lo que el dueño no quiere ver.
+    Es fondo + lo que entró en efectivo − lo que salió + lo que se metió a mano.
+    "Salió" son dos cosas: las propinas de tarjeta pagadas en efectivo (el banco
+    no las depositó todavía) y los retiros de medio turno (el pan, el gas). "Se
+    metió" son los ingresos: plata que se repone al cajón. Sin esto, esa plata
+    aparece en la noche como un faltante (o un sobrante) que no existe.
 
-    Existe como función y no como tres cuentas sueltas a propósito: antes el
-    cierre, la pantalla y el papel de 80 mm calculaban esto por separado, y el
-    papel ni siquiera restaba las propinas pagadas. Tres fórmulas que tenían que
-    dar lo mismo y no lo daban. Ahora es una.
+    Existe como función y no como cuentas sueltas a propósito: antes el cierre,
+    la pantalla y el papel de 80 mm la calculaban por separado, y no siempre
+    daban lo mismo. Ahora es una.
     """
     return (turno.monto_inicial + _efectivo_del_turno(s, turno)
-            - turno.propinas_pagadas - _retiros_del_turno(s, turno))
+            - turno.propinas_pagadas
+            - _retiros_del_turno(s, turno) + _ingresos_del_turno(s, turno))
 
 
 def _retiros_dict(s: Session, turno: Turno) -> list[dict]:
-    """Los retiros del turno, uno por uno, para el cierre y la pantalla."""
-    retiros = s.exec(
+    """Los movimientos de plata del turno (retiros e ingresos), uno por uno."""
+    filas = s.exec(
         select(RetiroCaja).where(RetiroCaja.turno_id == turno.id)
         .order_by(RetiroCaja.creado_at.desc())
     ).all()
     return [{
         "id": r.id,
+        "tipo": r.tipo,
         "monto": r.monto,
         "motivo": r.motivo,
         "hora": a_local(r.creado_at).strftime("%H:%M"),
         "hecho_por": r.hecho_por,
         "anulado": r.anulado,
         "anulado_por": r.anulado_por,
-    } for r in retiros]
+    } for r in filas]
 
 
 def _por_medio(s: Session, turno: Turno) -> dict:
@@ -102,15 +139,28 @@ def _por_medio(s: Session, turno: Turno) -> dict:
         select(Venta).where(Venta.turno_id == turno.id, Venta.estado == "pagada")
     ).all()
     salida: dict[str, dict] = {}
+
+    def _fila(medio):
+        return salida.setdefault(medio,
+                                 {"cantidad": 0, "ventas": 0, "propinas": 0, "total": 0})
+
     for v in ventas:
-        d = salida.setdefault(v.medio_pago,
-                              {"cantidad": 0, "ventas": 0, "propinas": 0, "total": 0})
-        d["cantidad"] += 1
-        d["ventas"] += v.total - v.descuento
-        d["propinas"] += v.propina
-        # `total` se mantiene con el nombre viejo por compatibilidad: es lo
-        # vendido sin propina, que es lo que mira el informe del día.
-        d["total"] += v.total - v.descuento
+        pagos = _pagos_de(s, v)
+        # `cantidad` cuenta ventas, no pagos: una venta mixta es UNA venta. Se le
+        # suma al medio de su primer pago para no contarla dos veces.
+        primero = True
+        for medio, monto in pagos:
+            d = _fila(medio)
+            if primero:
+                d["cantidad"] += 1
+                primero = False
+            d["ventas"] += monto
+            d["total"] += monto        # nombre viejo: lo vendido sin propina
+        # La propina va al medio_pago de la venta. En un pago mixto la venta va
+        # sin propina (medio_pago = "mixto"), así que esto no la toca.
+        if v.propina:
+            _fila(v.medio_pago)["propinas"] += v.propina
+
     for d in salida.values():
         d["cobrado"] = d["ventas"] + d["propinas"]
     return salida
@@ -221,10 +271,11 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         # Propinas de tarjeta pagadas en efectivo del cajón: salieron de ahí, así
         # que el cajón tiene que tener menos.
         "propinas_pagadas": t.propinas_pagadas,
-        # La plata que se sacó del cajón durante el turno, uno por uno y sumada.
-        # El total ya está descontado del efectivo esperado de arriba.
+        # La plata que se movió a mano en el turno (retiros e ingresos), una por
+        # una y sumada por tipo. Ya está aplicada al efectivo esperado de arriba.
         "retiros": _retiros_dict(s, t),
         "retiros_total": _retiros_del_turno(s, t),
+        "ingresos_total": _ingresos_del_turno(s, t),
         # Quiénes pasaron por la caja durante el turno. Es la respuesta a
         # "¿quién estuvo?", que no es lo mismo que "¿quién vendió?".
         "estuvieron": _estuvieron(s, t),
@@ -389,20 +440,47 @@ def sacar_plata(datos: RetiroCajaIn, s: Session = Depends(get_session),
     el cuadre de la noche la resta sola del efectivo esperado, así que la plata
     que se fue a comprar pan no aparece como un faltante.
 
-    No se pide que el cajón tenga tanto efectivo como el retiro: el cajón es la
-    verdad, no el número que calcula el programa (puede haber plata sin contar).
-    La pantalla avisa si se pasa, pero no lo bloquea — igual que en todo el resto
-    del sistema, la repisa manda sobre el saldo.
+    NO se puede sacar más de lo que hay en el cajón. Sacar plata que no está es
+    imposible de verdad —no es como el stock, donde la repisa puede tener más de
+    lo que dice el papel—: acá el cajón tiene lo que tiene. Si se pidiera de más,
+    el efectivo esperado quedaría negativo, que no significa nada.
     """
     t = turno_abierto(s)
     if not t:
         raise HTTPException(409, "La caja está cerrada. Ábrela antes de sacar plata.")
+    hay = _efectivo_esperado(s, t)
+    if datos.monto > hay:
+        raise HTTPException(
+            409,
+            f"En el cajón hay {_clp(hay)}. No puedes sacar {_clp(datos.monto)}: "
+            "no se puede sacar plata que no está.")
     r = RetiroCaja(
-        turno_id=t.id,
-        monto=datos.monto,
-        motivo=datos.motivo,
-        usuario_id=quien.get("id"),
-        hecho_por=quien.get("nombre", ""),
+        turno_id=t.id, tipo="retiro",
+        monto=datos.monto, motivo=datos.motivo,
+        usuario_id=quien.get("id"), hecho_por=quien.get("nombre", ""),
+    )
+    s.add(r)
+    s.commit()
+    return _turno_dict(s, t)
+
+
+@router.post("/ingreso")
+def meter_plata(datos: RetiroCajaIn, s: Session = Depends(get_session),
+                quien: dict = Depends(sesion.exige("caja_retirar"))):
+    """Mete plata al cajón EN MEDIO del turno: un vuelto que se repone, cambio
+    que se trae de otro lado. El cuadre lo suma al efectivo esperado, o esa plata
+    aparecería en la noche como un sobrante que no existe.
+
+    Un ingreso no tiene tope: siempre se puede agregar plata. Queda firmado
+    igual que un retiro, y se corrige anulando.
+    """
+    t = turno_abierto(s)
+    if not t:
+        raise HTTPException(409, "La caja está cerrada. Ábrela antes de meter plata.")
+    r = RetiroCaja(
+        turno_id=t.id, tipo="ingreso",
+        monto=datos.monto, motivo=datos.motivo,
+        usuario_id=quien.get("id"), hecho_por=quien.get("nombre", ""),
     )
     s.add(r)
     s.commit()

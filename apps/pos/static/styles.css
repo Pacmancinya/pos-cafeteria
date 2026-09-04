@@ -356,6 +356,17 @@ button{font-family:inherit;cursor:pointer}
 .grupo{margin-bottom:26px}
 .grupo h3{font-size:17px}
 .grupo__top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.grupo__acc{display:flex;gap:8px;flex-wrap:wrap}
+.grupo__editar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
+.grupo__editar>input[type=text]{
+  flex:1;min-width:140px;font-family:inherit;padding:8px 12px;
+  border:1px solid var(--linea);border-radius:9px;background:var(--papel);color:var(--tinta);
+}
+.grupo__orden{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--suave)}
+.grupo__orden input{
+  width:56px;font-family:inherit;padding:8px 10px;text-align:center;
+  border:1px solid var(--linea);border-radius:9px;background:var(--papel);color:var(--tinta);
+}
 .fila__acc{display:flex;gap:6px}
 .fila{
   display:grid;grid-template-columns:1fr 130px 110px auto;gap:10px;align-items:center;
@@ -724,6 +735,7 @@ html,body{overscroll-behavior:none}
 }
 .retiros__cab{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
 .retiros__cab b{font-size:15px}
+.retiros__botones{display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end}
 .retiros__lista{margin-top:12px}
 .retiros__fila{
   display:flex;gap:12px;align-items:center;justify-content:space-between;
@@ -1085,6 +1097,23 @@ html,body{overscroll-behavior:none}
 #rapidosDesc button{padding:0 6px;font-size:14px;white-space:nowrap}
 /* El vuelto es lo que se mira: que no quede apretado contra el borde. */
 .cobro .vuelto{margin-top:10px}
+
+/* ---- pago mixto ---- */
+.mixto{display:grid;gap:8px}
+.mixto__fila{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;margin:0}
+.mixto__fila span{font-size:14px;font-weight:600;color:var(--tinta)}
+.mixto__fila input{
+  width:100%;height:var(--toque-alto);text-align:right;padding:0 12px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--papel);
+  color:var(--tinta);font-family:inherit;font-size:17px;font-variant-numeric:tabular-nums;
+}
+.mixto__fila input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.mixto__resto{
+  margin-top:4px;padding:9px 12px;border-radius:10px;background:#FFF8EE;
+  border:1px solid #E7D9C7;font-size:14px;font-variant-numeric:tabular-nums;
+}
+.mixto__resto.es-ok{background:#EAF6EF;border-color:#BFE3CC;color:#14603A}
+.mixto__resto.es-mal{background:#FBECEA;border-color:#F0CFC9;color:var(--rojo)}
 
 @media (max-width:760px){
   .dialogo--cobro{width:min(520px,100%)}

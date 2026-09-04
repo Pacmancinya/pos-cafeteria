@@ -492,12 +492,13 @@ def test_no_se_retira_con_la_caja_cerrada(cliente):
     assert r.status_code == 409
 
 
-def test_anular_un_retiro_lo_devuelve_al_cajon(caja):
-    r = caja.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"}).json()
+def test_anular_un_retiro_lo_devuelve_al_cajon(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"}).json()
     rid = r["retiros"][0]["id"]
     esperado_con_retiro = r["efectivo_esperado"]
 
-    t = caja.post(f"/api/v1/turnos/retiro/{rid}/anular").json()
+    t = cliente.post(f"/api/v1/turnos/retiro/{rid}/anular").json()
     assert t["retiros_total"] == 0
     assert t["efectivo_esperado"] == esperado_con_retiro + 3000
     # La fila NO se borra: queda marcada, para que se vea que existió.
@@ -505,11 +506,12 @@ def test_anular_un_retiro_lo_devuelve_al_cajon(caja):
     assert t["retiros"][0]["anulado"] is True
 
 
-def test_un_retiro_anulado_no_se_vuelve_a_anular(caja):
-    r = caja.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"}).json()
+def test_un_retiro_anulado_no_se_vuelve_a_anular(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"}).json()
     rid = r["retiros"][0]["id"]
-    assert caja.post(f"/api/v1/turnos/retiro/{rid}/anular").status_code == 200
-    assert caja.post(f"/api/v1/turnos/retiro/{rid}/anular").status_code == 409
+    assert cliente.post(f"/api/v1/turnos/retiro/{rid}/anular").status_code == 200
+    assert cliente.post(f"/api/v1/turnos/retiro/{rid}/anular").status_code == 409
 
 
 def test_el_cierre_cuadra_restando_los_retiros(cliente, carta):
@@ -545,4 +547,75 @@ def test_el_papel_del_cierre_muestra_los_retiros(cliente, carta):
     tid = cliente.get("/api/v1/turnos/actual").json()["turno"]["id"]
     cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 7500, "fondo_siguiente": 0})
     html = cliente.get(f"/cierre/{tid}").text
-    assert "SALIÓ DEL CAJÓN" in html and "gas" in html
+    assert "PLATA MOVIDA EN EL TURNO" in html and "gas" in html
+
+
+# ---------------------------------------------------------------------------
+# No se saca más de lo que hay, y se puede meter plata (2.12)
+# ---------------------------------------------------------------------------
+"""Sacar plata que no está es imposible de verdad: el cajón tiene lo que tiene.
+Y a veces hay que METER plata —cambio que se trae, un vuelto que se repone—, que
+también tiene que quedar registrado o aparece como sobrante."""
+
+
+def test_no_se_saca_mas_de_lo_que_hay(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    # En el cajón hay 10000. Sacar 15000 es imposible.
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 15000, "motivo": "gas"})
+    assert r.status_code == 409
+    assert "no está" in r.json()["detail"].lower() or "hay" in r.json()["detail"].lower()
+    # Sacar 10000 justo sí.
+    assert cliente.post("/api/v1/turnos/retiro", json={"monto": 10000, "motivo": "gas"}).status_code == 200
+    # Y ahora no queda nada: otro retiro de 1 se rechaza.
+    assert cliente.post("/api/v1/turnos/retiro", json={"monto": 1, "motivo": "x"}).status_code == 409
+
+
+def test_el_tope_del_retiro_cuenta_las_ventas_en_efectivo(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 5000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],  # 3400 efectivo
+        "medio_pago": "efectivo"})
+    # Ahora hay 8400: sacar 8000 pasa, 9000 no.
+    assert cliente.post("/api/v1/turnos/retiro", json={"monto": 8000, "motivo": "compra"}).status_code == 200
+    assert cliente.post("/api/v1/turnos/retiro", json={"monto": 9000, "motivo": "x"}).status_code == 409
+
+
+def test_meter_plata_sube_el_efectivo_esperado(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 2000})
+    r = cliente.post("/api/v1/turnos/ingreso", json={"monto": 5000, "motivo": "traje cambio"})
+    assert r.status_code == 200, r.text
+    t = r.json()
+    assert t["ingresos_total"] == 5000
+    assert t["efectivo_esperado"] == 7000        # 2000 + 5000
+    assert t["retiros"][0]["tipo"] == "ingreso"
+
+
+def test_meter_plata_deja_sacar_mas(cliente, carta):
+    """Después de meter plata, se puede sacar hasta lo que hay ahora."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 1000})
+    # Con 1000 no se pueden sacar 4000...
+    assert cliente.post("/api/v1/turnos/retiro", json={"monto": 4000, "motivo": "x"}).status_code == 409
+    # ...pero si meto 5000, ahora hay 6000 y sí.
+    cliente.post("/api/v1/turnos/ingreso", json={"monto": 5000, "motivo": "cambio"})
+    assert cliente.post("/api/v1/turnos/retiro", json={"monto": 4000, "motivo": "gas"}).status_code == 200
+
+
+def test_anular_un_ingreso_lo_saca_de_la_cuenta(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 1000})
+    r = cliente.post("/api/v1/turnos/ingreso", json={"monto": 5000, "motivo": "error"}).json()
+    rid = r["retiros"][0]["id"]
+    t = cliente.post(f"/api/v1/turnos/retiro/{rid}/anular").json()
+    assert t["ingresos_total"] == 0
+    assert t["efectivo_esperado"] == 1000
+
+
+def test_el_cierre_cuadra_con_ingresos_y_retiros(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"})
+    cliente.post("/api/v1/turnos/ingreso", json={"monto": 1000, "motivo": "cambio"})
+    # En el cajón deberían quedar 10000 - 3000 + 1000 = 8000.
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 8000, "fondo_siguiente": 0}).json()
+    assert cierre["diferencia"] == 0
+    assert cierre["retiros_total"] == 3000
+    assert cierre["ingresos_total"] == 1000

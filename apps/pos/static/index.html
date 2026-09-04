@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=40">
+<link rel="stylesheet" href="/static/styles.css?v=43">
 </head>
 <body>
 
@@ -180,7 +180,12 @@
             <button class="medio" data-medio="credito">Crédito</button>
             <button class="medio" data-medio="transferencia">Transferencia</button>
           </div>
+          <label class="marca" style="margin-top:10px">
+            <input type="checkbox" id="pagoMixto"> Paga en dos formas (parte y parte)</label>
         </div>
+
+        <!-- Pago mixto: una parte con cada medio. Aparece al marcar arriba. -->
+        <div id="mixtoGrid" hidden></div>
 
         <!-- Descuento y propina van juntos y a la izquierda a propósito: son lo
              que MENOS se usa. Lo de cada venta —el medio de pago y el vuelto—
@@ -288,6 +293,6 @@
 <script src="/static/guias.js?v=11"></script>
 <script src="/static/teclado.js?v=3"></script>
 <script src="/static/escaner.js?v=3"></script>
-<script src="/static/app.js?v=38"></script>
+<script src="/static/app.js?v=43"></script>
 </body>
 </html>

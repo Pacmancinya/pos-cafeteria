@@ -61,6 +61,15 @@ def poner_al_dia() -> list[str]:
                 ))
                 hechos.append(f"{nombre}.{col.name}")
 
+                # `contado` nace en 0 para toda fila (ADD COLUMN no sabe de otra
+                # cosa), pero los insumos que YA existían tienen su saldo de
+                # compras y conteos de verdad: hay que marcarlos como contados o
+                # el tope duro no los tomaría en cuenta. Los insumos que cree la
+                # puesta al día DESPUÉS de esto nacen en 0 aparte, que es lo que
+                # queremos: ésos todavía no se contaron.
+                if nombre == "insumo" and col.name == "contado":
+                    con.execute(text('UPDATE "insumo" SET "contado" = 1'))
+
         # `create_all` crea las tablas nuevas con sus índices, pero una tabla que
         # YA existía no recibe nunca un índice nuevo. Y el del código de barras
         # importa: con el escáner, "dame el producto de este código" pasa a ser

@@ -43,6 +43,11 @@ def anotar(s: Session, insumo: Insumo, tipo: str, cantidad: int, *,
     o no entra ninguna.
     """
     insumo.stock = int(insumo.stock) + int(cantidad)
+    # Contar, comprar o cargar es el dueño diciendo "de esto sé cuántos hay".
+    # Desde ese momento el tope duro empieza a morder. Una venta o una merma NO
+    # lo prenden: bajan el saldo, pero no son un conteo.
+    if tipo in ("compra", "ajuste", "carga"):
+        insumo.contado = True
     m = Movimiento(
         insumo_id=insumo.id,
         tipo=tipo,
@@ -451,11 +456,26 @@ def guardar_receta(producto_id: int, datos: RecetaIn, s: Session = Depends(get_s
         raise HTTPException(404, "No existe ese producto")
     for vieja in s.exec(select(Receta).where(Receta.producto_id == producto_id)).all():
         s.delete(vieja)
+    insumos_nuevos = set()
     for linea in datos.lineas:
         if not s.get(Insumo, linea.insumo_id):
             raise HTTPException(404, f"No existe el insumo {linea.insumo_id}")
         s.add(Receta(producto_id=producto_id, insumo_id=linea.insumo_id,
                      cantidad=linea.cantidad))
+        insumos_nuevos.add(linea.insumo_id)
+
+    # Si el producto ERA su propio insumo (tal cual) y ahora se le pone una
+    # receta de VERDAD que no lo usa, ese insumo propio queda colgando: seguiría
+    # dando un "stock" en la carta que nadie descuenta nunca y —con el tope
+    # duro— un tope congelado que vuelve invendible el producto después de N
+    # ventas. Se apaga. Su libro de movimientos queda intacto; solo deja de
+    # contar como saldo y como tope.
+    propio = s.exec(select(Insumo).where(Insumo.producto_id == producto_id)).first()
+    if propio and propio.activo and propio.id not in insumos_nuevos:
+        propio.activo = False
+        propio.producto_id = None
+        s.add(propio)
+
     s.commit()
     return _receta_dict(s, p)
 
@@ -470,40 +490,52 @@ def borrar_receta(producto_id: int, s: Session = Depends(get_session),
     return {"ok": True}
 
 
-@router.post("/inventario/llevar-la-cuenta-de-todo")
-def llevar_la_cuenta_de_todo(s: Session = Depends(get_session),
-                             quien: dict = Depends(sesion.exige("inventario"))):
-    """Le da inventario a TODOS los productos que todavía no lo llevan.
+def dar_cuenta_a_los_que_faltan(s: Session) -> list[str]:
+    """Le da inventario a todo producto activo que no lleve cuenta de NADA.
 
-    Existe por un agujero que se vio en video: un producto sin inventario no
-    tiene tope, así que se vendieron 27 unidades de algo que no existía. Desde
-    la 2.8 los productos nuevos llevan cuenta solos, pero los que ya estaban
-    quedaron sin ella, y arreglarlos de a uno son 30 clics.
+    "No lleva cuenta" = no tiene insumo propio Y no tiene receta. Ésos no tienen
+    tope y se venden sin límite: así se vendieron 27 unidades de algo que estaba
+    en cero. Desde que el inventario es obligatorio, este estado no puede
+    quedar: los productos nuevos llevan cuenta al crearse, los importados acá, y
+    los que venían de antes se ponen al día solos al arrancar el programa.
 
-    NO toca los que ya llevan cuenta ni los que tienen receta de verdad: un
-    capuchino no "es" un insumo, se hace con leche y café. Los deja en cero, que
-    es la verdad hasta que alguien cuente.
+    NO toca los que tienen receta de VERDAD (leche + café): un capuchino no "es"
+    un insumo, y darle uno propio lo descontaría dos veces. Ésos ya llevan
+    cuenta por su receta. Los deja en cero, que es la verdad hasta que alguien
+    cuente la bodega.
+
+    Se amarra por ID, nunca por nombre. La versión vieja creaba el insumo con
+    `nombre=p.nombre` y lo buscaba de vuelta con `Insumo.nombre == nombre`. En la
+    base del local hay dos "Cortado" y tres "Producto nuevo": con nombres
+    repetidos esa búsqueda devolvía siempre el primero, así que un insumo recibía
+    la receta DOS veces (doble descuento en cada venta) y el otro producto
+    quedaba con insumo pero sin receta. Con el id de la fila recién creada eso no
+    puede pasar. Es idempotente: la segunda pasada no encuentra a nadie.
     """
-    hechos = []
     con_receta = {r.producto_id for r in s.exec(select(Receta)).all()}
     ya_tienen = {i.producto_id for i in s.exec(
         select(Insumo).where(Insumo.producto_id != None)).all()}          # noqa: E711
-
+    hechos = []
     for p in s.exec(select(Producto).where(Producto.activo == True)).all():  # noqa: E712
         if p.id in con_receta or p.id in ya_tienen:
             continue
-        s.add(Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
-                     compra_contenido=1, producto_id=p.id))
+        i = Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
+                   compra_contenido=1, producto_id=p.id)
+        s.add(i)
+        s.flush()                     # da i.id sin tener que re-buscarlo por nombre
+        s.add(Receta(producto_id=p.id, insumo_id=i.id, cantidad=1))
         hechos.append(p.nombre)
     s.commit()
+    return hechos
 
-    # Las recetas se escriben después, con los insumos ya con id.
-    for nombre in hechos:
-        i = s.exec(select(Insumo).where(Insumo.nombre == nombre)).first()
-        if i and i.producto_id:
-            s.add(Receta(producto_id=i.producto_id, insumo_id=i.id, cantidad=1))
-    s.commit()
 
+@router.post("/inventario/llevar-la-cuenta-de-todo")
+def llevar_la_cuenta_de_todo(s: Session = Depends(get_session),
+                             quien: dict = Depends(sesion.exige("inventario"))):
+    """El botón manual quedó de respaldo: desde que el inventario es obligatorio,
+    esto corre solo al arrancar. Sigue existiendo para el caso raro de alguien
+    que editó la base a mano."""
+    hechos = dar_cuenta_a_los_que_faltan(s)
     return {"ok": True, "cuantos": len(hechos), "productos": hechos}
 
 

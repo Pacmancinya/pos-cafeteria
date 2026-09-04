@@ -168,3 +168,83 @@ def test_un_valor_fuera_de_rango_guardado_a_mano_no_manda(cliente):
         s.add(Ajuste(clave="teclado_en_pantalla", valor="2"))
         s.commit()
     assert cliente.get("/api/v1/ajustes").json()["teclado_en_pantalla"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Pago mixto (2.12)
+# ---------------------------------------------------------------------------
+"""Una parte en efectivo y otra en tarjeta. Se guarda cada parte, y el cuadre la
+lee: el efectivo al cajón, la tarjeta contra la máquina. Una venta de un solo
+medio no pasa por acá y sigue igual que siempre."""
+
+
+def test_pago_mixto_reparte_al_cajon_y_a_la_tarjeta(cliente, carta, caja):
+    # Latte 3400 + espresso 1900 = 5300. Pago 3000 efectivo + 2300 débito.
+    v = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1},
+                   {"producto_id": carta["espresso"]["id"], "cantidad": 1}],
+        "pagos": [{"medio": "efectivo", "monto": 3000},
+                  {"medio": "debito", "monto": 2300}]}).json()
+    assert v["medio_pago"] == "mixto"
+    assert {p["medio"]: p["monto"] for p in v["pagos"]} == {"efectivo": 3000, "debito": 2300}
+
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    assert t["ventas_efectivo"] == 3000                 # solo la parte en efectivo va al cajón
+    debito = [m for m in t["medios"] if m["medio"] == "debito"][0]
+    assert debito["esperado"] == 2300                   # la máquina cobró 2300
+
+
+def test_las_partes_del_pago_mixto_tienen_que_sumar_lo_cobrado(cliente, carta, caja):
+    r = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "pagos": [{"medio": "efectivo", "monto": 1000},
+                  {"medio": "debito", "monto": 1000}]})                      # suma 2000 != 3400
+    assert r.status_code == 422
+    assert "suman" in r.json()["detail"].lower()
+
+
+def test_el_pago_mixto_respeta_el_descuento(cliente, carta, caja):
+    # Latte 3400 con 400 de descuento = 3000 a cobrar.
+    v = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "descuento": 400,
+        "pagos": [{"medio": "efectivo", "monto": 2000},
+                  {"medio": "transferencia", "monto": 1000}]})
+    assert v.status_code == 200, v.text
+
+
+def test_una_venta_de_un_solo_medio_no_escribe_pagos(cliente, carta, caja):
+    """Compatibilidad: sin `pagos`, todo sigue igual y no hay filas de Pago."""
+    v = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "debito"}).json()
+    assert v["medio_pago"] == "debito"
+    assert "pagos" not in v                             # una venta simple no trae split
+    from apps.pos.db.session import engine
+    from apps.pos.db.models import Pago
+    from sqlmodel import Session, select
+    with Session(engine) as s:
+        assert s.exec(select(Pago)).first() is None
+
+
+def test_anular_una_venta_mixta_la_saca_del_cuadre(cliente, carta, caja):
+    v = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "pagos": [{"medio": "efectivo", "monto": 2000},
+                  {"medio": "debito", "monto": 1400}]}).json()
+    cliente.post(f"/api/v1/ventas/{v['id']}/anular", json={"motivo": "se arrepintió"})
+    t = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    assert t["ventas_efectivo"] == 0                    # ya no cuenta
+    assert t["por_medio"] == {}
+
+
+def test_el_cierre_cuadra_con_una_venta_mixta(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 5000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "pagos": [{"medio": "efectivo", "monto": 2400},
+                  {"medio": "debito", "monto": 1000}]})
+    # En el cajón: 5000 fondo + 2400 efectivo = 7400.
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 7400, "fondo_siguiente": 0}).json()
+    assert cierre["diferencia"] == 0

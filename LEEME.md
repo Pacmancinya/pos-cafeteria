@@ -39,6 +39,11 @@ no le pongas tilde. Basta con empezar a escribir, no hace falta hacerle clic.
    monto que quieras).
 5. **Confirmar venta**. Listo, queda registrada.
 
+> **¿Pagan en dos formas?** (una parte en efectivo y otra con tarjeta). Marca **«Paga en
+> dos formas»** y escribe cuánto va en cada una. Abajo te dice cuánto falta repartir; cuando
+> las partes suman justo el total, se puede confirmar. En el cierre, la parte en efectivo va
+> al cajón y la de tarjeta se cuadra contra la máquina, cada una por su lado.
+
 > Si se te cierra la pestaña con un pedido a medias, no se pierde: al volver a abrir,
 > el pedido sigue ahí.
 
@@ -93,15 +98,20 @@ cuánto fondo dejas para mañana y el programa te dice cuánto te llevas del caj
 > dejas y lo que te llevas son **solo efectivo** —la plata que de verdad está en el cajón—;
 > la tarjeta ya está en el banco y no entra ahí.
 
-### Sacar plata del cajón sin cerrar la caja
+### Mover plata del cajón sin cerrar la caja
 
 ¿Hay que ir a comprar gas, pan o algo que faltó, en pleno turno? No hace falta cerrar la
 caja. Aprietas **Caja abierta** arriba a la derecha y, en el recuadro de arriba, **Sacar
 plata**: escribes cuánto y para qué, y listo. Queda anotado **quién lo sacó y a qué hora**,
 sale en el papel del cierre, y el cuadre de la noche lo resta solo — así esa plata no
-aparece como si faltara. Si te equivocaste, cada retiro tiene un botón **Anular**.
+aparece como si faltara. Si te equivocaste, cada movimiento tiene un botón **Anular**.
 
-> Cualquiera puede sacar plata, también el cajero: es el que está solo cuando hay que salir
+- **No puedes sacar más de lo que hay** en el cajón: el programa te dice cuánto hay y no te
+  deja pasarte.
+- ¿Al revés, trajiste cambio para el cajón? **Meter plata** hace lo mismo pero sumando: esa
+  plata entra al cuadre para que no aparezca como sobrante.
+
+> Cualquiera puede mover plata, también el cajero: es el que está solo cuando hay que salir
 > a comprar. Lo que la cuida no es un candado, es que **siempre queda firmado quién fue**.
 
 **Después del cuadre del efectivo, viene el de las tarjetas.** Aparece un recuadro que
@@ -143,6 +153,31 @@ va en el recuadro grande.
 
 Lo que cambies acá se ve en la caja al tiro, y en las **pantallas del local** en la
 siguiente revisión (cada 10 minutos, o lo que se haya configurado ahí).
+
+**Sacar un producto tiene dos formas, y son distintas:**
+- **Dejar de venderlo un rato:** desmarca la casilla **«A la venta»** en su ficha. Sale de
+  la caja y de las pantallas, pero queda ahí y lo vuelves a marcar cuando quieras. Esto se
+  puede deshacer.
+- **Borrarlo para siempre:** botón **Borrar para siempre** en la ficha. Desaparece de la
+  carta y no vuelve. Las ventas viejas no se tocan: siguen cuadrando igual. Esto **no** se
+  puede deshacer, así que te pregunta antes.
+
+**Las categorías** (la lista de la izquierda) también se editan: cada una tiene **Editar**
+(cambiar el nombre o el orden) y **Borrar**. Una categoría solo se puede borrar si está
+vacía; si tiene productos adentro, primero muévelos a otra (en la ficha de cada producto) o
+bórralos.
+
+## Cuánto queda de cada cosa (el tope)
+
+Desde esta versión, **no se vende lo que no hay**: si de un producto que se vende tal cual
+—una botella, un alfajor— ya no queda y lo tocas en la caja, no entra al pedido y te dice
+cuántos quedan. Para venderlo tienes que anotar la mercadería que llegó en **Bodega**
+(«Llegó mercadería»).
+
+> Esto solo pasa con los productos que **ya contaste**. Uno que nunca contaste se sigue
+> vendiendo sin tope, como antes: el programa no te va a frenar la venta de algo que no sabe
+> cuánto tienes. Cuando lo cuentes en Bodega, ahí empieza a cuidarte el tope. Así, el día
+> que actualizas, la caja sigue vendiendo todo con normalidad.
 
 ## Traer tu carta de un Excel
 

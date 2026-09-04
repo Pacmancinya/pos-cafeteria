@@ -14,6 +14,19 @@ class LineaIn(BaseModel):
     cantidad: int = Field(default=1, ge=1, le=999)
 
 
+class PagoIn(BaseModel):
+    """Una parte de un pago mixto: cuánto se pagó con este medio."""
+    medio: str
+    monto: int = Field(gt=0)
+
+    @field_validator("medio")
+    @classmethod
+    def medio_valido(cls, v):
+        if v not in MEDIOS_PAGO:
+            raise ValueError(f"Medio de pago desconocido: {v}")
+        return v
+
+
 class VentaIn(BaseModel):
     lineas: list[LineaIn]
     medio_pago: str = "efectivo"
@@ -21,6 +34,10 @@ class VentaIn(BaseModel):
     propina: int = Field(default=0, ge=0)
     nota: str = ""
     paga_con: Optional[int] = None      # solo para calcular el vuelto; no se guarda
+    # Pago mixto: parte en efectivo, parte en otra forma. Si viene, manda sobre
+    # `medio_pago` y la suma tiene que dar lo cobrado. Vacío = un solo medio,
+    # como siempre.
+    pagos: list[PagoIn] = Field(default_factory=list)
 
     @field_validator("lineas")
     @classmethod
@@ -110,6 +127,17 @@ class CategoriaIn(BaseModel):
     nombre: str
     orden: int = 0
     activa: bool = True
+
+    @field_validator("nombre")
+    @classmethod
+    def con_nombre(cls, v):
+        # Sin esto una pantalla de editar podía dejar una categoría llamada "   ",
+        # que en el rail es un botón sin texto imposible de distinguir del de al
+        # lado. El prompt() viejo filtraba el vacío; el editor nuevo no.
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Escribe un nombre para la categoría.")
+        return v
 
 
 # ---------------------------------------------------------------- usuarios

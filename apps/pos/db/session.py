@@ -19,6 +19,15 @@ def crear_tablas() -> None:
     # una caja que ya vendió cada vez que se actualiza el programa.
     from apps.pos.db.migraciones import poner_al_dia
     poner_al_dia()
+    # Inventario obligatorio: todo producto lleva cuenta. Los que venían de antes
+    # sin ella se ponen al día acá, una vez, al arrancar — si no, seguirían sin
+    # tope. Es idempotente y nunca puede impedir que la caja abra.
+    try:
+        from apps.pos.api.inventario import dar_cuenta_a_los_que_faltan
+        with Session(engine) as s:
+            dar_cuenta_a_los_que_faltan(s)
+    except Exception:
+        pass
 
 
 def get_session():
