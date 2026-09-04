@@ -67,6 +67,7 @@ alcanzado a vender nada.
 | Vender, anular, abrir la caja | ✅ | ✅ |
 | Cerrar la caja que abrió él mismo | ✅ | ✅ |
 | Cerrar una caja que abrió otra persona | ✅ | — |
+| Sacar plata del cajón durante el turno | ✅ | ✅ |
 | Mirar la bodega, anotar compras y pérdidas | ✅ | ✅ |
 | Cambiar precios y productos | ✅ | — |
 | Informes, respaldos, crear usuarios | ✅ | — |
@@ -88,7 +89,20 @@ Ahí recién aparece el cuadre: con cuánto abriste, cuánto se vendió en efect
 cuánto fondo dejas para mañana y el programa te dice cuánto te llevas del cajón.
 
 > **La plata de tarjeta no se cuenta a mano**: el programa ya sabe cuánto se cobró. Pero
-> sí se puede **cuadrar contra el banco**, más abajo en la misma pantalla.
+> sí se puede **cuadrar contra el banco**, más abajo en la misma pantalla. El fondo que
+> dejas y lo que te llevas son **solo efectivo** —la plata que de verdad está en el cajón—;
+> la tarjeta ya está en el banco y no entra ahí.
+
+### Sacar plata del cajón sin cerrar la caja
+
+¿Hay que ir a comprar gas, pan o algo que faltó, en pleno turno? No hace falta cerrar la
+caja. Aprietas **Caja abierta** arriba a la derecha y, en el recuadro de arriba, **Sacar
+plata**: escribes cuánto y para qué, y listo. Queda anotado **quién lo sacó y a qué hora**,
+sale en el papel del cierre, y el cuadre de la noche lo resta solo — así esa plata no
+aparece como si faltara. Si te equivocaste, cada retiro tiene un botón **Anular**.
+
+> Cualquiera puede sacar plata, también el cajero: es el que está solo cuando hay que salir
+> a comprar. Lo que la cuida no es un candado, es que **siempre queda firmado quién fue**.
 
 **Después del cuadre del efectivo, viene el de las tarjetas.** Aparece un recuadro que
 dice *¿cuánto dice la máquina?* con una línea por cada forma de pago que se usó. Al lado de

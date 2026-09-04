@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 # La versión tiene que coincidir con la de version.json cuando se publica.
 # Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
 # novedades entre versiones, o nadie distingue una de otra.
-APP_VERSION = "2.10"
-APP_NOMBRE = "La puerta que no abría"
+APP_VERSION = "2.11"
+APP_NOMBRE = "La plata que sale del cajón"
 VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
 
 # De dónde se enteran las cajas de que hay una versión nueva.
@@ -81,6 +81,7 @@ PERMISOS = {
     "dueno": (
         "vender", "anular", "anular_pasado",
         "turno_abrir", "turno_cerrar", "turno_cerrar_ajeno",
+        "caja_retirar",
         "ver_dia", "ver_informes", "editar_carta",
         "inventario", "inventario_ajustar",
         "usuarios", "config",
@@ -97,6 +98,11 @@ PERMISOS = {
     "cajero": (
         "vender", "anular",
         "turno_abrir", "turno_cerrar",
+        # Sacar plata del cajón durante el turno lo hace también el cajero: es el
+        # que está solo a las 9 de la mañana cuando hay que ir a comprar pan. No
+        # es un descuido dárselo: cada retiro queda firmado con su nombre y su
+        # hora, y eso —no un permiso que se lo quite— es lo que lo hace honesto.
+        "caja_retirar",
         "ver_dia", "inventario",
     ),
 }

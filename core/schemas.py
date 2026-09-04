@@ -41,6 +41,21 @@ class AnularIn(BaseModel):
     motivo: str = ""
 
 
+class RetiroCajaIn(BaseModel):
+    """Sacar plata del cajón en medio del turno. El motivo es obligatorio: un
+    retiro sin motivo no se distingue de un faltante."""
+    monto: int = Field(gt=0)
+    motivo: str
+
+    @field_validator("motivo")
+    @classmethod
+    def con_motivo(cls, v):
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Escribe para qué sacas la plata (gas, pan, etc.).")
+        return v
+
+
 class AbrirTurnoIn(BaseModel):
     cajero: str = ""
     monto_inicial: int = Field(default=0, ge=0)

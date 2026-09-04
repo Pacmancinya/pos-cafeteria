@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
-from apps.pos.api.turnos import (_conteo, _cuadre_de_medios, _efectivo_del_turno,
-                                 _propinas)
+from apps.pos.api.turnos import (_conteo, _cuadre_de_medios, _efectivo_esperado,
+                                 _propinas, _retiros_dict, _retiros_del_turno)
 from apps.pos.db.models import Turno, Venta
 from apps.pos.db.session import get_session
 from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_LOCAL, NOMBRE_MEDIO,
@@ -149,7 +149,10 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
         descuentos += v.descuento
         propinas += v.propina
     neto, iva = neto_iva(total)
-    esperado = t.monto_inicial + _efectivo_del_turno(s, t)
+    # La misma fórmula que la pantalla: fondo + efectivo − propinas pagadas −
+    # retiros del turno. Antes acá se sumaba sin restar nada, así que el papel
+    # decía un esperado distinto al de la caja cuando había propinas pagadas.
+    esperado = _efectivo_esperado(s, t)
 
     filas_medio = "".join(
         f"<tr><td>{NOMBRE_MEDIO.get(m, m)} ({c})</td><td class='num'>{_plata(mt)}</td></tr>"
@@ -209,6 +212,23 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
             f"<tr class='total'><td>Total</td><td class='num'>{_plata(prop['total'])}</td></tr>"
             "</table>")
 
+    # La plata que salió del cajón durante el turno para ir a comprar. Cada una
+    # con su nombre y su motivo: es lo que hace que el efectivo esperado de
+    # arriba sea creíble y no un número que apareció más bajo sin explicación.
+    bloque_retiros_turno = ""
+    retiros = [r for r in _retiros_dict(s, t) if not r["anulado"]]
+    if retiros:
+        filas_r = "".join(
+            f"<tr><td>{r['hora']} {r['motivo']} ({r['hecho_por'] or '—'})</td>"
+            f"<td class='num'>-{_plata(r['monto'])}</td></tr>"
+            for r in retiros)
+        bloque_retiros_turno = (
+            "<div class='raya'></div>"
+            "<div class='chico centro'>SALIÓ DEL CAJÓN EN EL TURNO</div>"
+            "<table>" + filas_r +
+            f"<tr class='total'><td>Total sacado</td>"
+            f"<td class='num'>-{_plata(_retiros_del_turno(s, t))}</td></tr></table>")
+
     # Lo que se lleva y lo que queda para mañana.
     bloque_retiro = ""
     if t.fondo_siguiente or t.retiro:
@@ -260,6 +280,7 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
       <tr><td>Efectivo contado</td><td class="num">{_plata(t.efectivo_contado or 0)}</td></tr>
       {linea_dif}
     </table>
+    {bloque_retiros_turno}
     {bloque_tarjetas}
     {bloque_propinas}
     {bloque_retiro}

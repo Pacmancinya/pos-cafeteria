@@ -14,12 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from apps.pos import sesion
-from apps.pos.db.models import Presencia, Turno, Usuario, Venta
+from apps.pos.db.models import Presencia, RetiroCaja, Turno, Usuario, Venta
 from apps.pos.db.session import get_session
 from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_MEDIO, a_local, ahora,
                          como_utc, hoy_local, puede, rango_utc_del_dia,
                          total_del_conteo)
-from core.schemas import AbrirTurnoIn, CerrarTurnoIn
+from core.schemas import AbrirTurnoIn, CerrarTurnoIn, RetiroCajaIn
 
 router = APIRouter(prefix="/api/v1/turnos", tags=["turnos"])
 
@@ -38,6 +38,56 @@ def _efectivo_del_turno(s: Session, turno: Turno) -> int:
     ).all()
     # Lo que quedó en el cajón: lo cobrado (ya con el descuento aplicado) más la propina.
     return sum(v.total - v.descuento + v.propina for v in ventas)
+
+
+def _retiros_del_turno(s: Session, turno: Turno) -> int:
+    """La plata que salió del cajón DURANTE el turno para ir a comprar cosas.
+
+    Los anulados no cuentan: quedan en el libro para que se vea que existieron,
+    pero no salieron de verdad, así que no se restan del efectivo.
+    """
+    retiros = s.exec(
+        select(RetiroCaja).where(
+            RetiroCaja.turno_id == turno.id,
+            RetiroCaja.anulado == False,          # noqa: E712
+        )
+    ).all()
+    return sum(r.monto for r in retiros)
+
+
+def _efectivo_esperado(s: Session, turno: Turno) -> int:
+    """Lo que DEBERÍA haber en el cajón, en un solo lugar.
+
+    Es fondo + lo que entró en efectivo − lo que salió del cajón. Y "salió" son
+    dos cosas: las propinas de tarjeta que se pagaron en efectivo (el banco no
+    las depositó todavía) y los retiros de medio turno (el pan, el gas). Sin
+    restar los retiros, esa plata aparece en la noche como un faltante que no
+    existe — que es justo lo que el dueño no quiere ver.
+
+    Existe como función y no como tres cuentas sueltas a propósito: antes el
+    cierre, la pantalla y el papel de 80 mm calculaban esto por separado, y el
+    papel ni siquiera restaba las propinas pagadas. Tres fórmulas que tenían que
+    dar lo mismo y no lo daban. Ahora es una.
+    """
+    return (turno.monto_inicial + _efectivo_del_turno(s, turno)
+            - turno.propinas_pagadas - _retiros_del_turno(s, turno))
+
+
+def _retiros_dict(s: Session, turno: Turno) -> list[dict]:
+    """Los retiros del turno, uno por uno, para el cierre y la pantalla."""
+    retiros = s.exec(
+        select(RetiroCaja).where(RetiroCaja.turno_id == turno.id)
+        .order_by(RetiroCaja.creado_at.desc())
+    ).all()
+    return [{
+        "id": r.id,
+        "monto": r.monto,
+        "motivo": r.motivo,
+        "hora": a_local(r.creado_at).strftime("%H:%M"),
+        "hecho_por": r.hecho_por,
+        "anulado": r.anulado,
+        "anulado_por": r.anulado_por,
+    } for r in retiros]
 
 
 def _por_medio(s: Session, turno: Turno) -> dict:
@@ -75,10 +125,27 @@ def _cuadre_de_medios(s: Session, t: Turno) -> list[dict]:
     """
     declarado = _conteo(t.conteo_medios)
     propinas_dichas = _conteo(t.propinas_medios)
+    por_medio = _por_medio(s, t)
+
+    # Qué medios llevan fila: los que la caja REGISTRÓ, más los que el cajero
+    # DECLARÓ aunque la caja no registrara ninguno.
+    #
+    # Ese segundo caso no es un borde raro: es la máquina diciendo que hubo un
+    # débito que acá quedó cobrado como efectivo, o que no quedó. Es el descuadre
+    # más grande que puede haber, y hasta ahora era el único invisible — el
+    # cierre armaba las filas recorriendo las ventas, así que un medio sin
+    # ventas no tenía fila, y lo que el cajero escribió se guardaba en la base
+    # sin aparecer nunca ni en el cierre ni en el papel de 80 mm.
+    medios = [m for m in por_medio if m != "efectivo"]
+    # Se mira también `propinas_dichas`: alguien puede escribir solo la propina
+    # de la máquina sin escribir el total, y esa fila tiene que existir igual.
+    escritos = list(declarado) + [m for m in propinas_dichas if m not in declarado]
+    medios += [m for m in escritos
+               if m in MEDIOS_PAGO and m != "efectivo" and m not in por_medio]
+
     filas = []
-    for medio, d in _por_medio(s, t).items():
-        if medio == "efectivo":
-            continue
+    for medio in medios:
+        d = por_medio.get(medio, {"cantidad": 0, "ventas": 0, "propinas": 0, "cobrado": 0})
         dicho = declarado.get(medio)
         try:
             dicho = int(dicho) if dicho is not None else None
@@ -129,7 +196,7 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         "cerrado_at": a_local(t.cerrado_at).isoformat() if t.cerrado_at else None,
         "monto_inicial": t.monto_inicial,
         "ventas_efectivo": ventas_efectivo,
-        "efectivo_esperado": t.monto_inicial + ventas_efectivo - t.propinas_pagadas,
+        "efectivo_esperado": _efectivo_esperado(s, t),
         "efectivo_contado": t.efectivo_contado,
         "diferencia": t.diferencia,
         "retiro": t.retiro,
@@ -154,6 +221,10 @@ def _turno_dict(s: Session, t: Turno) -> dict:
         # Propinas de tarjeta pagadas en efectivo del cajón: salieron de ahí, así
         # que el cajón tiene que tener menos.
         "propinas_pagadas": t.propinas_pagadas,
+        # La plata que se sacó del cajón durante el turno, uno por uno y sumada.
+        # El total ya está descontado del efectivo esperado de arriba.
+        "retiros": _retiros_dict(s, t),
+        "retiros_total": _retiros_del_turno(s, t),
         # Quiénes pasaron por la caja durante el turno. Es la respuesta a
         # "¿quién estuvo?", que no es lo mismo que "¿quién vendió?".
         "estuvieron": _estuvieron(s, t),
@@ -309,6 +380,58 @@ def abrir(datos: AbrirTurnoIn, s: Session = Depends(get_session),
     return _turno_dict(s, t)
 
 
+@router.post("/retiro")
+def sacar_plata(datos: RetiroCajaIn, s: Session = Depends(get_session),
+                quien: dict = Depends(sesion.exige("caja_retirar"))):
+    """Saca plata del cajón EN MEDIO del turno, para ir a comprar cosas.
+
+    No cierra la caja. Deja una fila firmada —quién, cuánto, cuándo, para qué— y
+    el cuadre de la noche la resta sola del efectivo esperado, así que la plata
+    que se fue a comprar pan no aparece como un faltante.
+
+    No se pide que el cajón tenga tanto efectivo como el retiro: el cajón es la
+    verdad, no el número que calcula el programa (puede haber plata sin contar).
+    La pantalla avisa si se pasa, pero no lo bloquea — igual que en todo el resto
+    del sistema, la repisa manda sobre el saldo.
+    """
+    t = turno_abierto(s)
+    if not t:
+        raise HTTPException(409, "La caja está cerrada. Ábrela antes de sacar plata.")
+    r = RetiroCaja(
+        turno_id=t.id,
+        monto=datos.monto,
+        motivo=datos.motivo,
+        usuario_id=quien.get("id"),
+        hecho_por=quien.get("nombre", ""),
+    )
+    s.add(r)
+    s.commit()
+    return _turno_dict(s, t)
+
+
+@router.post("/retiro/{retiro_id}/anular")
+def anular_retiro(retiro_id: int, s: Session = Depends(get_session),
+                  quien: dict = Depends(sesion.exige("caja_retirar"))):
+    """Deja sin efecto un retiro mal anotado.
+
+    No lo borra: la fila se queda, marcada, con quién la anuló. El libro no
+    esconde que hubo un movimiento; dice que ese no salió de verdad. Un retiro ya
+    anulado no se vuelve a anular.
+    """
+    r = s.get(RetiroCaja, retiro_id)
+    if not r:
+        raise HTTPException(404, "No existe ese retiro")
+    if r.anulado:
+        raise HTTPException(409, "Ese retiro ya estaba anulado")
+    r.anulado = True
+    r.anulado_at = ahora()
+    r.anulado_por = quien.get("nombre", "")
+    s.add(r)
+    s.commit()
+    t = s.get(Turno, r.turno_id)
+    return _turno_dict(s, t)
+
+
 @router.get("/{turno_id}/ventas")
 def ventas_del_turno(turno_id: int, s: Session = Depends(get_session),
                      quien: dict = Depends(sesion.exige("ver_dia"))):
@@ -363,7 +486,10 @@ def cerrar(datos: CerrarTurnoIn, s: Session = Depends(get_session),
     pagadas = min(datos.propinas_pagadas, _propinas(s, t)["tarjeta"])
     t.propinas_pagadas = pagadas
 
-    esperado = t.monto_inicial + _efectivo_del_turno(s, t) - pagadas
+    # La misma fórmula que ve la pantalla y que imprime el papel: fondo + lo que
+    # entró en efectivo − propinas pagadas − retiros del turno. Se calcula DESPUÉS
+    # de guardar propinas_pagadas, porque el helper lo lee del turno.
+    esperado = _efectivo_esperado(s, t)
     contado = total_del_conteo(datos.conteo) if datos.conteo else datos.efectivo_contado
 
     t.efectivo_contado = contado

@@ -352,3 +352,197 @@ def test_se_guarda_la_propina_que_dice_la_maquina(cliente, carta, caja):
     debito = [m for m in r["medios"] if m["medio"] == "debito"][0]
     assert debito["propinas"] == 500, "lo que anotó la caja"
     assert debito["propina_dicha"] == 800, "lo que dice la máquina"
+
+
+# ---------------------------------------------------------------------------
+# El cuadre de un medio que la caja NO registró
+# ---------------------------------------------------------------------------
+"""El caso que pidió el local, y que además tapaba el peor descuadre.
+
+El cierre armaba las filas de tarjeta recorriendo las VENTAS del turno. Así que
+un medio sin ventas no tenía fila: ni en la pantalla para escribir lo que dice
+el comprobante, ni en el cierre guardado, ni en el papel de 80 mm.
+
+Y ese es justo el descuadre más grande que puede haber: la máquina dice que
+pasó un débito de $30.000 que en la caja quedó cobrado como efectivo. El cajón
+aparece con plata de más, la máquina con plata de menos, y no había dónde
+escribirlo para que alguien lo viera.
+"""
+
+
+def test_lo_declarado_de_un_medio_sin_ventas_aparece_en_el_cierre(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    # Una venta en EFECTIVO. La caja no registra ningún débito en todo el turno.
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 13400, "fondo_siguiente": 10000,
+        # La máquina dice que hubo débito. La caja no lo sabe.
+        "medios": {"debito": 30000},
+        "propinas_medios": {"debito": 2000},
+    })
+    assert cierre.status_code == 200, cierre.text
+
+    filas = {f["medio"]: f for f in cierre.json()["medios"]}
+    assert "debito" in filas, (
+        "el débito declarado desapareció del cierre porque no hubo ventas de débito: "
+        "es exactamente el descuadre que no se puede esconder")
+    d = filas["debito"]
+    assert d["cantidad"] == 0 and d["ventas"] == 0
+    assert d["esperado"] == 0            # la caja no registró nada
+    assert d["declarado"] == 30000       # la máquina sí
+    assert d["diferencia"] == 30000      # y eso es lo que hay que ir a buscar
+    assert d["propina_dicha"] == 2000
+
+
+def test_un_medio_con_solo_la_propina_escrita_tambien_deja_fila(cliente, carta):
+    """Se puede anotar la propina de la máquina sin anotar el total."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 0})
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 0, "fondo_siguiente": 0,
+        "propinas_medios": {"transferencia": 1500},
+    })
+    filas = {f["medio"]: f for f in cierre.json()["medios"]}
+    assert filas["transferencia"]["propina_dicha"] == 1500
+    assert filas["transferencia"]["declarado"] is None    # no se inventa un cuadre
+
+
+def test_un_turno_sin_nada_declarado_no_inventa_filas(cliente, carta):
+    """Lo de arriba no puede convertirse en cuatro filas vacías en cada cierre:
+    el papel de 80 mm se llenaría de «Débito: 0» que nadie escribió."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 0})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 3400, "fondo_siguiente": 0})
+    assert cierre.json()["medios"] == []
+
+
+def test_la_pantalla_del_cierre_dibuja_una_fila_por_medio_y_no_por_venta():
+    """La otra mitad del arreglo vive en app.js y no la ve ninguna prueba de API.
+
+    Sin esto, el servidor devuelve bien y la columna igual sale vacía: es lo que
+    se vio en el video del local, con el turno recién abierto.
+    """
+    import io
+    from pathlib import Path
+    js = io.open(Path(__file__).resolve().parents[1] / "static" / "app.js",
+                 encoding="utf-8").read()
+    assert "MEDIOS_QUE_SE_CUADRAN" in js and "function filasDeCuadre" in js
+    ini = js.find("function bloqueTarjetas")
+    cuerpo = js[ini:js.find("\n}", ini)]
+    assert "filasDeCuadre(tu)" in cuerpo, (
+        "bloqueTarjetas volvió a armar las filas desde tu.medios (lo vendido): "
+        "los medios sin ventas no van a tener dónde escribirse")
+    assert "return \"\"" not in cuerpo, (
+        "bloqueTarjetas vuelve a irse en blanco cuando no hubo ventas de tarjeta")
+    ini = js.find("function conectarTarjetas")
+    assert "filasDeCuadre(tu)" in js[ini:js.find("\n}", ini)], (
+        "conectarTarjetas recorre otras filas que las que se dibujaron: "
+        "los campos nuevos quedan muertos")
+
+
+# ---------------------------------------------------------------------------
+# Retiros de plata en medio del turno
+# ---------------------------------------------------------------------------
+"""Sacar efectivo del cajón durante el turno, sin cerrar la caja.
+
+El dueño necesita mandar a comprar cosas —gas, pan, un insumo que faltó— y que
+esa plata quede registrada con quién la sacó. Si no se resta del efectivo
+esperado, aparece de noche como un faltante que no existe: justo lo que el dueño
+no quiere ver.
+"""
+
+
+def test_un_retiro_baja_el_efectivo_esperado(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],  # 3400 efectivo
+        "medio_pago": "efectivo"})
+
+    antes = cliente.get("/api/v1/turnos/actual").json()["turno"]["efectivo_esperado"]
+    assert antes == 13400          # 10000 fondo + 3400 ventas
+
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 5000, "motivo": "gas"})
+    assert r.status_code == 200, r.text
+    t = r.json()
+    assert t["retiros_total"] == 5000
+    assert t["efectivo_esperado"] == 8400        # se restó el retiro
+    assert t["retiros"][0]["motivo"] == "gas"
+    assert t["retiros"][0]["anulado"] is False
+
+
+def test_el_motivo_del_retiro_es_obligatorio(caja):
+    """Un retiro sin motivo no se distingue de un faltante."""
+    assert caja.post("/api/v1/turnos/retiro", json={"monto": 1000, "motivo": ""}).status_code == 422
+    assert caja.post("/api/v1/turnos/retiro", json={"monto": 1000, "motivo": "   "}).status_code == 422
+
+
+def test_no_se_puede_retirar_cero_ni_negativo(caja):
+    assert caja.post("/api/v1/turnos/retiro", json={"monto": 0, "motivo": "x"}).status_code == 422
+    assert caja.post("/api/v1/turnos/retiro", json={"monto": -100, "motivo": "x"}).status_code == 422
+
+
+def test_no_se_retira_con_la_caja_cerrada(cliente):
+    """Sin turno abierto no hay cajón del cual sacar."""
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 1000, "motivo": "pan"})
+    assert r.status_code == 409
+
+
+def test_anular_un_retiro_lo_devuelve_al_cajon(caja):
+    r = caja.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"}).json()
+    rid = r["retiros"][0]["id"]
+    esperado_con_retiro = r["efectivo_esperado"]
+
+    t = caja.post(f"/api/v1/turnos/retiro/{rid}/anular").json()
+    assert t["retiros_total"] == 0
+    assert t["efectivo_esperado"] == esperado_con_retiro + 3000
+    # La fila NO se borra: queda marcada, para que se vea que existió.
+    assert len(t["retiros"]) == 1
+    assert t["retiros"][0]["anulado"] is True
+
+
+def test_un_retiro_anulado_no_se_vuelve_a_anular(caja):
+    r = caja.post("/api/v1/turnos/retiro", json={"monto": 3000, "motivo": "pan"}).json()
+    rid = r["retiros"][0]["id"]
+    assert caja.post(f"/api/v1/turnos/retiro/{rid}/anular").status_code == 200
+    assert caja.post(f"/api/v1/turnos/retiro/{rid}/anular").status_code == 409
+
+
+def test_el_cierre_cuadra_restando_los_retiros(cliente, carta):
+    """La prueba de fondo: el retiro tiene que quedar restado al cerrar, o la
+    caja marca un faltante que no es."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],  # 3400
+        "medio_pago": "efectivo"})
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 2000, "motivo": "servilletas"})
+
+    # En el cajón deberían quedar 10000 + 3400 - 2000 = 11400. Si cuento eso, cuadra.
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 11400, "fondo_siguiente": 10000}).json()
+    assert cierre["diferencia"] == 0
+    assert cierre["retiros_total"] == 2000
+
+
+def test_un_retiro_anulado_no_afecta_el_cierre(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 9000, "motivo": "error"}).json()
+    caja_id = r["retiros"][0]["id"]
+    cliente.post(f"/api/v1/turnos/retiro/{caja_id}/anular")
+    # El retiro se anuló: en el cajón siguen los 10000 del fondo.
+    cierre = cliente.post("/api/v1/turnos/cerrar", json={
+        "efectivo_contado": 10000, "fondo_siguiente": 10000}).json()
+    assert cierre["diferencia"] == 0
+
+
+def test_el_papel_del_cierre_muestra_los_retiros(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 2500, "motivo": "gas"})
+    tid = cliente.get("/api/v1/turnos/actual").json()["turno"]["id"]
+    cliente.post("/api/v1/turnos/cerrar", json={"efectivo_contado": 7500, "fondo_siguiente": 0})
+    html = cliente.get(f"/cierre/{tid}").text
+    assert "SALIÓ DEL CAJÓN" in html and "gas" in html

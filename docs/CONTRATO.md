@@ -332,6 +332,14 @@ Movimiento(id, insumo_id→Insumo, creado_at, tipo, cantidad, saldo_despues,
 Turno(... , abierto_por_id→Usuario, cerrado_por_id→Usuario)
 Venta(... , usuario_id→Usuario, anulada_por_id→Usuario)
     # NULL en las filas anteriores al login: a esas no se les inventa un autor.
+
+RetiroCaja(id, turno_id→Turno, monto, motivo, creado_at,
+           usuario_id→Usuario, hecho_por, anulado, anulado_at, anulado_por)
+    # La plata que sale del cajón EN MEDIO del turno, para comprar cosas sin
+    # cerrar la caja. Libro de solo-agregar, como Movimiento, pero de PLATA y no
+    # de inventario. El motivo nunca va vacío. Se resta del efectivo esperado.
+    # Se corrige anulando (la fila queda), no borrando. NO es Turno.retiro, que
+    # es lo que se lleva el dueño al cerrar.
 ```
 
 ### Reglas de integridad
@@ -436,12 +444,28 @@ impresora térmica **y** con cualquier impresora normal, sin drivers ni ESC/POS.
 ```
 GET  /api/v1/turnos/actual
 GET  /api/v1/turnos/denominaciones
-POST /api/v1/turnos/abrir     {cajero, conteo}
-POST /api/v1/turnos/cerrar    {conteo, fondo_siguiente, medios, nota}
+POST /api/v1/turnos/abrir              {cajero, conteo}
+POST /api/v1/turnos/cerrar             {conteo, fondo_siguiente, medios, nota}
+POST /api/v1/turnos/retiro             {monto, motivo}      ← sacar plata en medio del turno
+POST /api/v1/turnos/retiro/{id}/anular
 ```
-El cierre calcula: `esperado = monto_inicial + ventas en efectivo del turno` y guarda la
-`diferencia` (contado − esperado). **Se guarda aunque descuadre** — ocultar el descuadre
-sería justamente lo contrario a lo que sirve.
+El cierre calcula: `esperado = monto_inicial + ventas en efectivo − propinas de tarjeta
+pagadas en efectivo − retiros del turno`, y guarda la `diferencia` (contado − esperado).
+**Se guarda aunque descuadre** — ocultar el descuadre sería justamente lo contrario a lo
+que sirve. Esa cuenta vive en **una sola función** (`turnos._efectivo_esperado`): la
+pantalla, el cierre y el papel de 80 mm la llaman a ella. Antes cada uno la calculaba por
+su lado y el papel ni siquiera restaba las propinas pagadas — tres fórmulas que tenían que
+dar lo mismo y no lo daban.
+
+**Sacar plata en medio del turno** (`RetiroCaja`) es para ir a comprar cosas —gas, pan, un
+insumo que faltó— sin cerrar la caja. Es un libro de solo-agregar con quién, cuánto, cuándo
+y para qué; el motivo es obligatorio, porque un retiro sin motivo no se distingue de un
+faltante. **Lo puede hacer cualquiera** (permiso `caja_retirar`, dueño y cajero): el cajero
+es el que está solo en la mañana, y lo que cuida la plata no es un permiso sino que cada
+retiro queda firmado. Se corrige anulando, no borrando: la fila queda, con quién la anuló.
+Y el cuadre lo resta solo del efectivo esperado, o esa plata aparecería de noche como un
+faltante que no existe. **No es** el `retiro` del cierre, que es lo que se lleva el dueño al
+final del día.
 
 **El arqueo se cuenta por denominación**, no se escribe un total. `conteo` es
 `{"10000": 2, "500": 6}` y el servidor lo suma con `total_del_conteo()`, que ignora

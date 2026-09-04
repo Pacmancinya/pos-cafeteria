@@ -717,6 +717,28 @@ html,body{overscroll-behavior:none}
   .tarjetas__esperado{text-align:left}
 }
 
+/* ---------- sacar plata del cajón en medio del turno ---------- */
+.retiros{
+  border:1px solid var(--linea);border-radius:12px;padding:14px 16px;
+  margin-bottom:16px;background:#FFF8EE;
+}
+.retiros__cab{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.retiros__cab b{font-size:15px}
+.retiros__lista{margin-top:12px}
+.retiros__fila{
+  display:flex;gap:12px;align-items:center;justify-content:space-between;
+  padding:9px 0;border-top:1px solid #F1E7DA;
+}
+.retiros__que b{font-size:15px;font-variant-numeric:tabular-nums}
+.retiros__que small{display:block;color:var(--suave);font-size:12px;margin-top:2px}
+.retiros__fila.es-anulado .retiros__que{opacity:.5;text-decoration:line-through}
+.retiros__total{
+  margin-top:10px;padding-top:10px;border-top:1px solid #F1E7DA;
+  text-align:right;font-size:14px;font-variant-numeric:tabular-nums;
+}
+.retiros__form{margin-top:12px;padding-top:12px;border-top:1px solid #F1E7DA}
+.retiros__form-pie{display:flex;gap:10px;justify-content:flex-end}
+
 /* ---------- resumen del turno, en el cierre ---------- */
 .resumen-turno{
   border:1px solid var(--linea);border-radius:12px;overflow:hidden;

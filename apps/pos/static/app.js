@@ -1344,6 +1344,7 @@ function pintarCerrarCaja(tu) {
     ${ajena ? `<div class="aviso-ajena">Esta caja la abrió <b>${esc(tu.abrio)}</b>.
       La estás cerrando tú, y así va a quedar escrito en el cierre y en el
       registro del mes.</div>` : ""}
+    ${retirosDelTurnoHTML(tu)}
     <div class="cierre">
       <div class="cierre__col">
         <div class="cierre__paso"><b>1</b> Cuenta la plata del cajón</div>
@@ -1371,6 +1372,109 @@ function pintarCerrarCaja(tu) {
   conectarArqueo(() => { if ($("#zonaCuadre").dataset.visto) mostrarCuadre(tu); });
 
   $("#verCuadre").onclick = () => mostrarCuadre(tu);
+}
+
+/* ---- sacar plata del cajón en medio del turno ----
+   El dueño manda a comprar gas o pan sin cerrar la caja, y esa plata tiene que
+   quedar firmada. Va acá arriba, en la misma pantalla que abre el chip de la
+   caja, porque es donde se maneja el cajón; separado del cierre para que no se
+   confunda "saqué plata para el pan" con "estoy cerrando el día".
+
+   Cualquiera puede sacar —el cajero es el que está solo en la mañana— y por eso
+   lo que la cuida no es un permiso: es que cada retiro dice quién fue. */
+function retirosDelTurnoHTML(tu) {
+  const retiros = tu.retiros || [];
+  const vivos = retiros.filter((r) => !r.anulado);
+  const total = tu.retiros_total || 0;
+  return `
+    <div class="retiros" id="retirosTurno">
+      <div class="retiros__cab">
+        <div>
+          <b>¿Sacaste plata del cajón?</b>
+          <p class="ayuda" style="margin:2px 0 0;font-size:12.5px">Para ir a comprar
+            algo sin cerrar la caja. Queda anotado quién y para qué.</p>
+        </div>
+        <button class="btn btn--fantasma btn--chico" data-sacar-plata>Sacar plata</button>
+      </div>
+      <div id="sacarPlataForm" hidden></div>
+      ${retiros.length ? `
+        <div class="retiros__lista">
+          ${retiros.map((r) => `
+            <div class="retiros__fila ${r.anulado ? "es-anulado" : ""}">
+              <div class="retiros__que">
+                <b>${clp(r.monto)}</b> · ${esc(r.motivo)}
+                <small>${esc(r.hora)}${r.hecho_por ? " · " + esc(r.hecho_por) : ""}${
+                  r.anulado ? " · anulado" + (r.anulado_por ? " por " + esc(r.anulado_por) : "") : ""}</small>
+              </div>
+              ${r.anulado ? "" : `<button class="btn btn--fantasma btn--chico"
+                data-anular-retiro="${r.id}">Anular</button>`}
+            </div>`).join("")}
+        </div>
+        <div class="retiros__total">Salió del cajón en el turno: <b>${clp(total)}</b></div>
+      ` : ""}
+    </div>`;
+}
+
+/* El formulario chico se abre dentro del mismo panel: dos campos y confirmar.
+   No abre otra ventana porque se hace con el cliente esperando y una capa arriba
+   de otra en una pantalla chica es justo lo que enreda. */
+function abrirFormRetiro(tu) {
+  const caja = $("#sacarPlataForm");
+  if (!caja) return;
+  const esperado = tu.efectivo_esperado;
+  caja.hidden = false;
+  caja.innerHTML = `
+    <div class="retiros__form">
+      <label class="campo"><span>¿Cuánto sacas?</span>
+        <input id="rMonto" type="text" inputmode="numeric" placeholder="0" autocomplete="off"></label>
+      <label class="campo"><span>¿Para qué?</span>
+        <input id="rMotivo" type="text" placeholder="Ej: gas, pan" autocomplete="off"></label>
+      <div id="rAviso" class="ayuda" style="margin:-4px 0 10px;font-size:12.5px"></div>
+      <div class="retiros__form-pie">
+        <button class="btn btn--fantasma" data-cerrar-form-retiro>Cancelar</button>
+        <button class="btn btn--cobrar" id="rConfirmar" style="width:auto">Sacar del cajón</button>
+      </div>
+    </div>`;
+  const monto = $("#rMonto");
+  const aviso = $("#rAviso");
+  const revisar = () => {
+    const m = soloNumeros(monto.value);
+    // El cajón es la verdad, no este número: por eso avisa y no bloquea. Pero si
+    // sacas más de lo que el programa cree que hay, conviene decirlo — casi
+    // siempre es un cero de más.
+    if (m > esperado && esperado >= 0) {
+      aviso.innerHTML = `Ojo: el programa cree que en el cajón hay <b>${clp(esperado)}</b>.
+        Si igual los tienes, sácalos.`;
+    } else { aviso.textContent = ""; }
+  };
+  monto.addEventListener("input", revisar);
+  setTimeout(() => monto.focus(), 40);
+  $("#rConfirmar").onclick = () => {
+    const m = soloNumeros(monto.value);
+    const motivo = ($("#rMotivo").value || "").trim();
+    if (!m) return avisar("Escribe cuánto sacas", true);
+    if (!motivo) return avisar("Escribe para qué sacas la plata", true);
+    api("/turnos/retiro", { method: "POST",
+      body: JSON.stringify({ monto: m, motivo }) })
+      .then((t) => { avisar(`Sacaste ${clp(m)} del cajón`); refrescarCierre(t); })
+      .catch((e) => avisar(e.message, true));
+  };
+}
+
+function anularRetiro(id) {
+  if (!confirm("¿Anular este retiro? Vuelve a contar como plata que sigue en el cajón.")) return;
+  api(`/turnos/retiro/${id}/anular`, { method: "POST" })
+    .then((t) => { avisar("Retiro anulado"); refrescarCierre(t); })
+    .catch((e) => avisar(e.message, true));
+}
+
+/* Después de sacar o anular, se redibuja el cierre con el turno nuevo —el
+   efectivo esperado ya viene con el retiro restado— sin perder lo que se llevaba
+   contado: conteoActual vive en memoria y pintarArqueo lo repinta. */
+function refrescarCierre(turnoNuevo) {
+  if (turnoNuevo && turnoNuevo.id) { TURNO = { abierto: true, turno: turnoNuevo,
+    fondo_anterior: TURNO.fondo_anterior }; }
+  pintarCerrarCaja(TURNO.turno);
 }
 
 const propinasPorPagar = (tu) => (tu.propinas && tu.propinas.tarjeta) || 0;
@@ -1404,6 +1508,8 @@ function mostrarCuadre(tu) {
         <div class="cuadre ${ok ? "cuadre--ok" : "cuadre--mal"}">
           <div class="cuadre__linea"><span>Fondo con el que abrió</span><span>${clp(tu.monto_inicial)}</span></div>
           <div class="cuadre__linea"><span>Ventas en efectivo</span><span>${clp(tu.ventas_efectivo)}</span></div>
+          ${tu.retiros_total ? `<div class="cuadre__linea"><span>Lo que sacaste del cajón</span>
+            <span>−${clp(tu.retiros_total)}</span></div>` : ""}
           ${pagadas ? `<div class="cuadre__linea"><span>Propinas que pagaste en efectivo</span>
             <span>−${clp(pagadas)}</span></div>` : ""}
           <div class="cuadre__linea"><span>Debería haber</span><span>${clp(esperado)}</span></div>
@@ -1428,6 +1534,9 @@ function mostrarCuadre(tu) {
           aparece como si faltara.</p>` : ""}
         <label class="campo"><span>¿Cuánto dejas de fondo para mañana?</span>
           <input id="tFondo" type="text" inputmode="numeric" value="${fondoPrevio || ""}" placeholder="0"></label>
+        <p class="ayuda" style="margin:-6px 0 10px;font-size:12.5px">Es plata en
+          <b>efectivo</b>, la que queda en el cajón. La tarjeta y las transferencias
+          no entran acá: ésas ya están en el banco.</p>
         <div class="medios-turno" id="tRetiro"></div>
         <label class="campo"><span>Nota (opcional)</span>
           <input id="tNota" type="text" value="${esc(notaPrevia)}"
@@ -1436,8 +1545,16 @@ function mostrarCuadre(tu) {
     </div>`;
 
   const pintarRetiro = () => {
-    const fondo = Math.min(soloNumeros($("#tFondo").value), contado);
-    $("#tRetiro").innerHTML = `Te llevas del cajón: <b>${clp(contado - fondo)}</b>`;
+    const escrito = soloNumeros($("#tFondo").value);
+    const fondo = Math.min(escrito, contado);
+    // Si pide dejar más de lo que contó, el fondo se recorta a lo que hay. Antes
+    // el número se cambiaba solo, en silencio, y el cajero no entendía por qué;
+    // ahora se dice, porque un recorte callado parece un error del programa.
+    const recorte = escrito > contado
+      ? `<div class="ayuda" style="margin-top:4px;font-size:12px">Contaste ${clp(contado)}
+         en el cajón, así que no puedes dejar más que eso de fondo.</div>` : "";
+    $("#tRetiro").innerHTML =
+      `Te llevas del cajón (efectivo): <b>${clp(contado - fondo)}</b>${recorte}`;
   };
   $("#tFondo").addEventListener("input", pintarRetiro);
   pintarRetiro();
@@ -2247,9 +2364,31 @@ function resumenDelTurno(tu, ciego) {
    Lo esperado incluye la propina: la máquina le cobró al cliente el total con
    propina adentro, así que compararlo contra lo vendido a secas daría una
    diferencia falsa todos los días, justo del tamaño de las propinas. */
+/* Los medios que se cuadran contra un papel de afuera: todos menos el efectivo,
+   que se cuenta. Salen de NOMBRE_MEDIO —la lista de lo que la caja sabe cobrar—
+   y NO de lo que se vendió, y ahí está el cambio.
+
+   Antes la fila existía solo si la CAJA había registrado una venta de ese medio.
+   O sea que el descuadre más grande posible era el único invisible: si en la
+   máquina pasó un débito que acá quedó como efectivo, o que no quedó, no había
+   dónde escribir lo que dice el comprobante. Con el turno recién abierto la
+   columna quedaba vacía del todo, que es como se vio en la pantalla del local. */
+const MEDIOS_QUE_SE_CUADRAN = Object.keys(NOMBRE_MEDIO).filter((m) => m !== "efectivo");
+
+/* La fila de cada medio: la que armó el servidor si hubo ventas, o una en cero
+   si no las hubo. `tu.medios` solo trae los que tuvieron. */
+function filasDeCuadre(tu) {
+  const registrados = {};
+  (tu.medios || []).forEach((m) => { registrados[m.medio] = m; });
+  return MEDIOS_QUE_SE_CUADRAN.map((medio) => registrados[medio] || {
+    medio, nombre: NOMBRE_MEDIO[medio] || medio,
+    cantidad: 0, ventas: 0, propinas: 0, esperado: 0,
+    declarado: null, diferencia: null, propina_dicha: null,
+  });
+}
+
 function bloqueTarjetas(tu) {
-  const medios = tu.medios || [];
-  if (!medios.length) return "";
+  const medios = filasDeCuadre(tu);
   return `
     <div class="tarjetas">
       <div class="tarjetas__tit">¿Cuánto dice la máquina?</div>
@@ -2260,8 +2399,7 @@ function bloqueTarjetas(tu) {
         <div class="tarjetas__fila" data-medio-fila="${m.medio}">
           <div>
             <b>${esc(m.nombre)}</b>
-            <div class="tarjetas__detalle">${m.cantidad} venta${m.cantidad === 1 ? "" : "s"}
-              · ${clp(m.ventas)}${m.propinas ? ` + ${clp(m.propinas)} de propina` : ""}</div>
+            <div class="tarjetas__detalle">${detalleDelMedio(m)}</div>
           </div>
           <div class="tarjetas__esperado">deberían ser<b>${clp(m.esperado)}</b></div>
           <input type="text" inputmode="numeric" data-dice="${m.medio}"
@@ -2391,8 +2529,15 @@ function listaDeVentas(ventas, resaltar) {
   </div>`;
 }
 
+/* Lo que la caja registró de ese medio, para la línea chica bajo el nombre. */
+function detalleDelMedio(m) {
+  if (!m.cantidad) return "la caja no registró ninguna";
+  const propina = m.propinas ? " + " + clp(m.propinas) + " de propina" : "";
+  return m.cantidad + " venta" + (m.cantidad === 1 ? "" : "s") + " · " + clp(m.ventas) + propina;
+}
+
 function conectarTarjetas(tu) {
-  (tu.medios || []).forEach((m) => {
+  filasDeCuadre(tu).forEach((m) => {
     const campo = document.querySelector(`[data-dice="${m.medio}"]`);
     if (!campo) return;
     const pintar = async () => {
@@ -2411,6 +2556,22 @@ function conectarTarjetas(tu) {
       // Acá está el trabajo de verdad: decir CUÁL venta puede ser.
       const todas = await ventasDelTurno(tu.id);
       const deEsteMedio = todas.filter((v) => v.medio_pago === m.medio && !v.anulada);
+
+      // El caso que antes no se podía ni escribir: la máquina dice que hubo y la
+      // caja no registró NINGUNA. No es una venta que calce mal, es una venta que
+      // se cobró con otra forma de pago. Buscarla entre las ventas de este medio
+      // sería buscar en una lista vacía, así que se dice derecho qué pasó.
+      if (!deEsteMedio.length) {
+        pista.innerHTML = `<div class="pista">
+          <b>La caja no registró ninguna venta en ${esc(m.nombre.toLowerCase())} este turno.</b>
+          <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Si la máquina dice que
+            sí hubo, esa venta quedó cobrada de otra forma —casi siempre efectivo—.
+            Búscala en <b>El día</b>, anúlala y vuelve a cobrarla como corresponde: si no,
+            el cajón va a aparecer con plata de más y la máquina con plata de menos.</p>
+        </div>`;
+        return;
+      }
+
       const calzan = loQueExplicaLaDiferencia(deEsteMedio, dif);
 
       pista.innerHTML = `
@@ -2883,6 +3044,13 @@ document.addEventListener("click", (e) => {
     actualizarCobro();
     return;
   }
+  if (cerca("data-sacar-plata")) return abrirFormRetiro(TURNO.turno);
+  if (cerca("data-cerrar-form-retiro")) {
+    const f = $("#sacarPlataForm");
+    if (f) { f.hidden = true; f.innerHTML = ""; }
+    return;
+  }
+  if (cerca("data-anular-retiro")) return anularRetiro(+cerca("data-anular-retiro").dataset.anularRetiro);
   if (cerca("data-cerrar-capa")) {
     $$(".capa").forEach((c) => c.classList.remove("is-on"));
     // La puerta vuelve si se cerró el arqueo sin abrir la caja. Sin esto el

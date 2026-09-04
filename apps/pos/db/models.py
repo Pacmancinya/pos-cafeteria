@@ -158,6 +158,42 @@ class VentaLinea(SQLModel, table=True):
     venta: Optional[Venta] = Relationship(back_populates="lineas")
 
 
+class RetiroCaja(SQLModel, table=True):
+    """La plata que sale del cajón EN MEDIO del turno, para comprar cosas sin
+    cerrar la caja: gas, pan, un insumo que faltó.
+
+    Es un libro, como Movimiento con el inventario: cada retiro es una fila y
+    queda para siempre quién lo sacó, cuánto, cuándo y para qué. Eso es lo que
+    pidió el dueño, y es la única defensa que tiene: como CUALQUIERA puede sacar,
+    lo que cuida la plata no es un permiso, es que todo queda firmado. Un retiro
+    sin motivo es indistinguible de un faltante, así que el motivo no puede ir
+    vacío.
+
+    NO es el retiro del CIERRE (`Turno.retiro`), que es lo que se lleva el dueño
+    al final del día. Éste sale con el local abierto, y el cuadre de la noche
+    tiene que RESTARLO del efectivo esperado: si no, esa plata que se fue a
+    comprar pan aparece como un faltante que no existe, que es justo lo que el
+    dueño no quiere ver.
+
+    Se corrige como una venta —anulando, no borrando—: la fila anulada se queda,
+    con quién la anuló. Esconder que salió plata sería lo contrario de para lo
+    que sirve el libro.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    turno_id: int = Field(foreign_key="turno.id", index=True)
+    monto: int = 0                        # CLP enteros, siempre > 0
+    motivo: str = ""                      # para qué salió; nunca vacío
+    creado_at: datetime = Field(default_factory=ahora, index=True)
+    # Quién lo sacó. Nombre COPIADO además del id, igual que VentaLinea congela
+    # el precio: si a la persona la renombran o la sacan, el retiro sigue
+    # diciendo quién fue ese día.
+    usuario_id: Optional[int] = Field(default=None, foreign_key="usuario.id")
+    hecho_por: str = ""
+    anulado: bool = False
+    anulado_at: Optional[datetime] = None
+    anulado_por: str = ""
+
+
 # ===========================================================================
 # Inventario
 # ===========================================================================

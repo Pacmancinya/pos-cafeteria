@@ -34,6 +34,12 @@ CABECERA = [
     "Propinas efectivo", "Propinas tarjeta",
     "Ventas del turno", "Total vendido",
     "Detalle por medio de pago", "Descuadre de tarjetas", "Nota",
+    # "Sacado en el turno" va AL FINAL a propósito, aunque su lugar natural sería
+    # junto a "Ventas en efectivo": el CSV del mes ya existe en el local y se le
+    # agregan filas sin reescribir la cabecera. Una columna metida en el medio
+    # correría todas las de la derecha y dejaría el mes en curso desalineado; al
+    # final, las filas viejas quedan con esa celda vacía y nada más se mueve.
+    "Sacado en el turno",
 ]
 
 
@@ -81,6 +87,7 @@ def anotar_cierre(turno: dict) -> str:
             propinas.get("efectivo", 0), propinas.get("tarjeta", 0),
             cuantas, vendido,
             detalle, descuadre, turno.get("nota", ""),
+            turno.get("retiros_total", 0),          # al final: ver CABECERA
         ]
 
         with io.open(ruta, "a", encoding="utf-8-sig", newline="") as f:
