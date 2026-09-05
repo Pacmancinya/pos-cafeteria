@@ -837,6 +837,13 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
 </div>
 <div class="rescate__pista" id="pista">Mueve el mouse o toca la pantalla para ver los controles</div>
 
+<!-- La MISMA biblioteca de dibujos que usa la caja. Sin esto, la pantalla tenía
+     su propia copia con 8 dibujos de cafetería y mostraba una taza de café en
+     lugar del sándwich (o la botella, o la lata) que el dueño eligió en la
+     carta. Las dos listas se habían separado y nadie lo notó hasta que el local
+     puso un sándwich. Es de solo lectura y viene del mismo servidor. -->
+<script src="/static/dibujos.js?v=6"></script>
+
 <script>
 /* ==========================================================
    1. CONFIG — todo lo editable del local vive aca
@@ -1153,7 +1160,21 @@ function alfajor(o) {
 }
 
 const ART = { mug, taza, vaso, frappe, croissant, torta, brownie, alfajor };
-const dibujar = (a) => `<svg class="art" viewBox="0 0 240 240" aria-hidden="true">${(ART[a.k] || mug)(a)}</svg>`;
+
+/* Los dibujos de acá son OCHO y son de cafetería. Los de la caja son 93 e
+   incluyen sándwich, pan, empanada, botella, lata, helado… Cuando el dueño le
+   ponía un sándwich a un producto, la pantalla no lo conocía y lo cambiaba por
+   la taza de café: el televisor mostraba un icono distinto al de la carta.
+
+   Así que lo que viene DEL PUNTO DE VENTA se dibuja con la MISMA biblioteca que
+   usa la caja (`dibujos.js`), y el televisor muestra exactamente el icono que el
+   dueño eligió. Lo de acá abajo se queda para la carta de ejemplo y para el
+   editor propio de la pantalla, que usan dibujos con colores a medida
+   (`liq`, `foam`, `hielo`) que la biblioteca compartida no recibe. */
+const dibujar = (a) => {
+  if (a && a.compartido && typeof dibujo === "function") return dibujo(a);
+  return `<svg class="art" viewBox="0 0 240 240" aria-hidden="true">${(ART[a.k] || mug)(a)}</svg>`;
+};
 
 /* ==========================================================
    4. El logo liquido — metaballs + luz especular
@@ -1949,12 +1970,15 @@ function desdePV(d) {
     throw new Error("no trae categorías");
   const armar = (p) => {
     if (!p || !p.nombre) throw new Error("hay un producto sin nombre");
-    const receta = DIBUJOS[p.dibujo] ? p.dibujo : "mug";
     const it = {
       n: String(p.nombre).slice(0, 60),
       d: String(p.descripcion || "").slice(0, 120),
       p: Math.max(0, parseInt(p.precio, 10) || 0),
-      art: clonar(ART_DEFECTO[receta])
+      // `compartido` manda el dibujo a la biblioteca de la caja: es la única
+      // forma de que el televisor muestre el MISMO icono que la carta. Antes acá
+      // se traducía contra una lista local de 18 dibujos de cafetería y todo lo
+      // que no estuviera —un sándwich, una botella— salía como taza de café.
+      art: { k: String(p.dibujo || "mug"), compartido: 1 }
     };
     if (p.color) it.art.col = String(p.color);
     if (p.antes) it.antes = parseInt(p.antes, 10) || 0;

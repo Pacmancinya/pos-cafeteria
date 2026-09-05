@@ -5,7 +5,16 @@
    quietos: en la caja puede haber 30 en pantalla y no tiene sentido que
    todos echen vapor.
    Lienzo de 240 x 240. Uso: dibujo({k:"mug", col:"#3A1B0C"})
+
+   TODO va dentro de una función y afuera sale UNA sola cosa: `dibujo`. Antes
+   este archivo declaraba sus ~100 nombres sueltos en el ámbito global (`ART`,
+   `mug`, `taza`, `_uid`…). Mientras solo lo cargaba la caja no molestaba, pero
+   al cargarlo también la pantalla del local —que tiene sus propios `ART`, `mug`
+   y `_uid`— los `const` chocaban y el navegador tiraba abajo el script ENTERO:
+   la pantalla quedaba en negro. Una biblioteca no puede ensuciar la casa de
+   quien la usa.
    ========================================================== */
+(function () {
 let _uid = 0;
 const uid = () => "u" + (++_uid);
 
@@ -661,3 +670,7 @@ const dibujo = (a) => {
   // donde realmente hay algo dibujado.
   return `<svg class="art" viewBox="22 38 196 182" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${(ART[art.k] || mug)(art)}</svg>`;
 };
+
+// Lo único que sale: la caja y la pantalla llaman `dibujo(...)` a secas.
+window.dibujo = dibujo;
+})();
