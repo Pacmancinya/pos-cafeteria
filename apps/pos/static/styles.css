@@ -130,9 +130,22 @@ button{font-family:inherit;cursor:pointer}
 .grilla{
   flex:1;overflow:auto;display:grid;gap:12px;align-content:start;
   grid-template-columns:repeat(auto-fill,minmax(158px,1fr));
+  /* EL ALTO DE LA FILA SE DEFINE ACÁ, no lo pone el azulejo. Suena a detalle y
+     no lo es: así estaba antes y los productos se veían encimados unos sobre
+     otros.
+     El azulejo pedía ser cuadrado (`aspect-ratio:1`) y la fila se dejaba llevar
+     por su contenido. Pero como las columnas son flexibles (`1fr`), cuando el
+     navegador mide la fila todavía no sabe cuánto va a medir el azulejo de
+     ancho — así que ignora el cuadrado y mide solo el texto: 42 px. Después
+     pintaba el azulejo de 193 px dentro de una fila de 42 y el dibujo se
+     DESBORDABA sobre la fila de abajo.
+     Con dos o tres productos casi no se notaba; con 30 en una categoría se veían
+     todos superpuestos, y así lo reportó el local. Con la fila definida acá el
+     azulejo la llena (`height:100%`) y no hay nada que adivinar. */
+  grid-auto-rows:minmax(158px,auto);
 }
 .prod{
-  aspect-ratio:1;position:relative;overflow:hidden;
+  height:100%;position:relative;overflow:hidden;
   background:var(--tarjeta);border:1px solid var(--linea);border-radius:16px;
   padding:0;box-shadow:var(--sombra);cursor:pointer;
   display:flex;flex-direction:column;
@@ -514,7 +527,11 @@ button{font-family:inherit;cursor:pointer}
 .buscador input{height:var(--toque-alto);padding:0 56px 0 52px;font-size:17px}
 .buscador__lupa{left:18px;width:21px;height:21px}
 .buscador__x{right:6px;width:var(--toque);height:var(--toque);font-size:18px}
-.grilla{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px}
+/* La fila crece junto con la columna: si acá el azulejo es más ancho, también
+   tiene que ser más alto, o el dibujo queda achatado. Ver el comentario largo
+   de .grilla más arriba: el alto lo manda la grilla, nunca el azulejo. */
+.grilla{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;
+        grid-auto-rows:minmax(168px,auto)}
 
 .pedido{width:420px}
 .linea{min-height:64px;gap:8px;padding:8px 4px}
