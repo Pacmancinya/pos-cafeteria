@@ -146,14 +146,12 @@ def _por_medio(s: Session, turno: Turno) -> dict:
 
     for v in ventas:
         pagos = _pagos_de(s, v)
-        # `cantidad` cuenta ventas, no pagos: una venta mixta es UNA venta. Se le
-        # suma al medio de su primer pago para no contarla dos veces.
-        primero = True
+        # `cantidad` cuenta las ventas que pasaron por CADA medio: una venta
+        # mixta suma 1 en efectivo y 1 en débito, porque por la máquina pasó una
+        # de verdad y es contra el comprobante de la máquina que se cuadra.
         for medio, monto in pagos:
             d = _fila(medio)
-            if primero:
-                d["cantidad"] += 1
-                primero = False
+            d["cantidad"] += 1
             d["ventas"] += monto
             d["total"] += monto        # nombre viejo: lo vendido sin propina
         # La propina va al medio_pago de la venta. En un pago mixto la venta va

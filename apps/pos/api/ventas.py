@@ -300,12 +300,28 @@ def resumen(
     validas = [v for v in ventas if v.estado == "pagada"]
     anuladas = [v for v in ventas if v.estado == "anulada"]
 
+    from apps.pos.api.turnos import _pagos_de
+
     por_medio = {m: {"cantidad": 0, "total": 0} for m in MEDIOS_PAGO}
     total = propinas = descuentos = 0
     for v in validas:
         cobrado = v.total - v.descuento          # lo que realmente entró
-        por_medio[v.medio_pago]["cantidad"] += 1
-        por_medio[v.medio_pago]["total"] += cobrado
+        # Se reparte por medio de pago con el mismo criterio que el cierre. Antes
+        # acá se hacía `por_medio[v.medio_pago]`, y desde que existe el pago mixto
+        # ese campo puede valer "mixto", que no es una de las claves: UNA sola
+        # venta mixta reventaba la pantalla entera de El día con un KeyError y el
+        # dueño se quedaba sin informe del día. Repartiendo por partes, además,
+        # la mitad en efectivo de un pago mixto aparece donde tiene que aparecer.
+        for medio, monto in _pagos_de(s, v):
+            if medio not in por_medio:
+                continue
+            # La venta se cuenta en CADA medio que tocó. Una mixta suma 1 en
+            # efectivo y 1 en débito: la pregunta que contesta esta columna es
+            # "cuántas ventas pasaron por acá", y por la máquina pasó una.
+            # Contándola en uno solo, el otro quedaba mostrando plata con "0
+            # ventas" al lado, que no se entiende.
+            por_medio[medio]["cantidad"] += 1
+            por_medio[medio]["total"] += monto
         total += cobrado
         descuentos += v.descuento
         propinas += v.propina
@@ -320,6 +336,22 @@ def resumen(
 
     top = sorted(vendidos.items(), key=lambda kv: kv[1]["cantidad"], reverse=True)[:10]
     dias = (d2 - d1).days + 1
+
+    # La plata que se sacó del cajón en el día. El local lo pidió con estas
+    # palabras: "no se resta de lo que sacó, o que tenga un cuadro del dinero
+    # sacado". Tenía razón: los retiros ya se restaban en el CIERRE, pero en El
+    # día no aparecían por ninguna parte, así que el efectivo del informe no
+    # calzaba con lo que quedaba en el cajón y no había dónde mirar por qué.
+    from apps.pos.db.models import RetiroCaja
+    movs = s.exec(
+        select(RetiroCaja).where(
+            RetiroCaja.creado_at >= ini, RetiroCaja.creado_at < fin,
+            RetiroCaja.anulado == False,          # noqa: E712
+        ).order_by(RetiroCaja.creado_at.desc())
+    ).all()
+    sacado = sum(r.monto for r in movs if r.tipo == "retiro")
+    metido = sum(r.monto for r in movs if r.tipo == "ingreso")
+
     return {
         "fecha": dia.isoformat(),
         "desde": d1.isoformat(),
@@ -337,4 +369,17 @@ def resumen(
         "anuladas": {"cantidad": len(anuladas),
                      "total": sum(v.total - v.descuento for v in anuladas)},
         "mas_vendidos": [{"nombre": n, **d} for n, d in top],
+        # Lo que salió y entró del cajón a mano, y el detalle de cada uno.
+        "sacado": sacado,
+        "metido": metido,
+        # Lo que queda en efectivo del día una vez restado lo que se sacó: es el
+        # número que el dueño esperaba ver y no estaba.
+        "efectivo_neto": por_medio["efectivo"]["total"] - sacado + metido,
+        "movimientos_caja": [{
+            "tipo": r.tipo,
+            "monto": r.monto,
+            "motivo": r.motivo,
+            "hora": a_local(r.creado_at).strftime("%H:%M"),
+            "hecho_por": r.hecho_por,
+        } for r in movs],
     }

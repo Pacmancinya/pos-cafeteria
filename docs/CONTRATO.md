@@ -432,6 +432,7 @@ GET  /api/v1/ventas?fecha=AAAA-MM-DD    → ventas del día (sin líneas, livian
 GET  /api/v1/ventas/{id}                → una venta con sus líneas
 POST /api/v1/ventas/{id}/anular         → {motivo}
 GET  /api/v1/resumen?fecha=AAAA-MM-DD   → totales del día por medio de pago + neto/IVA
+                                          + sacado / metido / efectivo_neto / movimientos_caja
 ```
 
 `POST /api/v1/ventas` recibe:
@@ -506,6 +507,14 @@ suma tiene que dar EXACTO lo cobrado (sin propina: un pago mixto va sin propina)
 cada parte como una fila de `Pago`, la venta queda con `medio_pago="mixto"`, y el cuadre lee
 las partes: la de efectivo va al cajón, la de tarjeta se cuadra contra la máquina. Una venta
 de un solo medio no escribe `Pago` y sigue igual que siempre.
+
+> **Todo lo que reparte por medio de pago pasa por `turnos._pagos_de`.** No se puede indexar
+> por `venta.medio_pago` a secas: desde el pago mixto ese campo puede valer `"mixto"`, que no
+> es una forma de pago. En la 2.14 `/resumen` lo hacía y **una sola venta mixta tumbaba la
+> pantalla de El día con un KeyError**, dejando al dueño sin informe. Al repartir por partes,
+> además, la mitad en efectivo de un pago mixto suma donde tiene que sumar. Una venta mixta
+> cuenta 1 en cada medio que tocó: la pregunta es "cuántas ventas pasaron por acá", y por la
+> máquina pasó una.
 
 **El arqueo se cuenta por denominación**, no se escribe un total. `conteo` es
 `{"10000": 2, "500": 6}` y el servidor lo suma con `total_del_conteo()`, que ignora

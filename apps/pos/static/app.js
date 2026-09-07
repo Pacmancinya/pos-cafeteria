@@ -688,9 +688,12 @@ async function cargarDia() {
     ${r.dias > 1 ? `<div class="kpi"><span>Promedio por día</span><b>${clp(r.promedio_diario)}</b>
       <small>${r.dias} días</small></div>` : ""}
     <div class="kpi"><span>Efectivo</span><b>${clp(r.por_medio.efectivo.total)}</b>
-      <small>${r.por_medio.efectivo.cantidad} ventas</small></div>
+      <small>${r.por_medio.efectivo.cantidad} ventas${
+        r.sacado || r.metido ? ` · quedan ${clp(r.efectivo_neto)}` : ""}</small></div>
     <div class="kpi"><span>Tarjetas</span><b>${clp(r.por_medio.debito.total + r.por_medio.credito.total)}</b>
       <small>${r.por_medio.debito.cantidad + r.por_medio.credito.cantidad} ventas</small></div>
+    ${r.sacado ? `<div class="kpi"><span>Sacado de la caja</span><b>−${clp(r.sacado)}</b>
+      <small>${r.metido ? "y " + clp(r.metido) + " que entró" : "para comprar cosas"}</small></div>` : ""}
     <div class="kpi"><span>Neto / IVA</span><b>${clp(r.neto)}</b>
       <small>IVA ${clp(r.iva)}</small></div>
     ${r.propinas ? `<div class="kpi"><span>Propinas</span><b>${clp(r.propinas)}</b></div>` : ""}
@@ -711,6 +714,26 @@ async function cargarDia() {
             ? `<button class="btn btn--peligro btn--chico" data-anular="${v.id}">Anular</button>`
             : ""}</td>
       </tr>`).join("") : `<tr><td colspan="5" style="color:var(--suave)">Todavía no hay ventas hoy.</td></tr>`}`;
+
+  // El cuadro del dinero sacado. Lo pidió el local con esas palabras: veían el
+  // efectivo del día y no calzaba con el cajón, sin nada que explicara la
+  // diferencia. Acá está cada movimiento con su motivo y quién lo hizo.
+  const movs = r.movimientos_caja || [];
+  $("#zonaCaja").innerHTML = !movs.length ? "" : `
+    <h3 style="margin-top:22px">Plata sacada de la caja</h3>
+    <div class="tabla-wrap"><table class="tabla">
+      <tr><th>Hora</th><th>Motivo</th><th>Quién</th><th class="num">Monto</th></tr>
+      ${movs.map((m) => `
+        <tr>
+          <td>${esc(m.hora)}</td>
+          <td>${esc(m.motivo)}</td>
+          <td>${esc(m.hecho_por) || "—"}</td>
+          <td class="num ${m.tipo === "ingreso" ? "ok" : "mal"}">
+            ${m.tipo === "ingreso" ? "+" : "−"}${clp(m.monto)}</td>
+        </tr>`).join("")}
+      <tr><td colspan="3"><b>Queda en efectivo del día</b></td>
+          <td class="num"><b>${clp(r.efectivo_neto)}</b></td></tr>
+    </table></div>`;
 
   TURNOS_A_LA_VISTA = turnos;
   $("#tablaTurnos").innerHTML = `

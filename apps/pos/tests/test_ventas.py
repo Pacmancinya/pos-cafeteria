@@ -248,3 +248,84 @@ def test_el_cierre_cuadra_con_una_venta_mixta(cliente, carta):
     cierre = cliente.post("/api/v1/turnos/cerrar", json={
         "efectivo_contado": 7400, "fondo_siguiente": 0}).json()
     assert cierre["diferencia"] == 0
+
+
+# ---------------------------------------------------------------------------
+# El dia: pago mixto y plata sacada de la caja (2.15)
+# ---------------------------------------------------------------------------
+"""Dos cosas que el local vio en el mostrador.
+
+La grave: UNA venta con pago mixto reventaba la pantalla entera de El dia. El
+resumen repartia con `por_medio[v.medio_pago]` y desde la 2.12 ese campo puede
+valer "mixto", que no es una de las claves: KeyError y el dueno se quedaba sin
+informe del dia.
+
+La reportada: "no se resta de lo que saco, o que tenga un cuadro del dinero
+sacado". Los retiros ya se restaban en el CIERRE, pero en El dia no aparecian, y
+el efectivo del informe no calzaba con lo que quedaba en el cajon."""
+
+
+def test_una_venta_mixta_no_rompe_el_dia(cliente, carta, caja):
+    """La regresion que importa: antes esto era un KeyError y se caia la pagina."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "pagos": [{"medio": "efectivo", "monto": 2000},
+                  {"medio": "debito", "monto": 1400}]})
+    r = cliente.get("/api/v1/resumen")
+    assert r.status_code == 200, "una venta mixta no puede tumbar El dia"
+    j = r.json()
+    assert j["total"] == 3400
+
+
+def test_el_dia_reparte_el_pago_mixto_por_medio(cliente, carta, caja):
+    """La parte en efectivo tiene que sumar en Efectivo, y la de tarjeta en
+    Tarjetas. Antes la venta entera caia en una sola clave (o reventaba)."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "medio_pago": "efectivo"})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "pagos": [{"medio": "efectivo", "monto": 2000},
+                  {"medio": "debito", "monto": 1400}]})
+    j = cliente.get("/api/v1/resumen").json()
+    assert j["por_medio"]["efectivo"]["total"] == 5400      # 3400 + 2000
+    assert j["por_medio"]["debito"]["total"] == 1400        # la otra parte
+    assert j["total"] == 6800
+
+
+def test_el_dia_muestra_la_plata_sacada_de_la_caja(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 20000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "medio_pago": "efectivo"})
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 5000, "motivo": "gas"})
+    cliente.post("/api/v1/turnos/ingreso", json={"monto": 1000, "motivo": "traje cambio"})
+
+    j = cliente.get("/api/v1/resumen").json()
+    assert j["sacado"] == 5000
+    assert j["metido"] == 1000
+    # Lo que el dueno esperaba ver: el efectivo del dia ya con lo sacado restado.
+    assert j["efectivo_neto"] == 3400 - 5000 + 1000
+    # Y el cuadro, con motivo y quien.
+    motivos = {m["motivo"]: m for m in j["movimientos_caja"]}
+    assert motivos["gas"]["tipo"] == "retiro"
+    assert motivos["traje cambio"]["tipo"] == "ingreso"
+
+
+def test_un_retiro_anulado_no_sale_en_el_dia(cliente, carta):
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 20000})
+    r = cliente.post("/api/v1/turnos/retiro", json={"monto": 5000, "motivo": "error"}).json()
+    cliente.post(f"/api/v1/turnos/retiro/{r['retiros'][0]['id']}/anular")
+    j = cliente.get("/api/v1/resumen").json()
+    assert j["sacado"] == 0
+    assert j["movimientos_caja"] == []
+
+
+def test_sin_movimientos_el_dia_no_inventa_el_cuadro(cliente, carta, caja):
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+    j = cliente.get("/api/v1/resumen").json()
+    assert j["sacado"] == 0 and j["metido"] == 0
+    assert j["movimientos_caja"] == []
+    assert j["efectivo_neto"] == j["por_medio"]["efectivo"]["total"]
