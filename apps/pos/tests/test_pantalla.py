@@ -285,3 +285,70 @@ def test_el_aviso_se_ve_por_encima_de_las_pantallas_que_tapan_todo():
     """Un «PIN incorrecto» que se dibuja detrás del candado no lo lee nadie."""
     css = io.open(ESTATICOS / "styles.css", encoding="utf-8").read()
     assert _z_index(css, ".aviso") > _z_index(css, ".candado")
+
+
+# ---------------------------------------------------------------------------
+# El día no puede mostrar cifras que no son del momento que se está mirando
+# ---------------------------------------------------------------------------
+"""El local lo contó así: tenían la caja recién abierta y sin vender nada, y El
+día —que había quedado en «Mes»— igual mostraba «Vendido hoy» con plata, ticket
+promedio y efectivo. Los números eran del mes y eran ciertos. El problema era el
+rótulo y la falta de un modo que mirara SOLO el turno.
+
+Esto no se ve en ninguna prueba de API: el servidor devolvía lo que le pidieron.
+La mentira estaba en app.js.
+"""
+
+
+def _cuerpo_de(js: str, firma: str) -> str:
+    ini = js.find(firma)
+    assert ini != -1, f"se renombró {firma!r}: revisa esta prueba"
+    return js[ini:js.find("\n}", ini)]
+
+
+def test_el_dia_no_dice_hoy_cuando_esta_mirando_el_mes():
+    """El rótulo tiene que salir del período, no estar escrito a mano."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function cargarDia()")
+    assert "<span>Vendido hoy</span>" not in cuerpo, (
+        "El rótulo del total vuelve a decir «Vendido hoy» siempre. Mirando el mes, "
+        "esa palabra hace leer un total de 30 días como la venta del día.")
+    for palabra in ("Vendido en la semana", "Vendido en el mes", "Vendido en el turno"):
+        assert palabra in cuerpo, f"falta el rótulo {palabra!r}"
+
+
+def test_sin_turno_elegido_el_dia_no_dibuja_ni_un_numero():
+    """Un «$0» al lado de «Ticket promedio» también se lee como un dato.
+
+    Con la caja cerrada y sin turno elegido no se muestra nada: es lo que pidió
+    el local con estas palabras, «cuando la caja esté cerrada que no se muestre».
+    """
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function cargarDia()")
+    assert "if (!turnoElegido) return nadaQueMirar" in cuerpo, (
+        "cargarDia sigue pidiendo el resumen sin turno elegido: va a pintar ceros "
+        "con cara de dato.")
+
+
+def test_el_selector_de_turno_no_se_para_solo_en_uno_cerrado():
+    """Elegirle uno cerrado es volver a mostrar cifras que no son de ahora."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "function pintarSelectorDeTurnos")
+    assert "!t.cerrado_at" in cuerpo, (
+        "el selector ya no busca el turno ABIERTO para pararse ahí; si cae en uno "
+        "cerrado, El día vuelve a mostrar plata de otro rato.")
+    assert "Elegí un turno" in cuerpo, (
+        "sin turno abierto tiene que quedar en un texto que no elige nada.")
+
+
+def test_la_cuenta_del_cajon_se_dibuja_entera_y_no_solo_los_retiros():
+    """«Aparece lo sacado, pero no se resta», dijeron. Se restaba; no se veía.
+
+    Mirando un turno, la tabla muestra la cuenta completa —fondo, lo que entró,
+    cada retiro— para que el total se pueda seguir con el dedo.
+    """
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "function pintarLaPlataDelCajon")
+    for pedazo in ("Fondo con que se abrió", "Lo que entró en efectivo",
+                   "efectivo_en_caja"):
+        assert pedazo in cuerpo, f"falta {pedazo!r} en la cuenta del cajón"

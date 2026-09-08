@@ -262,6 +262,36 @@ que ya están.
 > **Esto no reemplaza a la decisión 14.** El amarre sigue siendo por ID. Que los nombres no
 > se repitan es para la PERSONA que mira la pantalla, no para el programa.
 
+**20. Una cifra tiene que decir de qué momento es, o no se muestra.** El día se puede
+mirar por **turno** o por **día / semana / mes**, y son preguntas distintas: «cómo va MI
+turno» la hace el que está atendiendo; «cuánto se vendió» la hace el dueño.
+
+El local lo encontró así: caja recién abierta, sin una sola venta, y la pantalla —que había
+quedado en «Mes»— mostraba *Vendido hoy* con plata, ticket promedio y efectivo. **Ninguno
+de esos números estaba mal.** Eran del mes, y el rótulo decía «hoy» porque estaba escrito a
+mano en el HTML. Al lado de un cajón vacío eso no se lee como un total del mes: se lee como
+que la caja vendió algo que no vendió. Una cifra correcta con el rótulo equivocado hace más
+daño que una cifra que falta, porque nadie sospecha de ella.
+
+De ahí las tres reglas:
+
+- **El rótulo sale del período**, nunca de una palabra fija. «Vendido en el turno»,
+  «Vendido hoy», «Vendido en la semana», «Vendido en el mes».
+- **Con caja abierta, El día entra por turno.** Es lo que quiere ver quien está en la
+  caja. Si la persona elige otro período con el dedo, se respeta y no se le cambia solo.
+- **Sin turno elegido no se muestra nada**: un cartel, y las tablas vacías. Pedirlo lo
+  pidieron con estas palabras, «cuando la caja esté cerrada que no se muestre». Un `$0` al
+  lado de «Ticket promedio» también se lee como un dato, y no lo es. Y el selector **nunca
+  se para solo en un turno cerrado**: eso sería volver a mostrar plata de otro rato.
+
+**Y lo que se resta tiene que verse restándose.** El reclamo anterior fue «aparece lo
+sacado, pero no se resta». Se restaba —desde la 2.11— pero en ninguna parte se veía la
+cuenta, así que no había cómo creerle. Mirando un turno, el cuadro del cajón es la cuenta
+entera y en este orden: fondo de apertura, lo que entró en efectivo (con las propinas que
+quedaron en billetes), cada retiro e ingreso con su hora, su motivo y quién lo hizo, las
+propinas de tarjeta pagadas en efectivo, y el total. Ese total es `_efectivo_esperado()`,
+el mismo del cierre y el mismo del papel de 80 mm.
+
 ---
 
 ## 2. Modelo de datos `[IMPL]`
@@ -429,11 +459,27 @@ GET  /api/v1/salud                      → {ok, version, turno_abierto}
 GET  /api/v1/categorias                 → categorías activas con sus productos
 POST /api/v1/ventas                     → registra una venta cobrada
 GET  /api/v1/ventas?fecha=AAAA-MM-DD    → ventas del día (sin líneas, liviano)
+GET  /api/v1/ventas?turno_id=N          → las de UN turno (manda sobre la fecha)
 GET  /api/v1/ventas/{id}                → una venta con sus líneas
 POST /api/v1/ventas/{id}/anular         → {motivo}
 GET  /api/v1/resumen?fecha=AAAA-MM-DD   → totales del día por medio de pago + neto/IVA
                                           + sacado / metido / efectivo_neto / movimientos_caja
+GET  /api/v1/resumen?turno_id=N         → los mismos totales, pero de UN turno:
+                                          + turno{} y efectivo_en_caja
 ```
+
+`turno_id` **manda sobre las fechas**: el rango sale del turno y las ventas y los
+movimientos se filtran por `turno_id`, no por hora. Un turno que no existe da 404 y no
+ceros — cero es un dato, y un dato inventado es peor que un error.
+
+Sin `turno_id`, `turno` viene `null` y `efectivo_en_caja` también: fuera de un turno esa
+pregunta no tiene respuesta, porque son varios cajones de varios turnos.
+
+**`efectivo_neto` y `efectivo_en_caja` no son lo mismo**, y confundirlos fue el bug:
+`efectivo_neto` es *de lo vendido en efectivo, cuánto queda después de lo que se sacó* y
+sirve para cualquier rango; `efectivo_en_caja` es *cuánta plata tiene que haber en el
+cajón*, necesita el fondo de apertura y por eso solo existe con un turno. Sale de
+`_efectivo_esperado()`, la misma función del cierre: El día y el cierre no pueden discrepar.
 
 `POST /api/v1/ventas` recibe:
 ```json

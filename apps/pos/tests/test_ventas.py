@@ -329,3 +329,173 @@ def test_sin_movimientos_el_dia_no_inventa_el_cuadro(cliente, carta, caja):
     assert j["sacado"] == 0 and j["metido"] == 0
     assert j["movimientos_caja"] == []
     assert j["efectivo_neto"] == j["por_medio"]["efectivo"]["total"]
+
+
+# ══════════ El dia mirado por TURNO (2.16) ══════════
+# El local lo dijo asi: "tiene la caja abierta y no ha vendido nada, y aun asi
+# salen venta de hoy con dinero, ticket promedio, efectivo... lo ideal sea que
+# el elija el turno y vea las metricas del turno". Los numeros eran del rango de
+# fechas y estaban bien; el problema es que al lado de un cajon vacio se leen
+# como si fueran de ahora.
+
+
+def _abrir(cliente, cajero, fondo):
+    return cliente.post("/api/v1/turnos/abrir",
+                        json={"cajero": cajero, "monto_inicial": fondo}).json()
+
+
+def _cerrar(cliente, contado):
+    # En monedas de $100, que si es una denominacion real: las que no estan en
+    # la lista se ignoran y el conteo daria 0.
+    return cliente.post("/api/v1/turnos/cerrar",
+                        json={"conteo": {"100": contado // 100}}).json()
+
+
+def test_el_resumen_de_un_turno_solo_cuenta_ese_turno(cliente, carta):
+    """Dos cajas el mismo dia. Lo de la manana no es lo de la tarde."""
+    manana = _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "medio_pago": "efectivo"})
+    _cerrar(cliente, 13400)
+
+    tarde = _abrir(cliente, "Pau", 5000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["alfajor"]["id"], "cantidad": 1}],  # 1900
+        "medio_pago": "efectivo"})
+
+    del_dia = cliente.get("/api/v1/resumen").json()
+    assert del_dia["total"] == 5300 and del_dia["turno"] is None
+
+    m = cliente.get(f"/api/v1/resumen?turno_id={manana['id']}").json()
+    assert m["total"] == 3400 and m["ventas"] == 1
+    t = cliente.get(f"/api/v1/resumen?turno_id={tarde['id']}").json()
+    assert t["total"] == 1900 and t["ventas"] == 1
+
+
+def test_una_caja_recien_abierta_no_muestra_la_plata_de_antes(cliente, carta):
+    """EL reclamo, tal cual: caja abierta sin vender, y cifras igual.
+
+    El dia entero tiene ventas; el turno nuevo, ninguna. Pedido por turno, todo
+    tiene que dar cero — incluido el ticket promedio, que es el que mas engana
+    porque un promedio con cara de dato hace pensar que hubo ventas.
+    """
+    _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+    _cerrar(cliente, 13400)
+
+    nuevo = _abrir(cliente, "Pau", 13400)
+    j = cliente.get(f"/api/v1/resumen?turno_id={nuevo['id']}").json()
+    assert j["total"] == 0
+    assert j["ventas"] == 0
+    assert j["ticket_promedio"] == 0
+    assert j["por_medio"]["efectivo"]["total"] == 0
+    assert j["mas_vendidos"] == []
+    # Lo unico que si tiene plata es el cajon, porque el fondo esta ahi.
+    assert j["efectivo_en_caja"] == 13400
+
+
+def test_lo_que_hay_en_el_cajon_es_el_mismo_numero_del_cierre(cliente, carta):
+    """El dia y el cierre no pueden discrepar: sale de la misma funcion."""
+    _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "medio_pago": "efectivo"})
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 5000, "motivo": "gas"})
+    cliente.post("/api/v1/turnos/ingreso", json={"monto": 2000, "motivo": "cambio"})
+
+    actual = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    j = cliente.get(f"/api/v1/resumen?turno_id={actual['id']}").json()
+    assert j["efectivo_en_caja"] == actual["efectivo_esperado"] == 10400
+
+
+def test_la_cuenta_del_cajon_se_puede_seguir_a_mano(cliente, carta):
+    """Lo que reclamaron fue "aparece lo sacado, pero no se resta".
+
+    Se restaba, pero en ningun lado se VEIA restarse. La pantalla dibuja la
+    cuenta entera con estos campos, asi que tienen que cerrar exacto.
+    """
+    _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "medio_pago": "efectivo", "propina": 500})
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 5000, "motivo": "gas"})
+    cliente.post("/api/v1/turnos/ingreso", json={"monto": 2000, "motivo": "cambio"})
+
+    actual = cliente.get("/api/v1/turnos/actual").json()["turno"]
+    j = cliente.get(f"/api/v1/resumen?turno_id={actual['id']}").json()
+    t = j["turno"]
+    cuenta = (t["monto_inicial"] + t["efectivo_de_ventas"]
+              - t["propinas_pagadas"] - j["sacado"] + j["metido"])
+    assert cuenta == j["efectivo_en_caja"]
+    # La propina en billetes tambien quedo en el cajon: por eso no alcanza con
+    # `por_medio.efectivo`, que son solo las ventas.
+    assert t["efectivo_de_ventas"] == 3400 + 500
+    assert j["por_medio"]["efectivo"]["total"] == 3400
+
+
+def test_el_retiro_de_otro_turno_no_le_cuenta_al_de_ahora(cliente, carta):
+    """Sumarselo al que llego despues le inventa un faltante que no es suyo."""
+    _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/turnos/retiro", json={"monto": 5000, "motivo": "gas"})
+    _cerrar(cliente, 5000)
+
+    tarde = _abrir(cliente, "Pau", 5000)
+    j = cliente.get(f"/api/v1/resumen?turno_id={tarde['id']}").json()
+    assert j["sacado"] == 0
+    assert j["movimientos_caja"] == []
+    # El del dia si los ve los dos: son del dia.
+    assert cliente.get("/api/v1/resumen").json()["sacado"] == 5000
+
+
+def test_las_ventas_tambien_se_piden_por_turno(cliente, carta):
+    """La lista de al lado tiene que ser del mismo turno que las cifras."""
+    manana = _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+    _cerrar(cliente, 13400)
+    tarde = _abrir(cliente, "Pau", 5000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["alfajor"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+
+    assert len(cliente.get("/api/v1/ventas").json()["ventas"]) == 2
+    assert len(cliente.get(f"/api/v1/ventas?turno_id={manana['id']}").json()["ventas"]) == 1
+    tj = cliente.get(f"/api/v1/ventas?turno_id={tarde['id']}").json()
+    assert [v["total"] for v in tj["ventas"]] == [1900]
+
+
+def test_un_turno_que_no_existe_no_devuelve_cifras_en_cero(cliente):
+    """Cero no es "no hay": un 404 evita que la pantalla muestre un turno falso."""
+    assert cliente.get("/api/v1/resumen?turno_id=999").status_code == 404
+    assert cliente.get("/api/v1/ventas?turno_id=999").status_code == 404
+
+
+def test_sin_turno_el_resumen_sigue_siendo_del_rango(cliente, carta, caja):
+    """Lo de siempre no cambia: el dueno sigue mirando dias, semanas y meses."""
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "medio_pago": "efectivo"})
+    j = cliente.get("/api/v1/resumen").json()
+    assert j["turno"] is None
+    # `efectivo_en_caja` no existe fuera de un turno: son varios cajones.
+    assert j["efectivo_en_caja"] is None
+    assert j["total"] == 3400
+
+
+def test_un_turno_cerrado_muestra_lo_que_se_conto(cliente, carta):
+    """Mirando un turno viejo se ve el descuadre sin abrir el cierre."""
+    _abrir(cliente, "Javi", 10000)
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "medio_pago": "efectivo"})
+    t = _cerrar(cliente, 13000)                 # faltan 400
+
+    j = cliente.get(f"/api/v1/resumen?turno_id={t['id']}").json()
+    assert j["turno"]["abierto"] is False
+    assert j["turno"]["efectivo_contado"] == 13000
+    assert j["turno"]["diferencia"] == -400
+    assert j["efectivo_en_caja"] == 13400

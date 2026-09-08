@@ -337,7 +337,10 @@ button{font-family:inherit;cursor:pointer}
 }
 .barra-dia__acc{display:flex;gap:8px;flex-wrap:wrap}
 .campo--linea{margin:0}
-.campo--linea input{font-size:15px;padding:9px 12px;min-width:170px}
+.campo--linea input,.campo--linea select{font-size:15px;padding:9px 12px;min-width:170px}
+/* .campo es display:block, que le gana al atributo `hidden`. Sin esta línea el
+   selector de turno queda a la vista en Día, Semana y Mes, donde no significa nada. */
+.campo[hidden]{display:none}
 .periodos{display:flex;gap:4px;background:#F3E9DB;padding:4px;border-radius:10px}
 .periodo{border:0;background:transparent;color:var(--suave);font-size:14px;font-weight:600;padding:8px 15px;border-radius:7px}
 .periodo.is-on{background:var(--tarjeta);color:var(--tinta);box-shadow:var(--sombra)}
@@ -364,6 +367,12 @@ button{font-family:inherit;cursor:pointer}
 .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:#F3E9DB;color:var(--suave)}
 
 /* ---------- carta ---------- */
+/* Lo que se ve en El día cuando no hay turno que mirar. Es un cartel a
+   propósito y no un montón de ceros: un "$0" al lado de "Ticket promedio" se
+   lee como un dato, y no lo es. */
+.sin-turno{background:var(--tarjeta);border:1px dashed var(--linea);border-radius:13px;
+  padding:26px 20px;text-align:center;color:var(--suave);margin-bottom:22px}
+.sin-turno b{display:block;color:var(--tinta);font-size:17px;margin-bottom:5px}
 .ayuda{color:var(--suave);font-size:14px;line-height:1.55;margin-bottom:18px;max-width:70ch}
 .ayuda code{background:#F3E9DB;padding:1px 5px;border-radius:4px;font-size:13px}
 .grupo{margin-bottom:26px}

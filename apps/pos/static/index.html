@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=44">
+<link rel="stylesheet" href="/static/styles.css?v=45">
 </head>
 <body>
 
@@ -72,10 +72,15 @@
       <label class="campo campo--linea"><span>Día</span>
         <input type="date" id="fechaDia"></label>
       <div class="periodos">
+        <button class="periodo" data-periodo="turno">Turno</button>
         <button class="periodo is-on" data-periodo="dia">Día</button>
         <button class="periodo" data-periodo="semana">Semana</button>
         <button class="periodo" data-periodo="mes">Mes</button>
       </div>
+      <!-- Solo aparece mirando por turno. Si el día tuvo dos cajas, acá se elige
+           cuál: las cifras de arriba son de la que esté elegida y de ninguna otra. -->
+      <label class="campo campo--linea" id="campoTurno" hidden><span>Qué turno</span>
+        <select id="selTurno"></select></label>
       <div class="barra-dia__acc">
         <button class="btn" id="btnHoy">Hoy</button>
         <button class="btn" id="btnExportar">Descargar para el contador</button>
@@ -85,7 +90,7 @@
     <div class="kpis" id="kpis"></div>
     <div class="dos-col">
       <div>
-        <h3>Ventas de hoy</h3>
+        <h3 id="tituloVentas">Ventas de hoy</h3>
         <div class="tabla-wrap"><table class="tabla" id="tablaVentas"></table></div>
         <!-- La plata que salió y entró del cajón a mano. Vacío cuando no hubo. -->
         <div id="zonaCaja"></div>
@@ -295,6 +300,6 @@
 <script src="/static/guias.js?v=11"></script>
 <script src="/static/teclado.js?v=3"></script>
 <script src="/static/escaner.js?v=3"></script>
-<script src="/static/app.js?v=45"></script>
+<script src="/static/app.js?v=46"></script>
 </body>
 </html>

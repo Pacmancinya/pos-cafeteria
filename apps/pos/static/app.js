@@ -649,7 +649,22 @@ const hoyISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+/* El día contesta dos preguntas que NO son la misma, y mezclarlas fue el
+   problema: el local tenía la caja recién abierta, sin una sola venta, y la
+   pantalla —que había quedado en "Mes"— mostraba plata vendida, ticket promedio
+   y efectivo. Todo era del mes y era cierto, pero al lado de un cajón vacío se
+   lee como si fuera de ahora y no hay cómo saber qué cifra creer.
+
+   · por TURNO  — "cómo va la caja que está abierta". La mira el que atiende.
+   · por DÍA / SEMANA / MES — "cuánto se vendió". La mira el dueño.
+
+   Con caja abierta se entra por turno, que es el caso de casi todos los días.
+   Con la caja cerrada no se muestra nada solo: hay que elegir a mano qué turno
+   mirar. Un "$0" al lado de "Ticket promedio" también es un número que se lee
+   como dato, y no lo es. */
 let periodo = "dia";
+let turnoElegido = null;      // el turno que se está mirando, cuando periodo es "turno"
+let periodoALaMano = false;   // ¿lo eligió la persona? Entonces no se le cambia solo
 
 /* De un día elegido saca el rango que corresponde al período.
    La semana parte el lunes, como se cuenta acá. */
@@ -667,7 +682,61 @@ function rangoDelPeriodo(f) {
   if (periodo === "mes") {
     return [iso(new Date(a, m - 1, 1)), iso(new Date(a, m, 0))];
   }
-  return [f, f];
+  return [f, f];               // "dia" y "turno" miran un solo día
+}
+
+const horaCorta = (x) => new Date(x).toLocaleTimeString("es-CL",
+  { hour: "2-digit", minute: "2-digit", hour12: false });
+
+/* Cuando El día se abre solo y hay caja abierta, parte por turno: es lo que
+   quiere ver el que está atendiendo. Si la persona ya eligió un período con el
+   dedo, se respeta y no se le mueve por debajo. */
+function periodoQueCorresponde() {
+  if (!periodoALaMano && TURNO && TURNO.abierto && TURNO.turno) {
+    periodo = "turno";
+    turnoElegido = TURNO.turno.id;
+  }
+  $$(".periodo").forEach((b) => b.classList.toggle("is-on", b.dataset.periodo === periodo));
+}
+
+/* La lista de turnos del día elegido. Nunca cae solo en uno cerrado: si no hay
+   caja abierta, queda en "Elegí un turno" y no se muestra ninguna cifra. */
+function pintarSelectorDeTurnos(turnos) {
+  const sel = $("#selTurno");
+  if (!turnos.some((t) => t.id === turnoElegido)) {
+    const abierto = turnos.find((t) => !t.cerrado_at);
+    turnoElegido = abierto ? abierto.id : null;
+  }
+  if (!turnos.length) {
+    sel.innerHTML = `<option value="">No se abrió caja este día</option>`;
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML = (turnoElegido ? "" : `<option value="">Elegí un turno…</option>`)
+    + turnos.map((t) => {
+      const quien = t.abrio || t.cajero || "sin nombre";
+      const cuando = t.cerrado_at
+        ? `${horaCorta(t.abierto_at)} a ${horaCorta(t.cerrado_at)}`
+        : `abierta desde las ${horaCorta(t.abierto_at)}`;
+      return `<option value="${t.id}"${t.id === turnoElegido ? " selected" : ""}
+        >${esc(quien)} · ${cuando}</option>`;
+    }).join("");
+}
+
+/* Sin turno que mirar no se inventan cifras: un cartel y las tablas vacías. */
+function nadaQueMirar(hayTurnos) {
+  $("#kpis").innerHTML = `
+    <div class="sin-turno" style="grid-column:1/-1">
+      <b>${hayTurnos ? "Elegí un turno arriba" : "La caja está cerrada"}</b>
+      ${hayTurnos
+        ? "Las cifras que salgan van a ser las de ese turno."
+        : "Este día no se abrió caja. Cuando se abra, acá va cómo va el turno."}
+    </div>`;
+  $("#tituloVentas").textContent = "Ventas";
+  $("#tablaVentas").innerHTML = "";
+  $("#zonaCaja").innerHTML = "";
+  $("#tablaTop").innerHTML = "";
 }
 
 async function cargarDia() {
@@ -675,37 +744,63 @@ async function cargarDia() {
   if (!campo.value) campo.value = hoyISO();
   const f = campo.value;
   const [desde, hasta] = rangoDelPeriodo(f);
-  const [r, lista, turnos] = await Promise.all([
-    api(`/resumen?desde=${desde}&hasta=${hasta}`),
-    api(`/ventas?fecha=${f}`),
-    api(`/turnos?desde=${desde}&hasta=${hasta}`),
+
+  // Los turnos primero: de ahí sale el selector, y sin él no se sabe qué pedir.
+  const turnos = await api(`/turnos?desde=${desde}&hasta=${hasta}`);
+  TURNOS_A_LA_VISTA = turnos;
+  pintarCierresDeCaja(turnos);
+  $("#campoTurno").hidden = periodo !== "turno";
+
+  if (periodo === "turno") {
+    pintarSelectorDeTurnos(turnos);
+    if (!turnoElegido) return nadaQueMirar(turnos.length > 0);
+  }
+
+  const porTurno = periodo === "turno";
+  const [r, lista] = await Promise.all([
+    api(porTurno ? `/resumen?turno_id=${turnoElegido}` : `/resumen?desde=${desde}&hasta=${hasta}`),
+    api(porTurno ? `/ventas?turno_id=${turnoElegido}` : `/ventas?fecha=${f}`),
   ]);
 
+  // El rótulo dice de qué período es la plata. Antes decía "Vendido hoy" incluso
+  // mirando el mes entero, y esa sola palabra hacía que un total del mes se
+  // leyera como la venta del día.
+  const t = r.turno;
+  const rotulo = porTurno ? "Vendido en el turno"
+    : periodo === "semana" ? "Vendido en la semana"
+    : periodo === "mes" ? "Vendido en el mes"
+    : f === hoyISO() ? "Vendido hoy" : "Vendido ese día";
+
   $("#kpis").innerHTML = `
-    <div class="kpi"><span>Vendido hoy</span><b>${clp(r.total)}</b>
+    <div class="kpi"><span>${rotulo}</span><b>${clp(r.total)}</b>
       <small>${r.ventas} venta${r.ventas === 1 ? "" : "s"}</small></div>
     <div class="kpi"><span>Ticket promedio</span><b>${clp(r.ticket_promedio)}</b></div>
     ${r.dias > 1 ? `<div class="kpi"><span>Promedio por día</span><b>${clp(r.promedio_diario)}</b>
       <small>${r.dias} días</small></div>` : ""}
     <div class="kpi"><span>Efectivo</span><b>${clp(r.por_medio.efectivo.total)}</b>
-      <small>${r.por_medio.efectivo.cantidad} ventas${
-        r.sacado || r.metido ? ` · quedan ${clp(r.efectivo_neto)}` : ""}</small></div>
+      <small>${r.por_medio.efectivo.cantidad} ventas</small></div>
     <div class="kpi"><span>Tarjetas</span><b>${clp(r.por_medio.debito.total + r.por_medio.credito.total)}</b>
       <small>${r.por_medio.debito.cantidad + r.por_medio.credito.cantidad} ventas</small></div>
     ${r.sacado ? `<div class="kpi"><span>Sacado de la caja</span><b>−${clp(r.sacado)}</b>
       <small>${r.metido ? "y " + clp(r.metido) + " que entró" : "para comprar cosas"}</small></div>` : ""}
+    ${!r.sacado && r.metido ? `<div class="kpi"><span>Metido a la caja</span><b>+${clp(r.metido)}</b></div>` : ""}
+    ${t ? `<div class="kpi"><span>${t.abierto ? "Debe haber en el cajón" : "Debía haber al cerrar"}</span>
+      <b>${clp(r.efectivo_en_caja)}</b>
+      <small>fondo ${clp(t.monto_inicial)} + ventas − lo sacado</small></div>` : ""}
     <div class="kpi"><span>Neto / IVA</span><b>${clp(r.neto)}</b>
       <small>IVA ${clp(r.iva)}</small></div>
     ${r.propinas ? `<div class="kpi"><span>Propinas</span><b>${clp(r.propinas)}</b></div>` : ""}
     ${r.anuladas.cantidad ? `<div class="kpi"><span>Anuladas</span><b>${r.anuladas.cantidad}</b>
       <small>${clp(r.anuladas.total)}</small></div>` : ""}`;
 
+  $("#tituloVentas").textContent = porTurno ? "Ventas del turno"
+    : f === hoyISO() ? "Ventas de hoy" : "Ventas del día";
   $("#tablaVentas").innerHTML = `
     <tr><th>#</th><th>Hora</th><th>Medio</th><th class="num">Total</th><th></th></tr>
     ${lista.ventas.length ? lista.ventas.map((v) => `
       <tr class="${v.estado === "anulada" ? "anulada" : ""}">
         <td>${v.numero}</td>
-        <td>${new Date(v.creada_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false })}</td>
+        <td>${horaCorta(v.creada_at)}</td>
         <td><span class="pill">${v.medio_pago}</span></td>
         <td class="num">${clp(v.total)}</td>
         <td style="white-space:nowrap">
@@ -713,37 +808,87 @@ async function cargarDia() {
           ${v.estado === "pagada"
             ? `<button class="btn btn--peligro btn--chico" data-anular="${v.id}">Anular</button>`
             : ""}</td>
-      </tr>`).join("") : `<tr><td colspan="5" style="color:var(--suave)">Todavía no hay ventas hoy.</td></tr>`}`;
+      </tr>`).join("") : `<tr><td colspan="5" style="color:var(--suave)">${
+        porTurno ? "Este turno todavía no ha vendido nada." : "Todavía no hay ventas."
+      }</td></tr>`}`;
 
-  // El cuadro del dinero sacado. Lo pidió el local con esas palabras: veían el
-  // efectivo del día y no calzaba con el cajón, sin nada que explicara la
-  // diferencia. Acá está cada movimiento con su motivo y quién lo hizo.
+  pintarLaPlataDelCajon(r);
+
+  $("#tablaTop").innerHTML = `
+    <tr><th>Producto</th><th class="num">Cant.</th><th class="num">Total</th></tr>
+    ${r.mas_vendidos.length ? r.mas_vendidos.map((p) => `
+      <tr><td>${p.nombre}</td><td class="num">${p.cantidad}</td><td class="num">${clp(p.total)}</td></tr>
+    `).join("") : `<tr><td colspan="3" style="color:var(--suave)">Sin datos todavía.</td></tr>`}`;
+}
+
+/* El cuadro del dinero del cajón. Lo pidió el local con estas palabras: "aparece
+   lo sacado, pero no se resta". Tenían razón en el fondo del reclamo: el número
+   se restaba, pero en ninguna parte se VEÍA restarse, así que no había cómo
+   creerle. Mirando un turno la tabla es la cuenta entera —fondo, lo que entró,
+   cada retiro con su motivo y su nombre, y cuánto tiene que haber— y da exacto
+   el mismo total que el cierre, porque sale de la misma función del servidor. */
+function pintarLaPlataDelCajon(r) {
   const movs = r.movimientos_caja || [];
-  $("#zonaCaja").innerHTML = !movs.length ? "" : `
-    <h3 style="margin-top:22px">Plata sacada de la caja</h3>
-    <div class="tabla-wrap"><table class="tabla">
-      <tr><th>Hora</th><th>Motivo</th><th>Quién</th><th class="num">Monto</th></tr>
-      ${movs.map((m) => `
-        <tr>
-          <td>${esc(m.hora)}</td>
-          <td>${esc(m.motivo)}</td>
-          <td>${esc(m.hecho_por) || "—"}</td>
-          <td class="num ${m.tipo === "ingreso" ? "ok" : "mal"}">
-            ${m.tipo === "ingreso" ? "+" : "−"}${clp(m.monto)}</td>
-        </tr>`).join("")}
-      <tr><td colspan="3"><b>Queda en efectivo del día</b></td>
-          <td class="num"><b>${clp(r.efectivo_neto)}</b></td></tr>
-    </table></div>`;
+  const t = r.turno;
+  const fila = (m) => `
+    <tr>
+      <td>${esc(m.hora)}</td>
+      <td>${esc(m.motivo)}</td>
+      <td>${esc(m.hecho_por) || "—"}</td>
+      <td class="num ${m.tipo === "ingreso" ? "ok" : "mal"}">
+        ${m.tipo === "ingreso" ? "+" : "−"}${clp(m.monto)}</td>
+    </tr>`;
 
-  TURNOS_A_LA_VISTA = turnos;
+  if (!t) {
+    // Por día, semana o mes no existe "lo que hay en el cajón": son varios
+    // cajones de varios turnos. Solo se muestra el movimiento, si lo hubo.
+    $("#zonaCaja").innerHTML = !movs.length ? "" : `
+      <h3 style="margin-top:22px">Plata sacada de la caja</h3>
+      <div class="tabla-wrap"><table class="tabla">
+        <tr><th>Hora</th><th>Motivo</th><th>Quién</th><th class="num">Monto</th></tr>
+        ${movs.map(fila).join("")}
+        <tr><td colspan="3"><b>Del efectivo vendido, queda</b></td>
+            <td class="num"><b>${clp(r.efectivo_neto)}</b></td></tr>
+      </table></div>`;
+    return;
+  }
+
+  $("#zonaCaja").innerHTML = `
+    <h3 style="margin-top:22px">La plata del cajón</h3>
+    <div class="tabla-wrap"><table class="tabla">
+      <tr><th>Hora</th><th>Qué</th><th>Quién</th><th class="num">Monto</th></tr>
+      <tr><td>${horaCorta(t.abierto_at)}</td><td>Fondo con que se abrió</td>
+          <td>${esc(t.abrio) || "—"}</td>
+          <td class="num ok">+${clp(t.monto_inicial)}</td></tr>
+      <tr><td>—</td><td>Lo que entró en efectivo</td><td>—</td>
+          <td class="num ok">+${clp(t.efectivo_de_ventas)}</td></tr>
+      ${movs.map(fila).join("")}
+      ${t.propinas_pagadas ? `<tr><td>—</td>
+          <td>Propinas de tarjeta pagadas en efectivo</td><td>—</td>
+          <td class="num mal">−${clp(t.propinas_pagadas)}</td></tr>` : ""}
+      <tr><td colspan="3"><b>${t.abierto ? "Debe haber en el cajón" : "Debía haber al cerrar"}</b></td>
+          <td class="num"><b>${clp(r.efectivo_en_caja)}</b></td></tr>
+      ${t.efectivo_contado == null ? "" : `<tr>
+          <td colspan="3">Se contó al cerrar</td>
+          <td class="num">${clp(t.efectivo_contado)}
+            ${t.diferencia
+              ? `<span class="mal">${t.diferencia < 0 ? "faltaron" : "sobraron"}
+                   ${clp(Math.abs(t.diferencia))}</span>`
+              : `<span class="ok">cuadra</span>`}</td></tr>`}
+    </table></div>`;
+}
+
+function pintarCierresDeCaja(turnos) {
   $("#tablaTurnos").innerHTML = `
     <tr><th>Día</th><th>Abrió / cerró</th><th>Quiénes estuvieron</th>
         <th class="num">Esperado</th><th class="num">Contado</th><th class="num">Dif.</th><th></th></tr>
     ${turnos.length ? turnos.map((t) => {
       const d = t.diferencia;
+      // Con signo adelante y no "$-9.100": el menos pegado al peso se lee como
+      // parte del número y se pasa por alto justo cuando importa.
       const marca = d === null ? "<span class='pill'>abierto</span>"
         : d === 0 ? "<span class='ok'>cuadra</span>"
-        : `<span class='mal'>${clp(d)}</span>`;
+        : `<span class='mal'>${d < 0 ? "−" : "+"}${clp(Math.abs(d))}</span>`;
       return `<tr>
         <td>${new Date(t.abierto_at).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })}</td>
         <td>${esc(t.abrio || t.cajero || "—")}
@@ -759,13 +904,7 @@ async function cargarDia() {
           <button class="btn btn--chico" data-ver-cierre="${t.id}">Ver</button>
           <button class="btn btn--chico" data-cierre="${t.id}">Imprimir</button></td>
       </tr>`;
-    }).join("") : `<tr><td colspan="6" style="color:var(--suave)">Sin cierres en este período.</td></tr>`}`;
-
-  $("#tablaTop").innerHTML = `
-    <tr><th>Producto</th><th class="num">Cant.</th><th class="num">Total</th></tr>
-    ${r.mas_vendidos.length ? r.mas_vendidos.map((p) => `
-      <tr><td>${p.nombre}</td><td class="num">${p.cantidad}</td><td class="num">${clp(p.total)}</td></tr>
-    `).join("") : `<tr><td colspan="3" style="color:var(--suave)">Sin datos todavía.</td></tr>`}`;
+    }).join("") : `<tr><td colspan="7" style="color:var(--suave)">Sin cierres en este período.</td></tr>`}`;
 }
 
 async function anular(id) {
@@ -3188,7 +3327,7 @@ function verVista(nombre, empujarHash = true) {
   $$(".tab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === nombre));
   $$(".vista").forEach((v) => v.classList.toggle("is-on", v.dataset.vista === nombre));
   if (empujarHash) location.hash = "#/" + nombre;
-  if (nombre === "dia") cargarDia();
+  if (nombre === "dia") { periodoQueCorresponde(); cargarDia(); }
   if (nombre === "inventario") cargarBodega();
   if (nombre === "guias") pintarGuias();
 }
@@ -3223,6 +3362,9 @@ document.addEventListener("click", (e) => {
   if (cerca("data-cierre")) return imprimir(`/cierre/${cerca("data-cierre").dataset.cierre}`);
   if (cerca("data-periodo")) {
     periodo = cerca("data-periodo").dataset.periodo;
+    // Lo eligió con el dedo: de acá en adelante no se le cambia solo al volver
+    // a entrar, aunque haya caja abierta.
+    periodoALaMano = true;
     $$(".periodo").forEach((b) => b.classList.toggle("is-on", b.dataset.periodo === periodo));
     return cargarDia();
   }
@@ -3272,13 +3414,16 @@ document.addEventListener("click", (e) => {
   }
   if (t.id === "limpiarBuscar") { $("#buscar").value = ""; $("#buscar").focus(); return buscar(""); }
   if (t.id === "btnNuevaCat") return nuevaCategoria();
-  if (t.id === "btnHoy") { $("#fechaDia").value = hoyISO(); return cargarDia(); }
+  if (t.id === "btnHoy") { $("#fechaDia").value = hoyISO(); turnoElegido = null; return cargarDia(); }
   if (t.id === "btnExportar") {
     const [d1, d2] = rangoDelPeriodo($("#fechaDia").value || hoyISO());
     // Dos archivos: el resumen de ventas y el detalle por producto.
     window.open(`/api/v1/exportar/ventas?desde=${d1}&hasta=${d2}`, "_blank");
     setTimeout(() => window.open(`/api/v1/exportar/detalle?desde=${d1}&hasta=${d2}`, "_blank"), 400);
-    return avisar(`Descargando ${periodo === "dia" ? "el día" : "el " + periodo}`);
+    // El archivo del contador va SIEMPRE por fechas, aunque en pantalla se esté
+    // mirando un turno: al contador se le entregan días, no turnos.
+    return avisar(`Descargando ${periodo === "semana" || periodo === "mes"
+      ? "el " + periodo : "el día"}`);
   }
   if (t.id === "btnRespaldar") {
     return api("/respaldo", { method: "POST" })
@@ -3462,7 +3607,13 @@ $("#buscar").addEventListener("input", (e) => buscar(e.target.value));
 $("#buscar").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = ""; buscar(""); }
 });
-$("#fechaDia").addEventListener("change", cargarDia);
+// Al cambiar de día los turnos son otros: se suelta el elegido para que el
+// selector vuelva a partir del que esté abierto (o de ninguno).
+$("#fechaDia").addEventListener("change", () => { turnoElegido = null; cargarDia(); });
+$("#selTurno").addEventListener("change", (e) => {
+  turnoElegido = e.target.value ? +e.target.value : null;
+  cargarDia();
+});
 $("#pagaCon").addEventListener("input", calcularVuelto);
 $("#propina").addEventListener("input", actualizarCobro);
 $("#descuento").addEventListener("input", actualizarCobro);

@@ -224,8 +224,27 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
 @router.get("/ventas")
 def listar_ventas(
     fecha: str | None = Query(default=None, description="AAAA-MM-DD, día local"),
+    turno_id: int | None = Query(default=None,
+                                 description="un turno; si viene, manda sobre la fecha"),
     s: Session = Depends(get_session),
 ):
+    """Las ventas de un día, o las de un turno.
+
+    Por turno hace falta porque un día puede tener dos, y la lista de "las
+    ventas de hoy" al lado de las cifras de UN turno no calza: se ven ventas de
+    la mañana bajo el total de la tarde.
+    """
+    if turno_id is not None:
+        t = s.get(Turno, turno_id)
+        if not t:
+            raise HTTPException(404, "No existe ese turno")
+        ventas = s.exec(
+            select(Venta).where(Venta.turno_id == turno_id).order_by(Venta.numero.desc())
+        ).all()
+        return {"fecha": a_local(t.abierto_at).date().isoformat(),
+                "turno_id": turno_id,
+                "ventas": [_venta_dict(v, s=s) for v in ventas]}
+
     dia = date.fromisoformat(fecha) if fecha else hoy_local()
     desde, hasta = rango_utc_del_dia(dia)
     ventas = s.exec(
@@ -233,7 +252,7 @@ def listar_ventas(
         .where(Venta.creada_at >= desde, Venta.creada_at < hasta)
         .order_by(Venta.numero.desc())
     ).all()
-    return {"fecha": dia.isoformat(),
+    return {"fecha": dia.isoformat(), "turno_id": None,
             "ventas": [_venta_dict(v, s=s) for v in ventas]}
 
 
@@ -282,25 +301,68 @@ def resumen(
     fecha: str | None = Query(default=None, description="un día suelto"),
     desde: str | None = Query(default=None, description="AAAA-MM-DD"),
     hasta: str | None = Query(default=None, description="AAAA-MM-DD, incluido"),
+    turno_id: int | None = Query(default=None,
+                                 description="un turno; si viene, manda sobre las fechas"),
     s: Session = Depends(get_session),
 ):
-    """Totales de un día o de un rango. Las anuladas se cuentan aparte, nunca se suman."""
-    if desde:
-        d1 = date.fromisoformat(desde)
-        d2 = date.fromisoformat(hasta) if hasta else d1
+    """Totales de un día, de un rango de días, o de UN TURNO.
+
+    Mirar por turno lo pidió el local, y tenían toda la razón: la caja recién
+    abierta, sin una sola venta, y El día —que había quedado en "Mes"— igual
+    mostraba plata vendida, ticket promedio y efectivo. Los números eran del mes
+    y estaban bien, pero al lado de un cajón vacío se leen como si fueran de
+    ahora, y el que está en la caja no sabe cuál creer. Con `turno_id` las cifras
+    son las de ESE turno y de nada más, que es justo la pregunta que se hace el
+    que está atendiendo: cómo va MI turno.
+
+    Las anuladas se cuentan aparte, nunca se suman.
+    """
+    from apps.pos.api.turnos import (_efectivo_del_turno, _efectivo_esperado,
+                                     _nombre, _pagos_de)
+    from apps.pos.db.models import RetiroCaja
+
+    turno = None
+    if turno_id is not None:
+        turno = s.get(Turno, turno_id)
+        if not turno:
+            raise HTTPException(404, "No existe ese turno")
+        d1 = d2 = a_local(turno.abierto_at).date()
+        ventas = s.exec(select(Venta).where(Venta.turno_id == turno.id)).all()
+        # Los movimientos del turno son los del TURNO, no los del día: si hubo
+        # dos turnos, el retiro de la mañana no es del que está abierto ahora, y
+        # sumárselo le inventa un faltante al que llegó en la tarde.
+        movs = s.exec(
+            select(RetiroCaja).where(
+                RetiroCaja.turno_id == turno.id,
+                RetiroCaja.anulado == False,          # noqa: E712
+            ).order_by(RetiroCaja.creado_at.desc())
+        ).all()
     else:
-        d1 = d2 = date.fromisoformat(fecha) if fecha else hoy_local()
-    ini, _ = rango_utc_del_dia(d1)
-    _, fin = rango_utc_del_dia(d2)
-    ventas = s.exec(
-        select(Venta).where(Venta.creada_at >= ini, Venta.creada_at < fin)
-    ).all()
+        if desde:
+            d1 = date.fromisoformat(desde)
+            d2 = date.fromisoformat(hasta) if hasta else d1
+        else:
+            d1 = d2 = date.fromisoformat(fecha) if fecha else hoy_local()
+        ini, _ = rango_utc_del_dia(d1)
+        _, fin = rango_utc_del_dia(d2)
+        ventas = s.exec(
+            select(Venta).where(Venta.creada_at >= ini, Venta.creada_at < fin)
+        ).all()
+        # La plata que se movió a mano en el rango. El local lo pidió con estas
+        # palabras: "no se resta de lo que sacó, o que tenga un cuadro del dinero
+        # sacado". Los retiros ya se restaban en el CIERRE, pero en El día no
+        # aparecían por ninguna parte, así que el efectivo del informe no calzaba
+        # con lo que quedaba en el cajón y no había dónde mirar por qué.
+        movs = s.exec(
+            select(RetiroCaja).where(
+                RetiroCaja.creado_at >= ini, RetiroCaja.creado_at < fin,
+                RetiroCaja.anulado == False,          # noqa: E712
+            ).order_by(RetiroCaja.creado_at.desc())
+        ).all()
     dia = d1
 
     validas = [v for v in ventas if v.estado == "pagada"]
     anuladas = [v for v in ventas if v.estado == "anulada"]
-
-    from apps.pos.api.turnos import _pagos_de
 
     por_medio = {m: {"cantidad": 0, "total": 0} for m in MEDIOS_PAGO}
     total = propinas = descuentos = 0
@@ -337,22 +399,20 @@ def resumen(
     top = sorted(vendidos.items(), key=lambda kv: kv[1]["cantidad"], reverse=True)[:10]
     dias = (d2 - d1).days + 1
 
-    # La plata que se sacó del cajón en el día. El local lo pidió con estas
-    # palabras: "no se resta de lo que sacó, o que tenga un cuadro del dinero
-    # sacado". Tenía razón: los retiros ya se restaban en el CIERRE, pero en El
-    # día no aparecían por ninguna parte, así que el efectivo del informe no
-    # calzaba con lo que quedaba en el cajón y no había dónde mirar por qué.
-    from apps.pos.db.models import RetiroCaja
-    movs = s.exec(
-        select(RetiroCaja).where(
-            RetiroCaja.creado_at >= ini, RetiroCaja.creado_at < fin,
-            RetiroCaja.anulado == False,          # noqa: E712
-        ).order_by(RetiroCaja.creado_at.desc())
-    ).all()
     sacado = sum(r.monto for r in movs if r.tipo == "retiro")
     metido = sum(r.monto for r in movs if r.tipo == "ingreso")
 
-    return {
+    # Cuánta plata en efectivo hay son DOS preguntas distintas, y confundirlas es
+    # lo que tenía al local mirando el "quedan" de un mes entero como si fuera lo
+    # que había en el cajón:
+    #   · efectivo_neto    — de lo vendido en efectivo, cuánto queda después de
+    #     lo que se sacó. Sirve para cualquier rango, incluso un mes.
+    #   · efectivo_en_caja — cuánta plata tiene que haber AHORA en el cajón. Solo
+    #     existe mirando UN turno, porque necesita el fondo con que se abrió, y
+    #     sale de la misma función que el cierre, así que da el mismo número.
+    efectivo_neto = por_medio["efectivo"]["total"] - sacado + metido
+
+    salida = {
         "fecha": dia.isoformat(),
         "desde": d1.isoformat(),
         "hasta": d2.isoformat(),
@@ -372,9 +432,7 @@ def resumen(
         # Lo que salió y entró del cajón a mano, y el detalle de cada uno.
         "sacado": sacado,
         "metido": metido,
-        # Lo que queda en efectivo del día una vez restado lo que se sacó: es el
-        # número que el dueño esperaba ver y no estaba.
-        "efectivo_neto": por_medio["efectivo"]["total"] - sacado + metido,
+        "efectivo_neto": efectivo_neto,
         "movimientos_caja": [{
             "tipo": r.tipo,
             "monto": r.monto,
@@ -382,4 +440,30 @@ def resumen(
             "hora": a_local(r.creado_at).strftime("%H:%M"),
             "hecho_por": r.hecho_por,
         } for r in movs],
+        # Solo cuando se pidió un turno. `None` es la señal de que lo de arriba
+        # es de un rango de días y no de una caja abierta ahora.
+        "turno": None,
+        "efectivo_en_caja": None,
     }
+
+    if turno:
+        salida["turno"] = {
+            "id": turno.id,
+            "abierto": turno.cerrado_at is None,
+            "abrio": _nombre(s, turno.abierto_por_id) or turno.cajero,
+            "cerro": _nombre(s, turno.cerrado_por_id),
+            "abierto_at": a_local(turno.abierto_at).isoformat(),
+            "cerrado_at": a_local(turno.cerrado_at).isoformat() if turno.cerrado_at else None,
+            "monto_inicial": turno.monto_inicial,
+            # Lo que entró al cajón por ventas, CON las propinas que se dejaron
+            # en efectivo. No es lo mismo que `por_medio.efectivo`, que son solo
+            # las ventas: la propina en billetes también quedó en el cajón. Va
+            # aparte para que la cuenta de la pantalla dé exacto lo mismo que el
+            # cierre, sin que nadie tenga que rehacerla.
+            "efectivo_de_ventas": _efectivo_del_turno(s, turno),
+            "propinas_pagadas": turno.propinas_pagadas,
+            "efectivo_contado": turno.efectivo_contado,
+            "diferencia": turno.diferencia,
+        }
+        salida["efectivo_en_caja"] = _efectivo_esperado(s, turno)
+    return salida
