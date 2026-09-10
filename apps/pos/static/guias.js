@@ -397,7 +397,7 @@ window.GUIAS = [
 {
   id: "pantallas-del-local",
   titulo: "Las pantallas del menú",
-  resumen: "Son otro programa. Cómo se conectan y cómo se arreglan.",
+  resumen: "Las sirve esta caja. Cómo se conectan, cuál muestra qué y cómo se arreglan.",
   html: `
     <p>Las pantallas del local <b>las sirve esta misma caja</b>. No hay que
        instalar ni copiar nada en el televisor: solo abrir una dirección.</p>
@@ -408,12 +408,23 @@ window.GUIAS = [
           copiar.</li>
       <li>En el televisor, abre el navegador y entra a la que le toca:
         <ul>
-          <li><b>?p=1</b> — la vitrina, la que invita a elegir.</li>
+          <li><b>?p=1</b> — la vitrina, con el combo sugerido.</li>
           <li><b>?p=2</b> — la carta con los precios.</li>
           <li><b>?tv=1</b> — las dos turnándose, si tienes un solo televisor.</li>
         </ul>
       </li>
     </ol>
+
+    <h3>Dos televisores: uno con la vitrina y otro con la carta</h3>
+    <p>Si los dos se van turnando, es que en los dos se abrió la dirección de
+       «las dos turnándose». No hace falta cambiarla: en cada televisor mueve el
+       mouse (o aprieta una tecla del control), entra a <b>Configurar →
+       Pantallas</b> y elige <b>Solo la vitrina</b> en uno y <b>Solo la carta</b>
+       en el otro. Queda guardado en cada televisor.</p>
+
+    <h3>Cuando la caja se actualiza</h3>
+    <p>Los televisores se dan cuenta solos a los pocos minutos y se recargan. No
+       hay que ir a apretar nada.</p>
 
     <h3>La carta le llega sola</h3>
     <p>Cada precio que cambies acá se ve en los televisores en la siguiente

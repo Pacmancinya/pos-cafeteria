@@ -4,10 +4,10 @@ from __future__ import annotations
 import os
 import threading
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from apps.pos import actualizar
+from apps.pos import actualizar, sesion
 from core.config import APP_NOMBRE, APP_VERSION
 
 router = APIRouter(prefix="/api/v1", tags=["actualizaciones"])
@@ -75,18 +75,23 @@ def revisar():
 
 
 @router.post("/actualizacion")
-def instalar(datos: InstalarIn):
-    """Instala la versión nueva y, si se puede, reinicia el programa solo."""
-    url = datos.zip
-    if not url:
-        info = actualizar.revisar()
-        if not info.get("ok"):
-            return info
-        if not info.get("hay_nueva"):
-            return {"ok": True, "sin_cambios": True, "aviso": "Ya estás al día."}
-        url = info.get("zip", "")
+def instalar(datos: InstalarIn, quien: dict = Depends(sesion.exige("config"))):
+    """Instala la versión nueva del canal oficial y, si se puede, reinicia solo.
 
-    resultado = actualizar.aplicar(url)
+    Solo desde el canal oficial y solo el dueño. Antes aceptaba la dirección de
+    CUALQUIER zip que viniera en la petición, y no pedía sesión. La caja escucha
+    en toda la red del local (por los televisores) y el PIN de red viene igual
+    en todas las instalaciones: cualquiera conectado al Wi-Fi del local podía
+    hacer que la caja se instalara un programa ajeno. El campo `zip` se sigue
+    aceptando porque las pantallas viejas lo mandan, pero ya no se usa.
+    """
+    info = actualizar.revisar()
+    if not info.get("ok"):
+        return info
+    if not info.get("hay_nueva"):
+        return {"ok": True, "sin_cambios": True, "aviso": "Ya estás al día."}
+
+    resultado = actualizar.aplicar(info.get("zip", ""))
     if resultado.get("ok") and resultado.get("archivos"):
         resultado["reiniciando"] = True
         threading.Timer(1.5, _cerrar_para_reiniciar).start()

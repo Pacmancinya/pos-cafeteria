@@ -418,3 +418,70 @@ def test_servida_por_la_caja_el_combo_espera_la_carta_del_local():
     html = io.open(PANTALLAS, encoding="utf-8").read()
     assert "esperandoLaCarta()" in _cuerpo_de(html, "function pintarCombo()")
     assert "cartaDelLocal = true" in _cuerpo_de(html, "function aplicarCarta(")
+
+
+# ---------------------------------------------------------------------------
+# La caja no se puede quedar pegada detrás de un candado que no aparece
+# ---------------------------------------------------------------------------
+"""El local contó que la caja, al rato sin uso, «se queda pegada y hay que
+cerrarla». A los 3 minutos la caja se bloquea sola; para dibujar el candado
+esperaba al servidor, y si el servidor no contestaba el candado nunca aparecía:
+sin sesión no se podía vender, y no había por dónde volver a entrar."""
+
+
+def test_el_candado_se_dibuja_sin_esperar_al_servidor():
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function salirDeLaCaja(")
+    assert cuerpo.index("mostrarCandado(") < cuerpo.index('"/sesion/salir"'), (
+        "salirDeLaCaja vuelve a esperar al servidor antes de mostrar el candado")
+
+
+def test_si_el_servidor_no_contesta_igual_hay_candado():
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function mostrarCandado(")
+    assert "catch" in cuerpo and "candadoSinConexion(" in cuerpo
+
+
+def test_las_lecturas_tienen_plazo_y_los_cobros_no():
+    """Un cobro cortado a la mitad que el servidor sí guardó se cobraría dos veces."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function api(")
+    assert "AbortController" in cuerpo
+    assert 'metodo === "GET" ? ESPERA_LECTURA : 0' in cuerpo
+
+
+def test_una_sesion_perdida_vuelve_al_candado():
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function api(")
+    assert "sesionPerdida()" in cuerpo and '"/sesion/entrar"' in cuerpo, (
+        "un 401 ya no lleva al candado (o el PIN malo también lo haría)")
+
+
+# ---------------------------------------------------------------------------
+# Cada televisor sabe qué muestra, y se entera solo de las actualizaciones
+# ---------------------------------------------------------------------------
+"""El local tenía un TV para la vitrina y otro para la carta, y los dos se iban
+turnando. Y cada cambio a las pantallas obligaba a recargar los TV a mano."""
+
+
+def test_cada_televisor_elige_que_muestra_y_la_direccion_manda():
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "function aplicarModoTv()")
+    assert "PANTALLA_POR_DIRECCION || MODO_A_PANTALLA[CFG.modoTv]" in cuerpo
+
+
+def test_el_televisor_se_recarga_solo_cuando_la_caja_se_actualiza():
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "async function vigilarVersion()")
+    assert "location.reload()" in cuerpo
+    assert "is-open" in cuerpo, "no puede recargarse con el panel Configurar abierto"
+    assert "setInterval(vigilarVersion" in html
+
+
+def test_el_candado_tapa_la_caja_antes_de_preguntarle_al_servidor():
+    """Tapar recién cuando el servidor contesta era el hueco: si no contestaba,
+    la caja quedaba a la vista sin sesión."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function mostrarCandado(")
+    assert cuerpo.index('$("#candado").hidden = false') < cuerpo.index('api("/candado"')
+

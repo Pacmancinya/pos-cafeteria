@@ -292,6 +292,19 @@ quedaron en billetes), cada retiro e ingreso con su hora, su motivo y quién lo 
 propinas de tarjeta pagadas en efectivo, y el total. Ese total es `_efectivo_esperado()`,
 el mismo del cierre y el mismo del papel de 80 mm.
 
+**21. La caja se actualiza solo desde el canal oficial, y solo la actualiza el dueño.**
+`POST /api/v1/actualizacion` ignora cualquier dirección que venga en la petición: baja el
+zip que dice el `version.json` oficial, y pide el permiso `config`. Antes aceptaba la
+dirección de cualquier zip https y no pedía sesión. Como la caja escucha en toda la red del
+local —por los televisores— y el PIN de red viene igual en todas las instalaciones,
+cualquiera conectado al Wi-Fi del local podía hacer que la caja se instalara un programa
+ajeno. El campo `zip` se sigue aceptando porque las pantallas viejas lo mandan, pero no se
+usa. `BUSCAR-ACTUALIZACIONES.bat` no pasa por acá: corre en el mismo computador.
+
+> **Lo que falta, y no es poco:** el paquete no viene firmado. Hoy la confianza es "lo que
+> publique la cuenta de GitHub": si esa cuenta cae, caen todos los locales a la vez. Firmar
+> el paquete es de lo imprescindible antes de vender a otros locales.
+
 ---
 
 ## 2. Modelo de datos `[IMPL]`

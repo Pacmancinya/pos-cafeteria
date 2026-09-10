@@ -1258,3 +1258,14 @@ html,body{overscroll-behavior:none}
 }
 .tarjetas__propina input:focus{outline:2px solid var(--clay);outline-offset:1px}
 .tarjetas__propina small{font-size:12px;color:var(--suave)}
+
+/* La caja no contesta: se dice arriba, por encima del candado y de los avisos
+   y por debajo del teclado. Antes no se decía nada y la pantalla parecía andar. */
+.sin-caja{
+  position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:86;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;max-width:min(92vw,760px);
+  padding:14px 18px;border-radius:14px;background:#7A2E1B;color:#FFF8EF;
+  box-shadow:0 18px 40px rgba(0,0,0,.28);font-size:15px;line-height:1.4;
+}
+.sin-caja[hidden]{display:none}
+.sin-caja b{font-size:16px}

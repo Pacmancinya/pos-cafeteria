@@ -107,6 +107,17 @@ def comprobante(venta_id: int, s: Session = Depends(get_session)):
         descuento = (f"<tr><td>Subtotal</td><td class='num'>{_plata(v.total)}</td></tr>"
                      f"<tr><td>Descuento</td><td class='num'>-{_plata(v.descuento)}</td></tr>")
 
+    # Un pago mixto dice cuánto fue en cada forma. «Mixto» a secas no sirve para
+    # revisar después contra la máquina del banco.
+    if v.medio_pago == "mixto":
+        from apps.pos.api.turnos import _pagos_de
+        filas_pago = "".join(
+            f"<tr><td>Pago {NOMBRE_MEDIO.get(m, m)}</td><td class='num'>{_plata(mt)}</td></tr>"
+            for m, mt in _pagos_de(s, v))
+    else:
+        filas_pago = (f"<tr><td>Pago</td><td class='num'>"
+                      f"{NOMBRE_MEDIO.get(v.medio_pago, v.medio_pago)}</td></tr>")
+
     cuerpo = f"""
     <div class="centro">
       <div class="local">{NOMBRE_LOCAL}</div>
@@ -120,7 +131,7 @@ def comprobante(venta_id: int, s: Session = Depends(get_session)):
       {descuento}
       <tr class="total"><td>TOTAL</td><td class="num">{_plata(cobrado)}</td></tr>
       {propina}
-      <tr><td>Pago</td><td class="num">{NOMBRE_MEDIO.get(v.medio_pago, v.medio_pago)}</td></tr>
+      {filas_pago}
       <tr class="chico"><td>Neto</td><td class="num">{_plata(neto)}</td></tr>
       <tr class="chico"><td>IVA 19%</td><td class="num">{_plata(iva)}</td></tr>
     </table>
@@ -142,10 +153,18 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
 
     por_medio = {m: [0, 0] for m in MEDIOS_PAGO}
     total = propinas = descuentos = 0
+    from apps.pos.api.turnos import _pagos_de
     for v in ventas:
         cobrado = v.total - v.descuento
-        por_medio[v.medio_pago][0] += 1
-        por_medio[v.medio_pago][1] += cobrado
+        # Por partes, con el mismo criterio que el cierre en pantalla. Antes se
+        # hacía por_medio[v.medio_pago], y desde que existe el pago mixto ese
+        # campo puede valer "mixto", que no es una de las claves: el papel del
+        # cierre de CUALQUIER turno con una venta mixta se caía con un error y
+        # no se podía imprimir. Es el mismo tropiezo que tuvo El día (2.15).
+        for medio, monto in _pagos_de(s, v):
+            if medio in por_medio:
+                por_medio[medio][0] += 1
+                por_medio[medio][1] += monto
         total += cobrado
         descuentos += v.descuento
         propinas += v.propina

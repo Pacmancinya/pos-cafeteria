@@ -88,3 +88,25 @@ def test_cierre_imprimible_muestra_el_descuadre(cliente, carta):
 def test_papeles_de_algo_que_no_existe(cliente):
     assert cliente.get("/comprobante/999").status_code == 404
     assert cliente.get("/cierre/999").status_code == 404
+
+
+def test_el_cierre_impreso_aguanta_un_pago_mixto(cliente, carta):
+    """Se caía con KeyError: repartía por venta.medio_pago, que en un pago mixto
+    vale «mixto». Cualquier turno con una venta mixta quedaba sin papel."""
+    cliente.post("/api/v1/turnos/abrir", json={"cajero": "Javi", "monto_inicial": 10000})
+    cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],   # 3400
+        "pagos": [{"medio": "efectivo", "monto": 2000}, {"medio": "debito", "monto": 1400}]})
+    t = cliente.post("/api/v1/turnos/cerrar", json={"conteo": {"1000": 12}}).json()
+    r = cliente.get(f"/cierre/{t['id']}")
+    assert r.status_code == 200, r.text[:300]
+    assert "Efectivo (1)" in r.text and "Débito (1)" in r.text
+
+
+def test_el_comprobante_de_un_pago_mixto_dice_cuanto_fue_en_cada_forma(cliente, carta, caja):
+    v = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
+        "pagos": [{"medio": "efectivo", "monto": 2000}, {"medio": "debito", "monto": 1400}]}).json()
+    html = cliente.get(f"/comprobante/{v['id']}").text
+    assert "Pago Efectivo" in html and "Pago Débito" in html
+

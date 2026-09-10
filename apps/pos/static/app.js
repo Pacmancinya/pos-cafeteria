@@ -48,14 +48,46 @@ function imprimir(ruta) {
 }
 
 /* ---------------- utilidades ---------------- */
+/* Ninguna lectura puede dejar la caja esperando para siempre.
+
+   Así se quedaba "pegada": al rato sin uso la caja se bloquea sola, y para
+   dibujar el candado le pedía cosas al servidor. Si una respuesta no llegaba,
+   el candado nunca aparecía, la sesión ya estaba cerrada, y la caja quedaba a
+   la vista sin dejar vender ni volver a entrar. Había que cerrar el programa.
+
+   Las LECTURAS tienen plazo: pasado el plazo se dan por fallidas y quien las
+   pidió decide qué hacer. Las ESCRITURAS (cobrar, cerrar la caja) NO: cortar a
+   la mitad un cobro que el servidor sí guardó haría que el cajero lo cobre dos
+   veces. Esas esperan como siempre, salvo que quien llama pida un plazo. */
+const ESPERA_LECTURA = 15000;
+
 async function api(ruta, opciones = {}) {
-  const r = await fetch("/api/v1" + ruta, {
-    headers: { "Content-Type": "application/json" },
-    ...opciones,
-  });
+  const { espera, ...resto } = opciones;
+  const metodo = (resto.method || "GET").toUpperCase();
+  const plazo = espera !== undefined ? espera : (metodo === "GET" ? ESPERA_LECTURA : 0);
+  const corte = plazo ? new AbortController() : null;
+  const reloj = corte ? setTimeout(() => corte.abort(), plazo) : null;
+  let r;
+  try {
+    r = await fetch("/api/v1" + ruta, {
+      headers: { "Content-Type": "application/json" },
+      ...resto,
+      ...(corte ? { signal: corte.signal } : {}),
+    });
+  } catch (e) {
+    throw new Error(e && e.name === "AbortError"
+      ? "La caja no respondió a tiempo" : "No se pudo conectar con la caja");
+  } finally {
+    clearTimeout(reloj);
+  }
   if (!r.ok) {
     let detalle = "Error " + r.status;
     try { detalle = (await r.json()).detail || detalle; } catch (e) {}
+    // Una sesión que el servidor ya no reconoce —se reinició, o se cerró por
+    // otro lado— no puede seguir mostrando una caja que no deja hacer nada: se
+    // vuelve al candado. El PIN malo también es 401, pero ése lo maneja el
+    // mismo candado.
+    if (r.status === 401 && ruta !== "/sesion/entrar") sesionPerdida();
     throw new Error(typeof detalle === "string" ? detalle : JSON.stringify(detalle));
   }
   return r.status === 204 ? null : r.json();
@@ -1963,8 +1995,26 @@ function pintarQuien() {
 }
 
 /* ---- la pantalla de entrada ---- */
+let tCandado = null;
+
 async function mostrarCandado(motivo) {
-  const info = await api("/candado");
+  clearTimeout(tCandado);
+  // La caja se TAPA de inmediato; las caras llegan cuando contesta el servidor.
+  // Esperar la respuesta para tapar era justo el hueco por donde se quedaba
+  // pegada: si el servidor no contestaba, no se tapaba nunca.
+  if ($("#candado").hidden) {
+    $("#candadoCaja").innerHTML = `<h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
+      <p>${motivo || "¿Quién está en la caja?"}</p>`;
+    $("#candado").hidden = false;
+    const puerta = $("#cajaCerrada");
+    if (puerta) puerta.hidden = true;
+  }
+  let info;
+  try {
+    info = await api("/candado", { espera: 6000 });
+  } catch (e) {
+    return candadoSinConexion(motivo);
+  }
   CANDADO_USUARIOS = info.usuarios;
   if (info.primer_arranque) return pintarPrimerUsuario();
 
@@ -2049,21 +2099,27 @@ function pedirPinEscrito(u) {
 }
 
 async function entrarComo(usuarioId, pin) {
+  let r;
   try {
-    const r = await api("/sesion/entrar", {
-      method: "POST", body: JSON.stringify({ usuario_id: usuarioId, pin }) });
-    $("#candado").hidden = true;
-    await cargarSesion();
-    await cargarTurno();          // la puerta de la caja depende de esto
-    avisar("Hola, " + r.nombre);
-    reiniciarInactividad();
+    r = await api("/sesion/entrar", {
+      method: "POST", body: JSON.stringify({ usuario_id: usuarioId, pin }), espera: 10000 });
   } catch (e) {
     // Un PIN malo no puede sacar de la pantalla: se sacude y se vuelve a pedir.
     $("#candadoCaja").classList.add("candado--mal");
     setTimeout(() => $("#candadoCaja").classList.remove("candado--mal"), 420);
     avisar(e.message, true);
     setTimeout(() => pedirPin(usuarioId), 450);
+    return;
   }
+  // Ya entró. Si lo que sigue falla, NO es un PIN malo: antes caía en el mismo
+  // catch y volvía a pedir el PIN sobre un candado ya escondido.
+  $("#candado").hidden = true;
+  try {
+    await cargarSesion();
+    await cargarTurno();          // la puerta de la caja depende de esto
+  } catch (e) { avisar(e.message, true); }
+  avisar("Hola, " + r.nombre);
+  reiniciarInactividad();
 }
 
 async function crearPrimerUsuario() {
@@ -2211,11 +2267,61 @@ function puedoIrme() {
 }
 
 async function salirDeLaCaja(por) {
-  try { await api("/sesion/salir", { method: "POST", body: JSON.stringify({ por }) }); }
-  catch (e) {}
+  const motivo = por === "bloqueo" ? "La caja se bloqueó sola. ¿Quién sigue?"
+                                   : "¿Quién está en la caja?";
+  // El candado va PRIMERO, sin esperar al servidor. Antes se dibujaba recién
+  // cuando el servidor contestaba, y si no contestaba —o contestaba con error—
+  // la caja quedaba a la vista, sin sesión y sin candado: no dejaba vender y no
+  // había por dónde volver a entrar. Así "se quedaba pegada y había que
+  // cerrarla", que es como lo contó el local.
+  SESION = { entrado: false, provisorio: false, permisos: [] };
+  pintarQuien();
+  const candado = mostrarCandado(motivo);
+  try {
+    await api("/sesion/salir", { method: "POST", body: JSON.stringify({ por }), espera: 6000 });
+  } catch (e) { /* se ordena solo cuando entre el siguiente */ }
   await cargarSesion();
-  mostrarCandado(por === "bloqueo" ? "La caja se bloqueó sola. ¿Quién sigue?"
-                                   : "¿Quién está en la caja?");
+  await candado;
+}
+
+/* El candado cuando el servidor no contesta. Igual TAPA la caja —una caja sin
+   sesión a la vista parece que anda y no hace nada— y se reintenta sola. */
+function candadoSinConexion(motivo) {
+  $("#candadoCaja").innerHTML = `
+    <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
+    <p>${motivo || "¿Quién está en la caja?"}</p>
+    <p class="candado__nota">La caja no está respondiendo. Se vuelve a intentar sola;
+      si sigue así, cierra el programa y ábrelo de nuevo.</p>
+    <button class="btn btn--cobrar" data-reintentar-candado>Reintentar ahora</button>`;
+  $("#candado").hidden = false;
+  const puerta = $("#cajaCerrada");
+  if (puerta) puerta.hidden = true;
+  clearTimeout(tCandado);
+  tCandado = setTimeout(() => mostrarCandado(motivo), 5000);
+}
+
+/* El servidor ya no reconoce la sesión (401). Si la pantalla creía que había
+   alguien adentro, se va al candado; si el candado ya está arriba, nada. */
+let volviendoAlCandado = false;
+function sesionPerdida() {
+  if (volviendoAlCandado || !SESION.entrado || SESION.provisorio) return;
+  if (!$("#candado").hidden) return;
+  volviendoAlCandado = true;
+  SESION = { entrado: false, provisorio: false, permisos: [] };
+  pintarQuien();
+  mostrarCandado("Se cerró la sesión. ¿Quién sigue?")
+    .finally(() => { volviendoAlCandado = false; });
+}
+
+/* ¿La caja sigue viva? Se pregunta al volver a la ventana y cada minuto. Si no
+   contesta, se dice con todas sus letras y se ofrece recargar, en vez de dejar
+   una pantalla que parece andar y no hace nada. Con el candado arriba no hace
+   falta: el candado ya lo dice. */
+async function vigilarLaCaja() {
+  let viva = true;
+  try { await api("/salud", { espera: 5000 }); } catch (e) { viva = false; }
+  const aviso = $("#sinCaja");
+  if (aviso) aviso.hidden = viva || !$("#candado").hidden;
 }
 
 /* ---- bloqueo por inactividad ----
@@ -3463,6 +3569,8 @@ document.addEventListener("click", (e) => {
   // ---- candado ----
   if (cerca("data-entrar")) return pedirPin(+cerca("data-entrar").dataset.entrar);
   if (cerca("data-otro-usuario")) return mostrarCandado();
+  if (cerca("data-reintentar-candado")) return mostrarCandado();
+  if (cerca("data-recargar")) return location.reload();
   if (t.id === "ajTeclado") return guardarTeclado(t.checked);
   if (t.id === "abrirLaCaja") return dialogoTurno();
   if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");
@@ -3638,6 +3746,10 @@ document.addEventListener("keydown", (e) => {
 (async function iniciar() {
   reloj();
   setInterval(reloj, 20000);
+  // La caja se vigila sola: al volver a la ventana y cada minuto.
+  setInterval(vigilarLaCaja, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) vigilarLaCaja(); });
+  addEventListener("focus", vigilarLaCaja);
   try {
     const s = await api("/salud");
     NOMBRE_DEL_LOCAL = s.local;

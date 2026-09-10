@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=45">
+<link rel="stylesheet" href="/static/styles.css?v=46">
 </head>
 <body>
 
@@ -31,6 +31,13 @@
     <span class="reloj" id="reloj">--:--</span>
   </div>
 </header>
+
+<!-- Cuando la caja no contesta, se dice. Lo prende vigilarLaCaja() en app.js. -->
+<div class="sin-caja" id="sinCaja" role="alert" hidden>
+  <b>La caja no está respondiendo.</b>
+  <span>Si no se arregla sola en un minuto, recarga. Si tampoco, cierra el programa y ábrelo de nuevo.</span>
+  <button class="btn" data-recargar>Recargar</button>
+</div>
 
 <!-- ══════════ CAJA ══════════ -->
 <main class="vista is-on" data-vista="caja">
@@ -300,6 +307,6 @@
 <script src="/static/guias.js?v=11"></script>
 <script src="/static/teclado.js?v=3"></script>
 <script src="/static/escaner.js?v=3"></script>
-<script src="/static/app.js?v=46"></script>
+<script src="/static/app.js?v=47"></script>
 </body>
 </html>

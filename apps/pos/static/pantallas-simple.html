@@ -287,6 +287,28 @@ html, body {
     return true;
   }
 
+  /* ---- recargarse sola cuando la caja se actualiza ----
+     La pagina queda abierta todo el dia en el televisor. Cuando la caja se
+     actualiza, el TV sigue con la version vieja hasta que alguien apriete F5,
+     y en un TV colgado en la pared nadie lo hace. Cada 5 minutos se le pregunta
+     a la caja que version tiene; si cambio, se recarga sola. XMLHttpRequest y
+     no fetch: esta pagina existe para televisores viejos. */
+  var versionInicial = null;
+  function vigilarVersion() {
+    if (location.protocol === "file:") { return; }
+    var x = new XMLHttpRequest();
+    x.open("GET", "/api/v1/salud?t=" + (new Date()).getTime(), true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4 || x.status !== 200) { return; }
+      var v = null;
+      try { v = JSON.parse(x.responseText).version; } catch (e) { return; }
+      if (!v) { return; }
+      if (versionInicial === null) { versionInicial = v; return; }
+      if (v !== versionInicial) { location.reload(); }
+    };
+    x.send();
+  }
+
   /* ---- arrancar ---- */
   function empezar() {
     if (param("diag")) { diagnostico(); return; }
@@ -303,6 +325,9 @@ html, body {
         pintar();
       });
     }, CADA_RECARGA);
+
+    vigilarVersion();
+    setInterval(vigilarVersion, 5 * 60000);
 
     // Tocar la pantalla o apretar cualquier tecla del control pasa a lo
     // siguiente: en un TV no hay mouse, pero el control manda teclas.

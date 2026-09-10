@@ -790,8 +790,10 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
         el total da lo mismo que en la pantalla.</dd>
       <dt>TV parado o acostado</dt>
       <dd>En Configurar → Pantallas eliges <b>Vertical</b> (TV parado) u <b>Horizontal</b> (TV acostado). Todo el diseño se reordena solo.</dd>
-      <dt>Dos televisores, un solo archivo</dt>
-      <dd>Abre el archivo con <code>?p=1</code> al final de la dirección en el TV de la vitrina, y con <code>?p=2</code> en el del menú. Cada uno queda fijo en su pantalla, sin consola y sin saltar de una a otra.</dd>
+      <dt>Dos televisores</dt>
+      <dd>En cada TV: Configurar → Pantallas → «Qué muestra este televisor». Uno en <b>Solo la
+        vitrina</b> y el otro en <b>Solo la carta</b>; queda guardado en cada TV y ya no se turnan.
+        También sirve abrir la dirección con <code>?p=1</code> o <code>?p=2</code>: la dirección manda.</dd>
       <dt>Modo TV</dt>
       <dd>Pantalla completa con <kbd>F</kbd>. En el equipo del local conviene abrir Chrome en modo kiosko para que no se vea nada del navegador.</dd>
       <dt>Si el equipo es lento</dt>
@@ -885,6 +887,11 @@ const CONFIG = {
 
   // `reco` es cuánto se queda cada combo antes de que el programa arme otro.
   tiempos: { vitrina: 20000, categoria: 14000, reco: 12000 },
+
+  // Qué muestra ESTE televisor: "turnar" (vitrina y carta, una y otra),
+  // "vitrina" o "menu". Queda guardado en el TV, así que en un local con dos
+  // televisores cada uno sabe cuál es sin escribir nada en la dirección.
+  modoTv: "turnar",
 
   categorias: [
     {
@@ -1455,6 +1462,22 @@ function paso() {
   }
 }
 
+/* Qué muestra ESTE televisor.
+   Manda la dirección si trae ?p=1 (solo vitrina) o ?p=2 (solo carta). Si no,
+   lo que se eligió en Configurar → Pantallas, que queda guardado en el TV.
+   Lo segundo existe porque un local lo pidió así: tenía dos televisores, uno
+   para la vitrina y otro para la carta, y los dos se iban turnando, porque en
+   los dos se había pegado la dirección de "las dos turnándose". Pedirle al
+   dueño que reescriba una dirección en el navegador de un televisor no es una
+   solución. */
+const MODO_A_PANTALLA = { vitrina: 1, menu: 2 };
+let PANTALLA_POR_DIRECCION = 0;
+
+function aplicarModoTv() {
+  bloqueada = PANTALLA_POR_DIRECCION || MODO_A_PANTALLA[CFG.modoTv] || 0;
+  irA(bloqueada || 1);
+}
+
 /* ==========================================================
    8. Salpicaduras
    ========================================================== */
@@ -1628,7 +1651,7 @@ function guardarEditor() {
   setOrientacion(CFG.orientacion);
   pintarMargen();
   pintarVitrina(); pintarCabecera(); pintarCategoria(catIdx);
-  cerrarEditor(); paso(); pasoCombo(); iniciarPV();
+  cerrarEditor(); aplicarModoTv(); paso(); pasoCombo(); iniciarPV();
   toast(ok ? "Listo, cambios guardados" : "Aplicado, pero este navegador no permite guardarlo");
 }
 
@@ -1658,8 +1681,21 @@ function pintarEdLocal() {
 
 function pintarEdPantallas() {
   const v = BORRADOR.orientacion === "vertical";
+  const modo = BORRADOR.modoTv || "turnar";
+  const fijo = PANTALLA_POR_DIRECCION;
   $("#edPantallas").innerHTML = `
-    <h3>Cómo está puesto el televisor</h3>
+    <h3>Qué muestra este televisor</h3>
+    <p class="pista">Con dos televisores, pon uno en <b>Solo la vitrina</b> y el otro en
+      <b>Solo la carta</b>. Queda guardado en cada televisor.</p>
+    <div class="orient">
+      <button class="orient-b${modo === "turnar" ? " is-on" : ""}" data-modo="turnar">Las dos, turnándose</button>
+      <button class="orient-b${modo === "vitrina" ? " is-on" : ""}" data-modo="vitrina">Solo la vitrina</button>
+      <button class="orient-b${modo === "menu" ? " is-on" : ""}" data-modo="menu">Solo la carta</button>
+    </div>
+    ${fijo ? `<div class="aviso">Ojo: este televisor se abrió con <b>?p=${fijo}</b> en la
+      dirección, y eso manda: muestra siempre ${fijo === 1 ? "la vitrina" : "la carta"}.
+      Para que valga lo de arriba, ábrelo sin <b>?p=</b>.</div>` : ""}
+    <h3 style="margin-top:26px">Cómo está puesto el televisor</h3>
     <p class="pista">Si el TV está colgado parado, marca Vertical. El diseño se reordena solo: los productos quedan uno bajo otro y el destacado pasa abajo.</p>
     <div class="orient">
       <button class="orient-b${v ? "" : " is-on"}" data-or="horizontal"><i class="h"></i>Horizontal · TV acostado</button>
@@ -1672,7 +1708,8 @@ function pintarEdPantallas() {
       <label class="campo"><span>Cada categoría (segundos)</span><input type="number" min="5" max="180" data-t="categoria" value="${Math.round(BORRADOR.tiempos.categoria / 1000)}"></label>
     </div>
     <label class="campo"><span>Cada cuánto cambia el combo (segundos)</span><input type="number" min="5" max="90" data-t="reco" value="${Math.round(BORRADOR.tiempos.reco / 1000)}"></label>
-    <div class="aviso">¿Dos televisores? Abre el archivo con <b>?p=1</b> al final de la dirección en el de la vitrina, y con <b>?p=2</b> en el del menú. Así cada uno se queda en su pantalla.</div>`;
+    <div class="aviso">También se puede fijar desde la dirección: <b>?p=1</b> solo vitrina,
+      <b>?p=2</b> solo carta. La dirección manda sobre lo que se elija arriba.</div>`;
 }
 
 function edCampos(it, i, obj, sinTag) {
@@ -1888,6 +1925,8 @@ function conectarEditor() {
   });
 
   $("#edPantallas").addEventListener("click", e => {
+    const m = e.target.closest("[data-modo]");
+    if (m) { BORRADOR.modoTv = m.dataset.modo; return pintarEdPantallas(); }
     const b = e.target.closest("[data-or]");
     if (!b) return;
     BORRADOR.orientacion = b.dataset.or;
@@ -2160,6 +2199,28 @@ function iniciarPV() {
   tPV = setInterval(traerPV, min * 60000);
 }
 
+/* ---- recargarse sola cuando la caja se actualiza ----
+   La página queda abierta todo el día en el televisor. Cuando la caja se
+   actualiza, el navegador del TV sigue mostrando la versión VIEJA que tiene en
+   memoria hasta que alguien aprieta F5, y en un TV colgado en la pared nadie lo
+   hace: cada cambio a la vitrina obligaba a ir al local a recargarlo a mano.
+   Cada 5 minutos se le pregunta a la caja qué versión tiene (/api/v1/salud, que
+   no pide PIN) y, si cambió, la página se recarga sola. Nunca con el panel
+   Configurar abierto: se perdería lo que se estaba escribiendo. */
+let versionConQueArranco = null;
+
+async function vigilarVersion() {
+  if (location.protocol === "file:") return;
+  try {
+    const r = await fetch("/api/v1/salud", { cache: "no-store" });
+    if (!r.ok) return;
+    const v = (await r.json()).version;
+    if (!v) return;
+    if (!versionConQueArranco) { versionConQueArranco = v; return; }
+    if (v !== versionConQueArranco && !$("#editor").classList.contains("is-open")) location.reload();
+  } catch (e) { /* caja apagada o red caída: se pregunta de nuevo en la próxima vuelta */ }
+}
+
 /* ==========================================================
    10. Arranque
    ========================================================== */
@@ -2198,20 +2259,18 @@ function iniciarPV() {
     if (b) b.click();
   }
   const p = params.get("p");
-  if (p === "1" || p === "2") {
-    bloqueada = +p;                        // un televisor para cada pantalla
-    document.body.classList.add("kiosko");
-    irA(bloqueada);
-  } else {
-    if (params.get("tv")) document.body.classList.add("kiosko");  // un solo TV, las dos pantallas turnándose
-    irA(1);
-  }
+  // ?p=1 / ?p=2 / ?tv=1 esconden la consola: son direcciones para un TV.
+  if (p === "1" || p === "2" || params.get("tv")) document.body.classList.add("kiosko");
+  PANTALLA_POR_DIRECCION = (p === "1" || p === "2") ? +p : 0;
+  aplicarModoTv();
   luzOn(actual === 1);
   paso();
   pasoCombo();
   ajustar();       // recién ahora el tamaño real es el definitivo (con o sin consola)
   vigilarTamano();
   iniciarPV();     // si hay punto de venta configurado, trae la carta
+  vigilarVersion();
+  setInterval(vigilarVersion, 5 * 60000);
 
   // interaccion de la vitrina
   // Tocar la vitrina salpica café y nada más. En el televisor del local esto no

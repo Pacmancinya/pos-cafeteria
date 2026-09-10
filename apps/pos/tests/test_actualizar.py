@@ -171,3 +171,51 @@ def test_revisar_detecta_que_hay_una_nueva(monkeypatch):
 def test_la_api_informa_la_version(cliente):
     v = cliente.get("/api/v1/version").json()
     assert v["version"] and v["nombre"]
+
+
+# ---------------------------------------------------------------------------
+# Quién puede actualizar la caja, y desde dónde
+# ---------------------------------------------------------------------------
+"""Antes POST /actualizacion instalaba el zip de CUALQUIER dirección que viniera
+en la petición, y no pedía sesión. Con el PIN de red, que viene igual en todas
+las cajas, cualquiera en el Wi-Fi del local podía instalarle un programa ajeno."""
+
+
+def _canal(monkeypatch, pedidas):
+    """El canal oficial de mentira: dice que hay versión nueva y anota qué se
+    mandó a instalar. `archivos` vacío para que la prueba no reinicie nada."""
+    monkeypatch.setattr(actualizar, "revisar",
+                        lambda: {"ok": True, "hay_nueva": True,
+                                 "zip": "https://github.com/oficial/main.zip"})
+    monkeypatch.setattr(actualizar, "aplicar",
+                        lambda url: pedidas.append(url) or {"ok": True, "archivos": []})
+
+
+def test_la_caja_solo_se_actualiza_desde_el_canal_oficial(cliente, monkeypatch):
+    pedidas = []
+    _canal(monkeypatch, pedidas)
+    r = cliente.post("/api/v1/actualizacion", json={"zip": "https://atacante.cl/malo.zip"})
+    assert r.status_code == 200, r.text
+    assert pedidas == ["https://github.com/oficial/main.zip"]
+
+
+def test_un_cajero_no_puede_actualizar_la_caja(cliente, monkeypatch):
+    pedidas = []
+    _canal(monkeypatch, pedidas)
+    ana = cliente.post("/api/v1/usuarios", json={"nombre": "Ana", "pin": "1234"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": ana["id"], "pin": "1234"})
+    javi = cliente.post("/api/v1/usuarios",
+                        json={"nombre": "Javi", "pin": "4321", "rol": "cajero"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": javi["id"], "pin": "4321"})
+    assert cliente.post("/api/v1/actualizacion", json={}).status_code == 403
+    assert pedidas == []
+
+
+def test_el_dueno_si_puede_actualizar(cliente, monkeypatch):
+    pedidas = []
+    _canal(monkeypatch, pedidas)
+    ana = cliente.post("/api/v1/usuarios", json={"nombre": "Ana", "pin": "1234"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": ana["id"], "pin": "1234"})
+    assert cliente.post("/api/v1/actualizacion", json={}).status_code == 200
+    assert pedidas == ["https://github.com/oficial/main.zip"]
+
