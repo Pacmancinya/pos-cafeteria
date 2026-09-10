@@ -176,7 +176,6 @@ kbd{font:500 11px/1 var(--f-texto);background:rgba(244,226,204,.1);border:1px so
   0%,100%{transform:translate(0,0) scale(1)}
   50%{transform:translate(-13px,-11px) scale(1.2)}
 }
-@keyframes aro{to{stroke-dashoffset:150.8}}
 @keyframes burbuja{
   0%{transform:translateY(0);opacity:0}
   18%{opacity:.72}
@@ -193,13 +192,12 @@ kbd{font:500 11px/1 var(--f-texto);background:rgba(244,226,204,.1);border:1px so
   grid-template-columns:minmax(0,1fr);
   overflow:hidden;
 }
-.vitrina__hero,.animo{min-width:0}
+.vitrina__hero,.dupla{min-width:0}
 .vitrina__hero{
   position:relative;display:grid;place-items:center;align-content:center;gap:6px;
   grid-template-columns:minmax(0,1fr);   /* que el nombre sobresalga parejo por los dos lados */
   transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1);
 }
-.vitrina.is-reco .vitrina__hero{opacity:0;transform:translateY(-26px);pointer-events:none}
 .kicker{
   font:600 24px/1 var(--f-texto);letter-spacing:.42em;text-transform:uppercase;
   color:rgba(255,248,239,.72);margin:0 0 -10px;padding-left:.42em;
@@ -220,58 +218,58 @@ kbd{font:500 11px/1 var(--f-texto);background:rgba(244,226,204,.1);border:1px so
   100%{opacity:0;transform:translateY(240px) scale(1.2,1.7)}
 }
 
-/* eleccion de animo */
-.animo{
-  position:relative;padding:0 90px 60px;display:grid;gap:24px;justify-items:center;
+/* los dos recomendados */
+.dupla{
+  position:relative;padding:0 90px 52px;display:grid;gap:22px;justify-items:center;
   grid-template-columns:minmax(0,1fr);
-  transition:opacity .45s ease,transform .45s ease;
 }
-.vitrina.is-reco .animo{opacity:0;transform:translateY(20px);pointer-events:none}
-.animo__q{margin:0;font:600 40px/1 var(--f-display);color:var(--leche)}
-.animo__fila{display:flex;gap:20px}
-.chip{
-  appearance:none;cursor:pointer;
-  display:grid;gap:6px;justify-items:center;
-  min-width:252px;padding:22px 30px 24px;
-  border-radius:26px;border:2px solid rgba(255,248,239,.36);
-  background:rgba(64,22,8,.2);color:var(--leche);
-  transition:transform .22s cubic-bezier(.2,.8,.3,1.2),background .22s ease,border-color .22s ease;
+.dupla__t{
+  margin:0;font:600 26px/1 var(--f-texto);letter-spacing:.34em;text-transform:uppercase;
+  color:rgba(255,248,239,.66);
 }
-.chip:hover,.chip:focus-visible{background:rgba(43,14,4,.42);border-color:var(--leche);transform:translateY(-5px)}
-.chip:focus-visible{outline:3px solid var(--caramelo);outline-offset:4px}
-.chip:active{transform:translateY(-1px) scale(.98)}
-.chip b{font:600 34px/1 var(--f-display)}
-.chip span{font:400 19px/1 var(--f-texto);color:rgba(255,248,239,.68)}
+.dupla__combo{width:100%;display:grid;justify-items:center}
+/* Sin nada que ofrecer no queda un título flotando sobre el vacío. */
+.dupla[hidden]{display:none}
 
-/* tarjeta de recomendacion */
-.reco{
-  position:absolute;inset:0;display:grid;place-items:center;
-  opacity:0;visibility:hidden;transform:scale(.97);
-  transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1),visibility 0s linear .5s;
+/* La ficha del combo, NO un botón. Todo lo que la hacía parecer apretable se
+   sacó a propósito: no hay borde marcado, ni hover, ni cursor de mano, ni foco,
+   ni texto que mande a hacer algo en la pantalla. Mandan los dos dibujos y el
+   precio, que es como se lee un cartel de vitrina.
+   Acostado va así: los dos dibujos a la izquierda, el nombre y el precio a la
+   derecha. Parado (más abajo) va como en el dibujo del cliente: los dibujos
+   arriba y el texto debajo. */
+.combo{
+  width:100%;max-width:1360px;
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:44px;
+  padding:24px 50px 24px 30px;border-radius:34px;
+  background:linear-gradient(166deg,rgba(60,24,9,.34),rgba(34,12,3,.46));
+  box-shadow:0 22px 50px rgba(30,8,0,.26);
+  animation:itemIn .6s cubic-bezier(.2,.75,.25,1) backwards;
 }
-.vitrina.is-reco .reco{opacity:1;visibility:visible;transform:none;transition-delay:0s}
-.reco__card{
-  position:relative;
-  width:1250px;display:grid;grid-template-columns:400px 1fr;align-items:center;gap:52px;
-  padding:52px 64px;border-radius:40px;
-  background:linear-gradient(160deg,rgba(38,16,6,.9),rgba(26,10,3,.94));
-  border:1px solid rgba(255,248,239,.16);
-  box-shadow:0 40px 90px rgba(30,8,0,.45);
+.combo__arte{display:flex;align-items:center;justify-content:center;gap:16px}
+.combo__dib{display:grid;place-items:center}
+.combo__dib svg{width:210px;height:210px;filter:drop-shadow(0 18px 26px rgba(30,8,0,.42))}
+.combo__mas{font:600 60px/1 var(--f-display);color:var(--caramelo);opacity:.85}
+.combo__info{min-width:0}
+/* Tope de líneas: el punto de venta deja nombres de hasta 60 letras, y dos de
+   ésos juntos empujarían el logo fuera de la pantalla. */
+.combo__nombre{
+  margin:0;font:600 50px/1.06 var(--f-display);color:var(--leche);letter-spacing:-.01em;
+  overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
 }
-.reco__art{width:420px;height:420px;display:grid;place-items:center}
-.reco__art svg{width:400px;height:400px;filter:drop-shadow(0 24px 32px rgba(0,0,0,.4))}
-.reco__eyebrow{
-  margin:0 0 12px;font:600 20px/1 var(--f-texto);letter-spacing:.34em;text-transform:uppercase;
-  color:var(--caramelo);
+.combo__precio{
+  display:block;margin-top:16px;font:600 78px/1 var(--f-display);
+  color:var(--caramelo);font-variant-numeric:tabular-nums;
 }
-.reco__nombre{margin:0;font:600 88px/.98 var(--f-display);color:var(--leche);letter-spacing:-.01em;text-wrap:balance}
-.reco__desc{margin:18px 0 0;font:400 29px/1.4 var(--f-texto);color:rgba(244,226,204,.72);max-width:22ch}
-.reco__pie{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;margin-top:34px}
-.reco__precio{font:600 82px/1 var(--f-display);color:var(--caramelo);font-variant-numeric:tabular-nums}
-.reco__precio .cur{font-size:.5em;opacity:.62;margin-right:.06em;vertical-align:.16em}
-.reco__barra{font:500 22px/1.35 var(--f-texto);color:rgba(244,226,204,.5);text-align:right;max-width:15ch}
-.reco__aro{position:absolute;right:40px;top:36px;width:56px;height:56px}
-.reco__aro circle{fill:none;stroke-width:4}
+.combo__precio .cur{font-size:.5em;opacity:.62;margin-right:.06em;vertical-align:.16em}
+/* La respuesta a "¿y ahora qué hago?", que es lo que el dedo estaba
+   preguntando. Va afuera de la ficha, abajo: adentro parecería la etiqueta de
+   un botón. */
+.dupla__pie{
+  margin:0;font:500 24px/1 var(--f-texto);letter-spacing:.16em;text-transform:uppercase;
+  color:rgba(255,248,239,.52);
+}
 
 /* --- 7. Pantalla 2 · tablero de menu --------------------------- */
 .tablero{
@@ -398,23 +396,21 @@ body.vertical .kicker{font-size:30px;margin-bottom:-4px}
    pero solo con margen vacío, así el nombre se ve grande en el TV parado */
 body.vertical .palabra{width:1240px;height:560px;margin:-46px 0 -20px}
 body.vertical .bajada{font-size:35px}
-body.vertical .animo{padding:0 66px 132px;gap:44px}
-body.vertical .animo__q{font-size:52px}
-body.vertical .animo__fila{display:grid;grid-template-columns:1fr 1fr;gap:22px;width:100%}
-body.vertical .chip{min-width:0;padding:36px 22px 38px}
-body.vertical .chip b{font-size:42px}
-body.vertical .chip span{font-size:23px}
-body.vertical .reco__card{
-  width:920px;grid-template-columns:1fr;justify-items:center;text-align:center;
-  gap:14px;padding:60px 56px 64px;
+body.vertical .dupla{padding:0 66px 90px;gap:26px}
+body.vertical .dupla__t{font-size:34px}
+/* Parado va como lo dibujó el cliente: los dos dibujos arriba, uno al lado del
+   otro, y debajo el nombre y el precio. Y todo MÁS GRANDE que en la pantalla del
+   menú, a propósito: el tablero se lee a un metro, apoyado en la barra, y la
+   vitrina se lee desde la fila, a tres o cuatro metros. */
+body.vertical .combo{
+  grid-template-columns:minmax(0,1fr);justify-items:center;text-align:center;
+  gap:18px;padding:38px 44px 46px;
 }
-body.vertical .reco__art{width:360px;height:360px}
-body.vertical .reco__art svg{width:340px;height:340px}
-body.vertical .reco__nombre{font-size:78px}
-body.vertical .reco__desc{max-width:26ch;margin-inline:auto}
-body.vertical .reco__pie{flex-direction:column;align-items:center;gap:12px;margin-top:26px}
-body.vertical .reco__barra{text-align:center;max-width:none}
-body.vertical .reco__aro{right:34px;top:30px}
+body.vertical .combo__dib svg{width:330px;height:330px}
+body.vertical .combo__mas{font-size:86px}
+body.vertical .combo__nombre{font-size:62px;-webkit-line-clamp:4}
+body.vertical .combo__precio{font-size:108px;margin-top:20px}
+body.vertical .dupla__pie{font-size:30px}
 
 /* tablero en vertical */
 body.vertical .tablero__top{padding:40px 48px 18px}
@@ -640,11 +636,11 @@ body.kiosko .viewport{border-radius:0;box-shadow:none}
 body.calma .vapor,body.calma .burbuja,body.calma .gota-cae{animation:none;opacity:.34}
 body.calma .blob{animation:none}   /* las gotas quedan quietas, no transparentes */
 body.calma .cinta__pista{animation-duration:130s}
-body.calma .item,body.calma .destacado{animation-duration:.01s}
+body.calma .item,body.calma .destacado,body.calma .combo{animation-duration:.01s}
 body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
 @media (prefers-reduced-motion:reduce){
   .vapor,.burbuja,.gota-cae{animation:none;opacity:.34}
-  .item,.destacado{animation-duration:.01s}
+  .item,.destacado,.combo{animation-duration:.01s}
   .cinta__pista{animation-duration:130s}
 }
 </style>
@@ -718,12 +714,20 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
           <span class="gota-cae" style="left:74%;top:64%;--d:4.9s"></span>
         </div>
 
-        <div class="animo">
-          <p class="animo__q" id="animoQ">¿Qué te tinca hoy?</p>
-          <div class="animo__fila" id="chips"></div>
+        <!-- El combo de la vitrina.
+             Acá había "¿Qué te tinca hoy?" y cuatro botones. En el local los
+             clientes IBAN Y LOS APRETABAN: el televisor no es táctil, así que
+             quedaban tocando una pantalla que no contesta. Un botón en una
+             pantalla que no responde no es un adorno, es una promesa rota.
+             Ahora no hay nada que apretar: una sola ficha con un café y un
+             sándwich de la carta, que arma el programa, y la suma de los dos
+             precios — tal como lo dibujó el cliente en un papel. -->
+        <div class="dupla">
+          <p class="dupla__t" id="duplaT"></p>
+          <div class="dupla__combo" id="combo"></div>
+          <p class="dupla__pie" id="duplaPie"></p>
         </div>
 
-        <div class="reco" id="reco" aria-live="polite"></div>
         <div class="salpica" id="salpica"></div>
         <div class="grano"></div>
       </section>
@@ -777,6 +781,13 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
     <dl>
       <dt>Cambiar precios, productos y horarios</dt>
       <dd>Aprieta <b>Configurar</b> (o la tecla <kbd>C</kbd>). Ahí editas todo sin tocar código: nombre del local, productos, precios, ofertas, horarios y el dibujo de cada producto. Los cambios quedan guardados en ese computador.</dd>
+      <dt>El combo de la vitrina</dt>
+      <dd>Lo arma el programa solo: toma un café y un sándwich de la carta, muestra los dos
+        dibujos y la <b>suma de sus precios</b>, y cada tanto arma otro. Los busca por el
+        nombre de la categoría; si la carta no tiene sándwiches, usa pastelería u otra de
+        comida. <b>No es un botón y no se toca:</b> el televisor no es táctil. Quien lo
+        quiera lo pide en la barra, y en la caja se cobran los dos productos por separado:
+        el total da lo mismo que en la pantalla.</dd>
       <dt>TV parado o acostado</dt>
       <dd>En Configurar → Pantallas eliges <b>Vertical</b> (TV parado) u <b>Horizontal</b> (TV acostado). Todo el diseño se reordena solo.</dd>
       <dt>Dos televisores, un solo archivo</dt>
@@ -864,24 +875,16 @@ const CONFIG = {
   kicker: "Café de especialidad",
   bajada: "Tostado en Graneros, molido al momento",
   marcaTxt: "Café de especialidad · Graneros",
-  pregunta: "¿Qué te tinca hoy?",
 
+  // El título del combo NO es una pregunta, y eso es a propósito. Antes decía
+  // "¿Qué te tinca hoy?" con cuatro botones debajo: una pregunta pide una
+  // respuesta, y la respuesta que encontraba la gente era el dedo. Un título
+  // que afirma no pide nada. El pie dice lo único que sí hay que hacer.
+  tituloSug: "Combo sugerido",
+  pieSug: "Se pide en la barra",
+
+  // `reco` es cuánto se queda cada combo antes de que el programa arme otro.
   tiempos: { vitrina: 20000, categoria: 14000, reco: 12000 },
-
-  animos: [
-    { b: "Despertar", s: "algo cargado",
-      reco: { n: "Flat White", d: "Doble ristretto con microespuma. Directo al grano.", p: 3700,
-              art: { k: "mug", liq: "#8A5A34", foam: "#E8CFAE", arte: 1, hot: 1 } } },
-    { b: "Algo dulce", s: "para el bajón",
-      reco: { n: "Mocha con crema", d: "Café, cacao amargo y crema batida encima.", p: 3900,
-              art: { k: "mug", liq: "#3A1B0C", crema: 1, hot: 1 } } },
-    { b: "Bien helado", s: "para el calor",
-      reco: { n: "Cold Brew", d: "18 horas de infusión en frío. Suave, sin amargor.", p: 3800,
-              art: { k: "vaso", arriba: "#4A2410", abajo: "#3A1B0C", corte: .2, hielo: 1 } } },
-    { b: "Sin café", s: "algo suave",
-      reco: { n: "Limonada de menta", d: "Limón de pica, menta fresca y mucho hielo.", p: 3200,
-              art: { k: "vaso", arriba: "#D9E27A", abajo: "#EDF0B4", corte: .35, hielo: 1, adorno: "menta" } } }
-  ],
 
   categorias: [
     {
@@ -1234,15 +1237,137 @@ function pintarPalabra(svg, texto, filtro, opts) {
    ========================================================== */
 const stage = $("#stage"), viewport = $("#viewport");
 let cats = CFG.categorias;
-let catIdx = 0, actual = 1, auto = true, bloqueada = 0, escala = 1, tick = null, tReco = null;
+let catIdx = 0, actual = 1, auto = true, bloqueada = 0, escala = 1, tick = null;
 
 function pintarVitrina() {
   $("#kicker").textContent = CFG.kicker;
   $("#bajada").textContent = CFG.bajada;
-  $("#animoQ").textContent = CFG.pregunta;
+  $("#duplaT").textContent = CFG.tituloSug;
+  $("#duplaPie").textContent = CFG.pieSug;
   pintarPalabra($("#palabra"), CFG.marca, "liquido", { humo: 1 });
-  $("#chips").innerHTML = CFG.animos
-    .map((a, i) => `<button class="chip" data-i="${i}"><b>${esc(a.b)}</b><span>${esc(a.s)}</span></button>`).join("");
+  pintarCombo();
+}
+
+/* ---------------- el combo de la vitrina ----------------
+
+   Lo pidió el local con un dibujo en un papel: un café y un sándwich lado a
+   lado, los dos nombres y UN precio. Con sus palabras: "que el programa agarre
+   un café del menú y un sándwich y que los haga una especie de combo, pero que
+   el programa decida, y que sume sus precios".
+
+   El precio es la SUMA, sin descuento, y eso es a propósito: en la caja no
+   existe un producto "combo", así que quien lo pide se lleva los dos cobrados
+   por separado, y el total de la caja tiene que ser el mismo que vio en la
+   pantalla. Un descuento inventado acá sería una promesa que la caja no cumple.
+
+   Sale de la carta que manda el punto de venta, no de una lista escrita acá: la
+   vitrina vieja ofrecía "Flat White" y "Limonada de menta" en un local que no
+   vende ninguna de las dos. */
+let comboPrevio = "", tCombo = null;
+
+/* Servida por la caja, la vitrina NO arma el combo con la carta de ejemplo
+   (CONFIG): espera la del local, la guardada o la recién pedida. Un televisor
+   recién instalado, sin copia guardada y con la caja apagada, mostraría si no
+   un "Americano + Croissant $4.900" que el local capaz ni vende, a un precio
+   que la caja no cobra. Abierta como archivo suelto, en cambio, el ejemplo es
+   justo lo que se quiere ver: sirve para diseñar. */
+let cartaDelLocal = false;
+const esperandoLaCarta = () => location.protocol !== "file:" && !cartaDelLocal;
+
+const sinTildes = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/* Las categorías se reconocen por el NOMBRE, que es lo único que las distingue
+   ("CAFES" y "SANDWICH" en el local del pedido). Si la carta no tiene una de
+   sándwiches, el acompañamiento sale de una de comida —pastelería, la
+   vitrina— y si tampoco hay, de la que siga: un café con un jugo no es un combo,
+   pero es mejor que una pantalla vacía. */
+const ES_CAFE = /caf/;
+const ES_SANDWICH = /sandw|sanw|sangu/;
+const ES_COMIDA = /pasteler|panader|dulce|vitrina|reposter|queque|torta|kuchen|empanad|salad|comida|almuerzo|desayuno|snack|galleta|horno/;
+
+/* Lo que se puede ofrecer de una categoría: con nombre y con precio de verdad
+   (algo que "va por la casa" no se puede sumar). El destacado se agrega aparte
+   porque el punto de venta lo manda FUERA de la lista de productos; si es la
+   copia de relleno del primero, se descarta por nombre. */
+function ofrecibles(c) {
+  const vistos = new Set(), lista = [];
+  for (const p of [...(c.items || []), c.destacado]) {
+    if (!p || !p.n || !(+p.p > 0) || vistos.has(p.n)) continue;
+    vistos.add(p.n);
+    lista.push(p);
+  }
+  return lista;
+}
+
+function ladosDelCombo() {
+  const cs = cats.filter(c => ofrecibles(c).length);
+  if (!cs.length) return null;
+  const cafe = cs.find(c => ES_CAFE.test(sinTildes(c.nombre))) || cs[0];
+  const resto = cs.filter(c => c !== cafe);
+  const acomp = resto.find(c => ES_SANDWICH.test(sinTildes(c.nombre)))
+    || resto.find(c => ES_COMIDA.test(sinTildes(c.nombre)))
+    || resto[0] || cafe;
+  return { cafes: ofrecibles(cafe), acomps: ofrecibles(acomp), misma: acomp === cafe };
+}
+
+/* Todos los combos que se pueden armar, SIN ORDEN: "Latte + Espresso" y
+   "Espresso + Latte" son el mismo combo, al mismo precio. Contados como dos, con
+   una sola categoría la pantalla "cambiaba" al mismo combo dado vuelta. */
+function combosPosibles(l) {
+  const lista = [];
+  l.cafes.forEach((a, i) => {
+    (l.misma ? l.cafes.slice(i + 1) : l.acomps).forEach(b => lista.push([a, b]));
+  });
+  // Toda la carta es un solo producto: se muestra ése, solo.
+  if (!lista.length) lista.push([l.cafes[0]]);
+  return lista;
+}
+const claveCombo = par => par.map(p => p.n).sort().join("|");
+
+/* "Que el programa decida": al azar entre todos los combos MENOS el que está en
+   pantalla. Sorteando y reintentando, con pocos combos posibles a veces volvía a
+   salir el mismo y parecía que la pantalla se había quedado pegada. */
+function elegirCombo() {
+  const l = ladosDelCombo();
+  if (!l) return null;
+  const todos = combosPosibles(l);
+  const otros = todos.filter(par => claveCombo(par) !== comboPrevio);
+  const pozo = otros.length ? otros : todos;
+  const par = pozo[Math.floor(Math.random() * pozo.length)];
+  comboPrevio = claveCombo(par);
+  return par;
+}
+
+function pintarCombo() {
+  const caja = $("#combo");
+  if (!caja) return;
+  const par = esperandoLaCarta() ? null : elegirCombo();
+  // Sin nada que ofrecer —o esperando la carta del local— se esconde el bloque
+  // entero: un título con el vacío debajo se lee como que algo se rompió.
+  caja.closest(".dupla").hidden = !par;
+  if (!par) { caja.innerHTML = ""; return; }
+  const total = par.reduce((s, p) => s + (+p.p || 0), 0);
+  caja.innerHTML = `
+    <article class="combo">
+      <div class="combo__arte">${par
+        .map(p => `<div class="combo__dib">${dibujar(p.art)}</div>`)
+        .join('<span class="combo__mas" aria-hidden="true">+</span>')}</div>
+      <div class="combo__info">
+        <h2 class="combo__nombre">${par.map(p => esc(p.n)).join(" + ")}</h2>
+        <span class="combo__precio">${precioHTML(total)}</span>
+      </div>
+    </article>`;
+}
+
+/* Cambia solo. Hace falta de verdad: el televisor de la vitrina se abre con
+   ?p=1, que lo deja FIJO en esta pantalla, y sin este timer mostraría el mismo
+   combo todo el día. */
+function pasoCombo() {
+  clearTimeout(tCombo);
+  const l = ladosDelCombo();
+  // esperando la carta del local, o con un solo combo posible, no hay a qué cambiar
+  if (esperandoLaCarta() || !l || combosPosibles(l).length < 2) return;
+  tCombo = setTimeout(() => { pintarCombo(); pasoCombo(); }, Math.max(4000, CFG.tiempos.reco));
 }
 
 function pintarCabecera() {
@@ -1331,39 +1456,8 @@ function paso() {
 }
 
 /* ==========================================================
-   8. Vitrina interactiva: animo -> recomendacion, y salpicaduras
+   8. Salpicaduras
    ========================================================== */
-function mostrarReco(i) {
-  const a = CFG.animos[i], r = a.reco;
-  clearTimeout(tick); clearTimeout(tReco);
-  $("#reco").innerHTML = `
-    <div class="reco__card">
-      <svg class="reco__aro" viewBox="0 0 56 56" aria-hidden="true">
-        <circle cx="28" cy="28" r="24" stroke="rgba(255,248,239,.2)"/>
-        <circle cx="28" cy="28" r="24" stroke="#F0A94A" stroke-linecap="round"
-          stroke-dasharray="150.8" transform="rotate(-90 28 28)"
-          style="animation:aro ${CFG.tiempos.reco}ms linear forwards"/>
-      </svg>
-      <div class="reco__art">${dibujar(r.art)}</div>
-      <div>
-        <p class="reco__eyebrow">Para ${esc(a.b.toLowerCase())}</p>
-        <h2 class="reco__nombre">${esc(r.n)}</h2>
-        <p class="reco__desc">${esc(r.d)}</p>
-        <div class="reco__pie">
-          <span class="reco__precio">${precioHTML(r.p)}</span>
-          <span class="reco__barra">Pídelo en la barra</span>
-        </div>
-      </div>
-    </div>`;
-  $("#pantalla1").classList.add("is-reco");
-  tReco = setTimeout(cerrarReco, CFG.tiempos.reco);
-}
-function cerrarReco() {
-  clearTimeout(tReco);
-  $("#pantalla1").classList.remove("is-reco");
-  paso();
-}
-
 const salpica = $("#salpica");
 const gotas = [];
 let rafGotas = 0;
@@ -1534,7 +1628,7 @@ function guardarEditor() {
   setOrientacion(CFG.orientacion);
   pintarMargen();
   pintarVitrina(); pintarCabecera(); pintarCategoria(catIdx);
-  cerrarEditor(); paso(); iniciarPV();
+  cerrarEditor(); paso(); pasoCombo(); iniciarPV();
   toast(ok ? "Listo, cambios guardados" : "Aplicado, pero este navegador no permite guardarlo");
 }
 
@@ -1549,7 +1643,17 @@ function pintarEdLocal() {
     </div>
     <label class="campo"><span>Frase bajo el nombre</span><input data-g="bajada" value="${esc(BORRADOR.bajada)}"></label>
     <label class="campo"><span>Texto al lado del logo, en la pantalla del menú</span><input data-g="marcaTxt" value="${esc(BORRADOR.marcaTxt)}"></label>
-    <label class="campo"><span>Pregunta de la vitrina</span><input data-g="pregunta" value="${esc(BORRADOR.pregunta)}"></label>`;
+    <div class="fila2">
+      <label class="campo"><span>Título del combo</span><input data-g="tituloSug" value="${esc(BORRADOR.tituloSug)}"></label>
+      <label class="campo"><span>Línea de abajo</span><input data-g="pieSug" value="${esc(BORRADOR.pieSug)}"></label>
+    </div>
+    <p class="pista">El combo lo arma el programa solo: toma un café y un sándwich de la
+      carta y suma sus dos precios, y cada tanto arma otro. Busca las categorías por el
+      nombre —la que diga «café» y la que diga «sándwich»—; si no hay de sándwiches, usa
+      pastelería u otra de comida.</p>
+    <div class="aviso">Mejor que no sea una pregunta. Cuando decía
+      “¿Qué te tinca hoy?” con botones abajo, la gente iba y los apretaba — y el
+      televisor no es táctil.</div>`;
 }
 
 function pintarEdPantallas() {
@@ -1567,7 +1671,7 @@ function pintarEdPantallas() {
       <label class="campo"><span>Vitrina (segundos)</span><input type="number" min="5" max="180" data-t="vitrina" value="${Math.round(BORRADOR.tiempos.vitrina / 1000)}"></label>
       <label class="campo"><span>Cada categoría (segundos)</span><input type="number" min="5" max="180" data-t="categoria" value="${Math.round(BORRADOR.tiempos.categoria / 1000)}"></label>
     </div>
-    <label class="campo"><span>Recomendación de la vitrina (segundos)</span><input type="number" min="5" max="90" data-t="reco" value="${Math.round(BORRADOR.tiempos.reco / 1000)}"></label>
+    <label class="campo"><span>Cada cuánto cambia el combo (segundos)</span><input type="number" min="5" max="90" data-t="reco" value="${Math.round(BORRADOR.tiempos.reco / 1000)}"></label>
     <div class="aviso">¿Dos televisores? Abre el archivo con <b>?p=1</b> al final de la dirección en el de la vitrina, y con <b>?p=2</b> en el del menú. Así cada uno se queda en su pantalla.</div>`;
 }
 
@@ -2011,6 +2115,12 @@ function aplicarCarta(carta) {
   catIdx = Math.min(catIdx, cats.length - 1);
   pintarCabecera();
   pintarCategoria(catIdx);
+  // La vitrina también sale de esta carta. Sin estas líneas el combo quedaría
+  // armado con los productos de ejemplo para siempre, que es exactamente lo que
+  // le pasaba a los cuatro botones que había antes acá.
+  cartaDelLocal = true;
+  pintarCombo();
+  pasoCombo();
 }
 
 async function traerPV() {
@@ -2098,19 +2208,19 @@ function iniciarPV() {
   }
   luzOn(actual === 1);
   paso();
+  pasoCombo();
   ajustar();       // recién ahora el tamaño real es el definitivo (con o sin consola)
   vigilarTamano();
   iniciarPV();     // si hay punto de venta configurado, trae la carta
 
   // interaccion de la vitrina
-  $("#chips").addEventListener("click", e => {
-    const b = e.target.closest(".chip");
-    if (b) mostrarReco(+b.dataset.i);
-  });
+  // Tocar la vitrina salpica café y nada más. En el televisor del local esto no
+  // corre nunca: una pantalla que no es táctil no avisa que la tocaron, así que
+  // no hay evento que atender. Solo pasa en pantallas táctiles, donde es un
+  // juego que no promete nada detrás.
   $("#pantalla1").addEventListener("pointerdown", e => {
     const r = stage.getBoundingClientRect();
     salpicar((e.clientX - r.left) / escala, (e.clientY - r.top) / escala);
-    if ($("#pantalla1").classList.contains("is-reco") && !e.target.closest(".reco__card")) cerrarReco();
   });
   $("#tabs").addEventListener("click", e => {
     const b = e.target.closest(".tab");

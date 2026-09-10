@@ -352,3 +352,69 @@ def test_la_cuenta_del_cajon_se_dibuja_entera_y_no_solo_los_retiros():
     for pedazo in ("Fondo con que se abrió", "Lo que entró en efectivo",
                    "efectivo_en_caja"):
         assert pedazo in cuerpo, f"falta {pedazo!r} en la cuenta del cajón"
+
+
+# ---------------------------------------------------------------------------
+# La vitrina de los televisores no puede tener botones
+# ---------------------------------------------------------------------------
+"""En el local la vitrina tenía «¿Qué te tinca hoy?» y cuatro botones. Los
+clientes iban y los apretaban, y el televisor NO ES TÁCTIL: quedaban tocando
+una pantalla que no contesta. Se reemplazó por un combo café + sándwich que
+arma el programa solo. Estas pruebas cuidan que no vuelva un botón, y que el
+precio del combo sea la suma, que es lo que después cobra la caja.
+"""
+
+PANTALLAS = ESTATICOS / "pantallas.html"
+
+
+def _vitrina_html() -> str:
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    ini = html.find('id="pantalla1"')
+    assert ini != -1, "se renombró #pantalla1: revisa esta prueba"
+    return html[ini:html.find("</section>", ini)]
+
+
+def test_la_vitrina_no_tiene_botones():
+    """Un botón en un televisor que no es táctil es una promesa rota."""
+    assert "<button" not in _vitrina_html(), (
+        "Volvió un <button> a la vitrina. El televisor no es táctil: la gente lo "
+        "aprieta y no pasa nada, que es exactamente el reclamo del local.")
+
+
+def test_el_combo_no_se_arma_con_botones():
+    """La ficha se arma en JS, así que ahí también tiene que ser un cartel."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "function pintarCombo()")
+    assert "<button" not in cuerpo and "onclick" not in cuerpo
+    assert "<article" in cuerpo
+
+
+def test_el_precio_del_combo_es_la_suma_de_los_dos():
+    """En la caja no existe un producto «combo»: se cobran los dos por separado.
+    Si la pantalla mostrara un descuento, el cliente llegaría a pedir un precio
+    que la caja no le puede cobrar."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "function pintarCombo()")
+    assert "reduce((s, p) => s + (+p.p || 0), 0)" in cuerpo, (
+        "el total del combo ya no es la suma de los dos precios")
+    assert ".antes" not in cuerpo, (
+        "el combo muestra un precio «antes»: promete un descuento que la caja no hace")
+
+
+def test_el_combo_sale_de_la_carta_y_no_de_una_lista_fija():
+    """Los cuatro botones viejos mostraban productos escritos a mano que el
+    local ni vendía, porque aplicarCarta() nunca los tocaba."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    assert "CFG.animos" not in html
+    cuerpo = _cuerpo_de(html, "function aplicarCarta(")
+    assert "pintarCombo()" in cuerpo and "pasoCombo()" in cuerpo, (
+        "aplicarCarta ya no repinta el combo: se va a quedar con los productos de ejemplo")
+
+
+def test_servida_por_la_caja_el_combo_espera_la_carta_del_local():
+    """La carta de ejemplo trae productos y precios inventados. Un TV recién
+    instalado, sin copia guardada, no puede mostrar un combo con ellos: el local
+    capaz ni los vende, y la caja no cobra ese precio."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    assert "esperandoLaCarta()" in _cuerpo_de(html, "function pintarCombo()")
+    assert "cartaDelLocal = true" in _cuerpo_de(html, "function aplicarCarta(")
