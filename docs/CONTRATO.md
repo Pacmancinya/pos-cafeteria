@@ -301,9 +301,110 @@ cualquiera conectado al Wi-Fi del local podía hacer que la caja se instalara un
 ajeno. El campo `zip` se sigue aceptando porque las pantallas viejas lo mandan, pero no se
 usa. `BUSCAR-ACTUALIZACIONES.bat` no pasa por acá: corre en el mismo computador.
 
-> **Lo que falta, y no es poco:** el paquete no viene firmado. Hoy la confianza es "lo que
-> publique la cuenta de GitHub": si esa cuenta cae, caen todos los locales a la vez. Firmar
-> el paquete es de lo imprescindible antes de vender a otros locales.
+> **Resuelto en la 2.19:** el paquete viene firmado y la caja revisa cada archivo antes de
+> instalar. Ver la decisión 23.
+
+**22. Cada local tiene su nombre, su RUT y su PIN de red, y viven en su base.** Hasta la
+2.18 salían de variables de entorno de Windows: el nombre era `POS_LOCAL` —si nadie lo
+tocaba, «Kofe»— y el PIN de red era `2468` en todas las instalaciones, escrito en la guía y
+en el código público. Una cafetería nueva aparecía como Kofe en la caja, en el comprobante y
+en sus televisores. Ahora son filas de `Ajuste` (`local_nombre`, `local_rut`,
+`local_direccion`, `pin_red`), el primer arranque las pide antes de crear al dueño, y el
+dueño las cambia en Ayuda → Ajustes.
+
+- **El primer arranque guarda el local y el PIN de red ANTES que el primer usuario.**
+  Mientras no hay nadie registrado la caja deja hacer todo (el dueño provisorio); apenas
+  existe el primero, esa puerta se cierra. Al revés, quedarían sin poder guardarse.
+- **Una caja sin dueño se configura solo desde su propio computador.** Mientras no hay
+  nadie registrado, el dueño provisorio es dueño únicamente en el computador de la caja;
+  desde un tablet o el Wi-Fi es cajero: vende, pero no crea el primer usuario, no cambia
+  el PIN de red ni los ajustes. Con el PIN de fábrica, igual en todas las cajas, cualquiera
+  en el Wi-Fi de una caja recién instalada podía crear el primer dueño con un PIN suyo y
+  quedarse con ella (revisión de Codex). El asistente del primer arranque aparece solo en
+  una instalación de verdad nueva —sin gente, sin ventas y sin nombre— y solo en ese
+  computador: una caja que ya vende sin usuarios sigue abriendo directo.
+- **El PIN de red nuevo es de 6 dígitos al azar** y se muestra una vez, en grande. Una caja
+  que ya estaba instalada sigue con `2468` —cambiarlo solo dejaría afuera sus tablets sin
+  aviso— pero el dueño ve un aviso rojo en Ajustes y lo cambia con un botón. `2468` no se
+  acepta como PIN nuevo. `POS_PIN` lo deja fijo, y entonces la caja no lo cambia.
+- **El RUT se valida con su dígito verificador** y se guarda como `12.345.678-5`. Un RUT mal
+  escrito en el comprobante es peor que ninguno, y el SII lo va a rechazar.
+- **La galleta de la red va firmada con la llave de la caja** (`.secreto`). Hasta la 2.18
+  era `sha256("pos-cafeteria:" + PIN)`: sin ningún secreto, se podía calcular desde el
+  código público sin escribir nunca el PIN, y el freno de la decisión 24 no habría servido
+  de nada. Cambiar el PIN deja afuera a los equipos que entraron con el viejo —menos al que
+  lo cambió, que recibe la galleta nueva—; reiniciar el programa, no.
+- **Los televisores toman el nombre de la carta**, aunque todavía no tenga productos.
+  Solo reemplazan lo que sigue siendo el ejemplo de Kofe o lo que puso la caja la vez
+  anterior (queda anotado en `CFG.auto`, así un cambio de nombre también llega); lo que se
+  escribió a mano en su Configurar se respeta. Las frases de Kofe («Tostado en Graneros»)
+  quedan en blanco en otro local. El logo se pensó para las cuatro letras de «Kofe»: un
+  nombre más largo se achica hasta caber en lo que se ve del televisor.
+
+**23. Las actualizaciones vienen firmadas, llegan por canal y se pueden deshacer.**
+
+- **Firmadas.** Cada versión trae `manifiesto.json` —su número y la huella SHA-256 de cada
+  archivo que se instala— y `manifiesto.firma`, una firma Ed25519 hecha con una llave que
+  NO está en el repositorio (vive en el computador de quien publica). La caja trae la llave
+  pública en `LLAVES_PUBLICAS` y revisa TODO antes de escribir el primer archivo: sin
+  firma, otra firma, un archivo distinto del firmado, uno de más o uno de menos, y no se
+  instala nada. La firma usa solo la biblioteca estándar (`apps/pos/firma.py`) porque lo
+  que viaja es el código, no las librerías de Kofe.exe; está probada contra
+  `cryptography` y contra los vectores del RFC 8032, y rechaza llaves de orden chico.
+- **Nunca hacia atrás.** El paquete tiene que ser más nuevo que la versión instalada y ser
+  justo la que anunció el canal: un paquete viejo, firmado de verdad, serviría para volver
+  a meter un error que ya se arregló.
+- **Por canal.** `version.json` es el canal estable y `version-piloto.json` el piloto; cada
+  local elige en Ayuda → Ajustes. Cada uno apunta al zip de una ETIQUETA (`vX.Y`), no de
+  `main`, así el estable no recibe lo que se está probando. La 2.12 tumbó El día en todos
+  los locales el mismo día.
+- **Se deshace.** `_version_anterior/` guarda solo lo que pisó la última actualización, con
+  la lista en `_cambios.json`, y el dueño vuelve con un botón (`POST
+  /api/v1/actualizacion/volver`). Antes se acumulaban copias de varias versiones: volver con
+  eso habría mezclado versiones.
+- **Nunca a medias.** Instalar va en tres pasos: mirar qué cambia; guardar los originales y
+  anotar la lista, marcada «a medias»; recién ahí reemplazar, cada archivo con un temporal
+  que se escribe a disco y se renombra. Si algo falla se vuelve atrás al tiro, y si se corta
+  la luz, `apps/pos/__init__.py` lo deshace al abrir, antes de importar nada más
+  (`apps/pos/vuelta.py`, solo biblioteca estándar). Volver atrás sigue las mismas reglas.
+  Reinstalar lo mismo no borra la vuelta atrás, y reintentar una instalación a medias no
+  pierde los originales. Antes la lista se escribía al final (revisión de Codex).
+- **Con topes.** Un paquete de más de 60 MB, que se expande a más de 200 MB o que trae más
+  de 5.000 archivos se rechaza antes de abrirlo: sin topes, un paquete sin firma podía
+  reventar la memoria de la caja antes de que se revisara la firma.
+- **Repositorio privado, cuando se decida.** Con `POS_CLAVE_DESCARGA` la caja baja con una
+  clave (una por local, para poder revocar la de uno). Sin clave baja como siempre. Ver
+  `docs/PUBLICAR-ACTUALIZACIONES.md`.
+
+**24. Ningún PIN se prueba diez mil veces.** Después de cinco intentos fallidos seguidos hay
+que esperar 30 segundos, y la espera se dobla con cada fallo nuevo hasta 15 minutos: por
+equipo y persona en el PIN de usuario, por equipo en el PIN de red. Mientras dura la espera
+ni el PIN bueno entra. Vive en memoria (`apps/pos/freno.py`): reiniciar el programa lo
+limpia, y está bien — quien puede reiniciar la caja ya está frente a ella.
+
+**25. La caja deja rastro, guarda afuera y no se traba con varios equipos.**
+
+- **Registro de errores.** `registros/kofe.log` (rota solo, nunca pasa de ~5 MB) anota los
+  errores del servidor, lo que tarda más de 2 segundos y los errores de la pantalla y de
+  los televisores, que llegan por `POST /api/v1/diagnostico/evento` (libre, con tope de 30
+  por minuto). El dueño baja todo en un .zip desde Ayuda → Ajustes —sin el PIN ni las
+  claves— para mandarlo por WhatsApp. Hasta la 2.18 los problemas llegaban como capturas y
+  la caja pegada se diagnosticó leyendo código.
+- **La copia de afuera.** Si el dueño eligió una carpeta (una que se sincroniza con la nube,
+  o un pendrive), cada respaldo se copia ahí y se ABRE y se revisa entero
+  (`integrity_check`) antes de darlo por bueno. El resultado queda en
+  `Ajuste.respaldo_afuera_estado` y se ve en Ajustes (si el dueño elige otra carpeta, deja
+  de mostrarse: no dice nada de la nueva). La copia va primero a un archivo aparte, que
+  recién al salir sana reemplaza a la del día: un pendrive que se desconecta a la mitad no
+  rompe la copia buena de antes. Cada caja anota su identidad (`Ajuste.instalacion_id`)
+  antes del primer respaldo, la lleva en cada uno y en el nombre de su carpeta de afuera:
+  dos sucursales que se llaman igual no se pisan. `tools/restaurar.py` vuelve la base a un
+  respaldo guardando primero la actual, y a una caja que ya vende no le pone un respaldo
+  que no se pueda comprobar que es suyo (`--sin-revisar-local` para hacerlo igual). Los
+  respaldos quedan en modo de diario normal, no WAL: son un solo archivo.
+- **SQLite en modo WAL, con 10 segundos de espera.** Sin WAL, una lectura larga frenaba las
+  escrituras hasta «database is locked». `synchronous` queda en FULL: una venta confirmada
+  no se pierde ni con un corte de luz.
 
 ---
 
@@ -779,6 +880,24 @@ niega con un mensaje que dice cuántos. `PUT` sobre una categoría cambia nombre
 
 ---
 
+### Local, red, respaldo y diagnóstico `[IMPL]` (2.19)
+```
+GET  /api/v1/local                      → {nombre, rut, direccion}              (libre)
+PUT  /api/v1/local                      {nombre, rut?, direccion?}              (dueño)
+GET  /api/v1/red                        → {pin, de_fabrica, fijo}               (dueño)
+POST /api/v1/red/pin                    {pin?} → sin pin inventa uno de 6        (dueño)
+GET  /api/v1/ajustes                    + bloqueo_minutos, canal_actualizaciones,
+                                          respaldo_afuera, respaldo_afuera_estado
+GET  /api/v1/respaldo/lugares           → carpetas de nube y pendrives          (dueño)
+POST /api/v1/respaldo                   → … + afuera {configurado, ok, ventas, detalle}
+POST /api/v1/diagnostico/evento         {tipo, mensaje, donde?, detalle?}       (libre, tope)
+GET  /api/v1/diagnostico                → .zip con el registro y el estado      (dueño)
+GET  /api/v1/actualizacion/vuelta       → {disponible, version}
+POST /api/v1/actualizacion/volver       → deshace la última actualización       (dueño)
+```
+`POST /api/v1/sesion/entrar` y `POST /entrar` responden **429** con cuánto esperar
+cuando actúa el freno de intentos.
+
 ## 4. Quién puede entrar `[IMPL]`
 
 El punto de venta escucha en **toda la red del local** (`0.0.0.0`), porque las pantallas
@@ -793,9 +912,12 @@ La regla, en `apps/pos/acceso.py`:
 | El propio PC de la caja (`127.0.0.1`) | Entra directo, sin PIN. Cero fricción para el cajero. |
 | Otro equipo de la red | Pide el PIN una vez y deja una galleta de 180 días. |
 | Cualquiera, a `/api/v1/carta` y `/api/v1/salud` | Libre: son de solo lectura y muestran precios que ya están a la vista. |
+| Cualquiera, a `/api/v1/diagnostico/evento` | Libre y con tope: son los avisos de error de los televisores, que no tienen PIN. |
 
-El PIN se cambia con la variable `POS_PIN` (por defecto `2468`). El token de la galleta se
-deriva del PIN, así que reiniciar el programa no desloguea al tablet.
+Desde la 2.19 el PIN de red es de cada local: vive en su base, se crea al instalar y el dueño
+lo ve y lo cambia en Ayuda → Ajustes (`POS_PIN` lo deja fijo si la instalación lo pide). La
+galleta va firmada con la llave de la caja, así que reiniciar el programa no desloguea al
+tablet y cambiar el PIN sí. Y hay freno de intentos. Ver las decisiones 22 y 24.
 
 > Esto **no** dice quién vendió: solo impide que entre cualquiera desde la red. Quién es
 > la persona lo resuelve el otro candado, el de usuarios, más abajo en esta misma sección.

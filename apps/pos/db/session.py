@@ -10,6 +10,24 @@ from core.config import DB_URL
 _args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
 engine = create_engine(DB_URL, echo=False, connect_args=_args)
 
+# Modo WAL y 10 segundos de espera, desde la 2.19. Sin WAL, una lectura larga
+# —el informe del mes, un respaldo— frena las escrituras, y pasados los 5
+# segundos que Python espera por defecto el cobro falla con «database is
+# locked». En la caja eso se ve como un cobro que tarda o falla sin razón. Con
+# WAL leer y escribir no se estorban. `synchronous` se queda como viene (FULL):
+# una venta confirmada no se pierde ni con un corte de luz.
+if DB_URL.startswith("sqlite"):
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _al_conectar(conexion, _registro):
+        cursor = conexion.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=10000")
+        finally:
+            cursor.close()
+
 
 def crear_tablas() -> None:
     # Importar los modelos antes de create_all, si no SQLModel no los conoce.

@@ -13,7 +13,8 @@ función por más que las dos se llamen "candado".
 ## La regla del arranque en frío
 
 Si en la base no hay ningún usuario activo, el punto de venta **funciona igual**
-y todo el mundo entra como dueño. Es a propósito, por dos razones:
+y todo el mundo entra como dueño —desde otro equipo de la red, como cajero: ver
+`quien_es`—. Es a propósito, por dos razones:
 
   1. La caja del local ya está vendiendo con una base sin usuarios. Si esta
      actualización exigiera login, el lunes en la mañana nadie podría cobrar.
@@ -44,6 +45,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session, select
 
+from apps.pos import acceso
 from apps.pos.db.models import Presencia, Usuario
 from apps.pos.db.session import get_session
 from core.config import RAIZ, SECRETO, ahora, puede
@@ -179,7 +181,16 @@ PROVISORIO = {"id": None, "nombre": "", "rol": "dueno", "presencia_id": None,
 def quien_es(request: Request, s: Session = Depends(get_session)) -> dict:
     """El usuario de esta petición. Nunca lanza: dice quién es o dice que nadie."""
     if not hay_usuarios(s):
-        return dict(PROVISORIO)
+        yo = dict(PROVISORIO)
+        # El dueño de mentira es dueño solo en el computador de la caja. Desde
+        # otro equipo —que entró con el PIN de red, y en una caja recién
+        # instalada ese es el de fábrica, el mismo en todas— vende pero no
+        # configura: si no, cualquiera en el Wi-Fi podía crear el primer dueño
+        # con un PIN suyo, cambiar el PIN de red o mandar los respaldos a otra
+        # carpeta (lo encontró la revisión de Codex).
+        if not acceso.es_local(request):
+            yo["rol"] = "cajero"
+        return yo
     carga = _abrir(request.cookies.get(GALLETA, ""))
     if not carga:
         return {"id": None, "nombre": "", "rol": "", "presencia_id": None,

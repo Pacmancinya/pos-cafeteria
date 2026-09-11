@@ -1,5 +1,7 @@
 """Contratos de entrada y salida de la API (Pydantic v2)."""
 from __future__ import annotations
+from core.config import BLOQUEO_MINUTOS
+from typing import Literal
 
 from typing import Optional
 
@@ -286,6 +288,12 @@ class AjustesIn(BaseModel):
     # 0 o 1. En un notebook con teclado, el teclado dibujado estorba; en una
     # pantalla táctil es lo único con lo que se puede escribir.
     teclado_en_pantalla: int = Field(default=int(TECLADO_EN_PANTALLA), ge=0, le=1)
+    # Entre 1 y 30 minutos: menos que eso bloquea en medio de atender, y más
+    # deja una sesión abierta que ya no dice la verdad sobre quién estuvo.
+    bloqueo_minutos: int = Field(default=BLOQUEO_MINUTOS, ge=1, le=30)
+    canal_actualizaciones: Literal["estable", "piloto"] = "estable"
+    # La carpeta de la copia de afuera. Vacía = no hay copia de afuera.
+    respaldo_afuera: str = Field(default="", max_length=300)
 
 
 class CodigoIn(BaseModel):

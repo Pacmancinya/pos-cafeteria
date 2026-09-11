@@ -1,5 +1,6 @@
 """Respaldo de la base y exportación para el contador."""
 from __future__ import annotations
+from core.config import MEDIOS_PAGO, NOMBRE_MEDIO
 
 import csv
 import io
@@ -66,14 +67,24 @@ def exportar_ventas(
         local = a_local(v.creada_at)
         cobrado = v.total - v.descuento
         neto, iva = neto_iva(cobrado) if v.estado == "pagada" else (0, 0)
+        # Cuánto entró por cada medio. Una venta mixta decía «mixto» a secas y el
+        # contador no podía saber qué parte fue efectivo y qué parte tarjeta. Van
+        # al FINAL para no correr las columnas que ya conoce.
+        partes = {medio: 0 for medio in MEDIOS_PAGO}
+        if v.estado == "pagada":
+            from apps.pos.api.turnos import _pagos_de
+            for medio, monto in _pagos_de(s, v):
+                if medio in partes:
+                    partes[medio] += monto
         filas.append([
             local.strftime("%d-%m-%Y"), local.strftime("%H:%M"), v.numero, v.estado,
             v.medio_pago, v.total, v.descuento, cobrado, neto, iva, v.propina,
+            *(partes[medio] for medio in MEDIOS_PAGO),
         ])
     return _csv(
         filas,
         ["Fecha", "Hora", "N°", "Estado", "Medio de pago", "Bruto", "Descuento",
-         "Cobrado", "Neto", "IVA", "Propina"],
+         "Cobrado", "Neto", "IVA", "Propina", *(NOMBRE_MEDIO[m] for m in MEDIOS_PAGO)],
         f"ventas_{d.isoformat()}_a_{h.isoformat()}.csv",
     )
 

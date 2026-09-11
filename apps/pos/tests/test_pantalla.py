@@ -33,6 +33,7 @@ esta prueba y estar mal de otra forma; ninguno puede fallarla y funcionar.
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
 import pytest
@@ -485,3 +486,122 @@ def test_el_candado_tapa_la_caja_antes_de_preguntarle_al_servidor():
     cuerpo = _cuerpo_de(js, "async function mostrarCandado(")
     assert cuerpo.index('$("#candado").hidden = false') < cuerpo.index('api("/candado"')
 
+
+# ---------------------------------------------------------------------------
+# 2.19: listo para el segundo local
+# ---------------------------------------------------------------------------
+def test_el_bloqueo_usa_el_ajuste_del_dueno():
+    """Hasta la 2.18 había dos verdades: 90 s en la configuración, sin usarse, y
+    3 minutos fijos en la pantalla."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    assert "AJUSTES.bloqueo_minutos" in _cuerpo_de(js, "function reiniciarInactividad(")
+
+
+def test_el_primer_arranque_guarda_el_local_y_el_pin_antes_que_el_usuario():
+    """Apenas existe el primer usuario la caja deja de ser «de todos»: si los
+    datos del local fueran después, no se podrían guardar."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo_de(js, "async function crearPrimerUsuario(")
+    assert cuerpo.index('"/local"') < cuerpo.index('"/usuarios"')
+    assert cuerpo.index('"/red/pin"') < cuerpo.index('"/usuarios"')
+
+
+def test_la_pantalla_anota_lo_que_el_servidor_no_ve():
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    assert "reportar(" in _cuerpo_de(js, "async function api(")
+    assert 'window.addEventListener("error"' in js
+
+
+def test_los_televisores_usan_el_nombre_del_local():
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    assert "carta.local" in _cuerpo_de(html, "function aplicarCarta(")
+
+
+def test_ningun_script_tiene_errores_de_sintaxis(tmp_path):
+    """Un error de sintaxis deja la caja en el PIN, o los televisores en blanco.
+    Desde que hay Node en el computador, se revisa de verdad."""
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no hay Node en este computador")
+    for js in archivos_js():
+        r = subprocess.run([node, "--check", str(js)], capture_output=True, text=True)
+        assert r.returncode == 0, f"{js.name}: {r.stderr[:400]}"
+    for pagina in ("pantallas.html", "pantallas-simple.html"):
+        html = io.open(ESTATICOS / pagina, encoding="utf-8").read()
+        scripts = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S)
+        archivo = tmp_path / (pagina + ".js")
+        archivo.write_text("\n;\n".join(scripts), encoding="utf-8")
+        r = subprocess.run([node, "--check", str(archivo)], capture_output=True, text=True)
+        assert r.returncode == 0, f"{pagina}: {r.stderr[:400]}"
+
+
+def test_una_caja_recien_instalada_abre_con_el_asistente():
+    """En la 2.19 el asistente del primer arranque no aparecía nunca: sin gente
+    la sesión es provisoria, y la caja abría directo sin pasar por el candado."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    ini = js.find("if (!SESION.entrado) await mostrarCandado();")
+    assert ini != -1, "se movió el arranque: revisa esta prueba"
+    assert "instalacion_nueva" in js[ini:ini + 800]
+
+
+def test_el_nombre_nuevo_del_local_llega_a_los_televisores(tmp_path):
+    """Lo encontró la revisión de Codex: el nombre que ponía la caja quedaba
+    como si alguien lo hubiera escrito a mano, y si el local se cambiaba de
+    nombre los televisores seguían con el viejo."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no hay Node en este computador")
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    prueba = _cuerpo_de(html, "function ponerNombreEnLaTv(") + "\n}\n" + """
+const CONFIG = { marca: "Kofe", marcaTxt: "Kofe", kicker: "Tostado en Graneros", bajada: "Del grano" };
+const copia = (o) => JSON.parse(JSON.stringify(o));
+let CFG = copia(CONFIG);
+let pintadas = 0;
+function pintarVitrina() { pintadas++; }
+const r = [];
+ponerNombreEnLaTv("Kofe"); r.push(CFG.kicker, pintadas);        // el primer local, intacto
+ponerNombreEnLaTv("Cafe Tito"); r.push(CFG.marca, CFG.kicker);
+ponerNombreEnLaTv("Cafe Tita"); r.push(CFG.marca);              // se cambio de nombre
+CFG = copia(CFG);                                                // lo guarda y lo vuelve a leer
+CFG.marcaTxt = "Tito a mano";                                    // escrito en Configurar
+ponerNombreEnLaTv("Cafe Toto"); r.push(CFG.marca, CFG.marcaTxt);
+const antes = pintadas;
+ponerNombreEnLaTv("Cafe Toto"); r.push(pintadas - antes);       // nada que repintar
+console.log(JSON.stringify(r));
+"""
+    archivo = tmp_path / "nombre.js"
+    archivo.write_text(prueba, encoding="utf-8")
+    salida = subprocess.run([node, str(archivo)], capture_output=True, text=True, encoding="utf-8")
+    assert salida.returncode == 0, salida.stderr[:400]
+    assert json.loads(salida.stdout) == [
+        "Tostado en Graneros", 0,
+        "Cafe Tito", "",
+        "Cafe Tita",
+        "Cafe Toto", "Tito a mano",
+        0,
+    ]
+
+
+def test_un_local_sin_productos_igual_se_ve_con_su_nombre():
+    """Un local recién instalado todavía no tiene carta: la caja contesta sin
+    categorías y la pantalla lo toma como error. El nombre se perdía con ese
+    error y los televisores seguían diciendo «Kofe»."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "async function traerPV(")
+    assert cuerpo.index("ponerNombreEnLaTv") < cuerpo.index("desdePV(")
+
+
+def test_un_nombre_largo_cabe_en_el_logo():
+    """«Café Tito» salía cortado en los dos bordes del televisor parado: el
+    tamaño del logo se pensó para las cuatro letras de «Kofe». Y el nombre va
+    escapado: «Pan & Café» no puede romper el dibujo."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "function pintarPalabra(")
+    assert "anchoDelTexto(" in cuerpo and "anchoVisible(" in cuerpo
+    assert "pintarPalabra(" in _cuerpo_de(html, "function setOrientacion(")
+    assert "esc(texto)" in cuerpo and ">${texto}<" not in cuerpo

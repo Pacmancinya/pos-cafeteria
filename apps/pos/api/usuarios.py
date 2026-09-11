@@ -1,11 +1,13 @@
 """Usuarios y sesión: quién entra a la caja y quién estuvo en cada turno."""
 from __future__ import annotations
+from apps.pos import freno
+from fastapi import Request
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 
-from apps.pos import sesion
-from apps.pos.db.models import Presencia, Turno, Usuario
+from apps.pos import acceso, local as datos_local, sesion
+from apps.pos.db.models import Presencia, Turno, Usuario, Venta
 from apps.pos.db.session import get_session
 from core.config import NOMBRE_ROL, PERMISOS, a_local, ahora, como_utc
 from core.schemas import EntrarIn, SalirIn, UsuarioIn
@@ -41,7 +43,7 @@ def _activos(s: Session) -> list[Usuario]:
 # La pantalla de candado
 # ---------------------------------------------------------------------------
 @router.get("/candado")
-def candado(s: Session = Depends(get_session)):
+def candado(request: Request, s: Session = Depends(get_session)):
     """Lo que necesita la pantalla de entrada. No pide sesión, obviamente.
 
     Devuelve los nombres, nunca los PIN. Que los nombres se vean es a propósito:
@@ -51,6 +53,16 @@ def candado(s: Session = Depends(get_session)):
     gente = _activos(s)
     return {
         "primer_arranque": not gente,
+        # Una instalación recién hecha: sin gente, sin ventas y sin el nombre del
+        # local. Solo ahí se abre el asistente al arrancar. Una caja que ya vende
+        # sin usuarios —las hay— sigue abriendo directo, como siempre: si el
+        # asistente le apareciera un lunes en la mañana, nadie podría cobrar.
+        # Y solo en el computador de la caja: desde otro equipo no se configura
+        # una caja sin dueño (ver sesion.quien_es).
+        "instalacion_nueva": (acceso.es_local(request)
+                              and not gente
+                              and s.exec(select(Venta.id).limit(1)).first() is None
+                              and not datos_local._leer("local_nombre").get("local_nombre")),
         "usuarios": [_usuario_dict(u, con_rol=False) for u in gente],
     }
 
@@ -70,14 +82,25 @@ def mi_sesion(quien: dict = Depends(sesion.quien_es)):
 
 
 @router.post("/sesion/entrar")
-def entrar(datos: EntrarIn, respuesta: Response, s: Session = Depends(get_session)):
+def entrar(datos: EntrarIn, respuesta: Response, request: Request,
+           s: Session = Depends(get_session)):
+    # Freno por equipo y por persona: diez mil PIN de 4 dígitos no se prueban
+    # ni desde la caja ni desde un celular (ver apps/pos/freno.py).
+    llave = f"{request.client.host if request.client else '?'}:{datos.usuario_id}"
+    falta = freno.PIN.cuanto_falta(llave)
+    if falta:
+        raise HTTPException(429, freno.mensaje_de_espera(falta))
     u = s.get(Usuario, datos.usuario_id)
     if not u or not u.activo:
         raise HTTPException(404, "Ese usuario ya no está en la caja")
     if not sesion.pin_calza(datos.pin, u.pin_hash):
+        espera = freno.PIN.fallo(llave)
+        if espera:
+            raise HTTPException(429, freno.mensaje_de_espera(espera))
         # A propósito no decimos si el usuario existe o si el PIN estaba malo:
         # en una pantalla que muestra los nombres, eso solo ayudaría a adivinar.
         raise HTTPException(401, "Ese PIN no es")
+    freno.PIN.acierto(llave)
 
     p = sesion.entrar(s, u)
     respuesta.set_cookie(
@@ -108,7 +131,7 @@ def listar(s: Session = Depends(get_session),
 
 
 @router.post("/usuarios")
-def crear(datos: UsuarioIn, s: Session = Depends(get_session),
+def crear(datos: UsuarioIn, request: Request, s: Session = Depends(get_session),
           quien: dict = Depends(sesion.quien_es)):
     """Crea a alguien.
 
@@ -117,6 +140,11 @@ def crear(datos: UsuarioIn, s: Session = Depends(get_session),
     y como el primero se crea siempre como dueño, esa puerta se cierra sola.
     """
     primero = not sesion.hay_usuarios(s)
+    if primero and not acceso.es_local(request):
+        # En una caja recién instalada el PIN de red es el de fábrica, el mismo
+        # en todas: si el primer dueño se pudiera crear desde el Wi-Fi, cualquiera
+        # se quedaba con la caja (lo encontró la revisión de Codex).
+        raise HTTPException(403, "El primer usuario se crea en el computador de la caja.")
     if not primero and not _puede_usuarios(quien):
         raise HTTPException(403, "Solo el dueño puede crear usuarios.")
     if not datos.pin:

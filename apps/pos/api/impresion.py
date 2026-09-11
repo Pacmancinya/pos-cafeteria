@@ -9,6 +9,7 @@ el comprobante lo dice en grande: si pareciera una boleta sin serlo, el local
 quedaría expuesto. Ver docs/CONTRATO.md sección 5.
 """
 from __future__ import annotations
+from apps.pos import local as datos_local
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -85,6 +86,16 @@ def _plata(n: int) -> str:
     return "$" + f"{int(n):,}".replace(",", ".")
 
 
+def _cabecera_del_local() -> str:
+    """El nombre del local y, si están, su RUT y su dirección. Desde la 2.19
+    salen de la base: antes el papel decía «Kofe» en cualquier local."""
+    from html import escape
+    d = datos_local.datos()
+    extra = "".join(f'<div class="chico">{escape(x)}</div>'
+                    for x in (f"RUT {d['rut']}" if d["rut"] else "", d["direccion"]) if x)
+    return f'<div class="local">{escape(d["nombre"])}</div>{extra}'
+
+
 @router.get("/comprobante/{venta_id}")
 def comprobante(venta_id: int, s: Session = Depends(get_session)):
     v = s.get(Venta, venta_id)
@@ -120,7 +131,7 @@ def comprobante(venta_id: int, s: Session = Depends(get_session)):
 
     cuerpo = f"""
     <div class="centro">
-      <div class="local">{NOMBRE_LOCAL}</div>
+      {_cabecera_del_local()}
       <div class="chico">Comprobante interno N° {v.numero}</div>
       <div class="chico">{f.strftime('%d-%m-%Y  %H:%M')}</div>
     </div>
@@ -274,7 +285,7 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
     otro_cerro = bool(quien_cerro and quien_abrio and quien_cerro != quien_abrio)
     cuerpo = f"""
     <div class="centro">
-      <div class="local">{NOMBRE_LOCAL}</div>
+      {_cabecera_del_local()}
       <div class="chico">CIERRE DE CAJA</div>
       <div class="chico">{abre.strftime('%d-%m-%Y')}</div>
     </div>

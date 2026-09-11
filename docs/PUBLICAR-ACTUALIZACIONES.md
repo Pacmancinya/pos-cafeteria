@@ -1,114 +1,136 @@
 # Cómo publicar una actualización
 
-> Guía para **Ruperto**, no para el local. Mismo mecanismo que la Biblioteca
-> Láser, adaptado a que este proyecto vive en subcarpetas.
+> Guía para **Ruperto**, no para el local.
 
 ---
 
-## El canal de actualizaciones
+## Los dos canales
 
-El programa busca las actualizaciones en:
+Cada caja pregunta por una versión nueva en uno de dos archivos de la rama `main`:
+
+| Canal | Archivo | Para quién |
+|---|---|---|
+| **Estable** | `version.json` | Todos los locales, por defecto |
+| **Piloto** | `version-piloto.json` | El local que elige «Las nuevas, antes que nadie» en Ayuda → Ajustes |
+
+Cada archivo dice qué versión hay y dónde está su zip. El zip es el de una **etiqueta**
+(`https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.19.zip`), nunca el de
+`main`: si apuntara a `main`, el canal estable recibiría lo que se está probando.
+
+La idea es simple: una versión nueva va primero al piloto; si en unos días anda bien, se
+copia al estable. La 2.12 tumbó El día en todos los locales el mismo día que se publicó.
+
+---
+
+## La llave de firma — la parte que no se puede perder
+
+Desde la 2.19 cada versión va **firmada**, y una caja no instala nada que no esté firmado
+con la llave que conoce. La llave privada vive en:
 
 ```
-https://raw.githubusercontent.com/Pacmancinya/pos-cafeteria/main/version.json
+%USERPROFILE%\.kofe\llave-firma.txt
 ```
 
-y descarga el paquete desde el zipball de la rama `main`. El repositorio es
-**público a propósito**: el actualizador descarga sin credenciales, y meterle
-manejo de claves a un programa que corre en el mostrador de una cafetería sería
-peor. No hay secretos adentro — la llave que firma las sesiones (`.secreto`) y
-la base del local (`pos.db`) están en `.gitignore` y nunca salen del equipo.
-
-Si algún día conviene no publicar el código, sirve cualquier lugar que entregue
-dos cosas por https: un `version.json` y un `.zip`. Se cambia con la variable
-`POS_URL_VERSION` o editando `core/config.py`.
-
-> **Qué viaja en una actualización.** El zipball trae el repo entero, pero
-> `actualizar.py` solo copia `.py`, `.html`, `.css`, `.js`, `.bat`, `.md`,
-> `.txt` y `.json`, se salta las carpetas protegidas (`respaldos/`, `.venv/`,
-> `despliegue/`, `datos-ventana/`, `_internal/`) y jamás toca `pos.db` ni
-> `.secreto`. Por eso una actualización pesa ~160 KB y no 29 MB.
+- **Guárdala también en un gestor de contraseñas.** Si se pierde, las cajas instaladas no
+  aceptan más actualizaciones hasta que alguien les cambie la llave a mano, local por local.
+- **Nunca la subas al repositorio**, ni la mandes por WhatsApp o correo.
+- La llave pública está en `apps/pos/actualizar.py` (`LLAVES_PUBLICAS`).
+- **Para cambiar de llave** (porque se filtró, por ejemplo): publica una versión, firmada
+  con la llave VIEJA, cuya `LLAVES_PUBLICAS` tenga las dos. Cuando todas las cajas la
+  tengan, firma con la nueva y saca la vieja de la lista.
 
 ---
 
 ## Publicar una versión nueva
 
-1. **Haces los cambios** en el código.
+1. **Haces los cambios** y corres las pruebas: `.venv/Scripts/python -m pytest apps/pos/tests -q`.
+2. **Subes la versión, y tiene que coincidir en todos lados:**
+   - `core/config.py` → `APP_VERSION` y `APP_NOMBRE`
+   - `version-piloto.json` → `version`, `nombre`, `novedades` y `zip` (el de la etiqueta)
+   - la fila en [`VERSIONES.md`](../VERSIONES.md)
 
-2. **Subes la versión en dos lugares, y tienen que coincidir:**
-   - `core/config.py` → `APP_VERSION = "1.1"` y `APP_NOMBRE = "..."`
-   - `version.json` → `"version": "1.1"`, `"nombre"` y `"novedades"`
+   > Nunca repitas el nombre ni el texto de novedades entre versiones: si dos dicen lo
+   > mismo, nadie las distingue.
+3. **Commit** de todo eso.
+4. **Firmas:**
+   ```bash
+   .venv/Scripts/python tools/firmar_version.py
+   ```
+   Firma lo commiteado (no la carpeta: en Windows git deja CRLF en la carpeta y guarda LF,
+   y GitHub empaqueta lo guardado). Si hay cambios sin commitear, no firma.
+5. **Commit de la firma, etiqueta y subida** (el script te dice los comandos exactos):
+   ```bash
+   git add manifiesto.json manifiesto.firma && git commit -m "Firma de la v2.19"
+   git tag v2.19 && git push && git push origin v2.19
+   ```
+6. **Al piloto le llega sola.** Cuando haya andado bien unos días, copia el contenido de
+   `version-piloto.json` a `version.json`, commit y push: ahí les llega a todos. No hay que
+   volver a firmar: el zip de la etiqueta es el mismo.
 
-   > **Regla heredada de la Biblioteca Láser:** nunca repitas el nombre ni el
-   > texto de novedades entre versiones. Si dos versiones dicen lo mismo, nadie
-   > distingue una de otra — y eso ya pasó.
-
-3. **Agregas la fila** en [`VERSIONES.md`](../VERSIONES.md).
-
-4. **Armas el paquete y publicas:**
-
-```bash
-.venv/Scripts/python -m despliegue.empaquetar
-git add -A && git commit -m "v1.1 - lo que cambiaste" && git push
-```
-
-Listo. La próxima vez que la caja se abra, el número de versión de la barra se
-pone verde y dice *"Actualizar a v1.1"*.
-
-> GitHub cachea `version.json` unos minutos. Si acabas de publicar y no aparece,
+> GitHub cachea los `version*.json` unos minutos. Si acabas de publicar y no aparece,
 > espera un poco: no está roto.
+
+> **La primera versión firmada (2.19) la instalan cajas 2.18, que no revisan firmas.** Desde
+> la 2.19 en adelante, todas revisan.
 
 ---
 
 ## Qué hace y qué NO hace la actualización
 
-**Reemplaza** el código: `.py`, `.html`, `.css`, `.js`, `.bat`, `.md`, `.json`.
-Antes de pisar cada archivo, guarda el anterior en `_version_anterior/`.
+**Revisa primero, escribe después.** Baja el zip, lee el manifiesto, comprueba la firma y la
+huella de cada archivo, y recién entonces escribe. Si algo no calza, no toca nada.
+
+**Reemplaza** el código: `.py`, `.html`, `.css`, `.js`, `.bat`, `.md`, `.txt`, `.json`. Se
+salta todo lo que empieza con punto y las carpetas protegidas.
+
+**Guarda lo que pisa** en `_version_anterior/`, solo de ESTA actualización, con la lista en
+`_cambios.json`. El dueño vuelve atrás desde el aviso de versión («Volver a la vX.Y»).
+
+**Nunca queda a medias.** Guarda los originales y anota la lista ANTES de reemplazar el
+primer archivo. Si algo falla vuelve atrás al tiro; si se corta la luz, al abrir. Un zip de
+más de 60 MB, o que se expande a más de 200 MB, no se abre.
 
 **Nunca toca:**
 
 | Qué | Por qué |
 |---|---|
-| `pos.db` | Son las ventas, los turnos y los precios del local |
-| `respaldos/` | Las copias de esa base |
-| `.venv/` | El motor instalado en ese computador |
+| `pos.db` (y `-wal`, `-shm`) | Son las ventas, los turnos y los precios del local |
+| `respaldos/`, `registros/` | Las copias de esa base y el registro de errores |
+| `.secreto` | La llave de las sesiones y del PIN de red de esa caja |
+| `.venv/`, `_internal/` | El motor instalado en ese computador |
 
-Después de instalar, la caja **se reinicia sola**: `Kofe.py` le pasa al
-actualizador su función `relanzar`, que lanza la copia nueva desprendida y
-recién ahí sale con código 3. (En el plan B del navegador, donde no pasa por
-`Kofe.py`, el que la vuelve a levantar es el bucle de `INICIAR-POS.bat`) y la pantalla se recarga cuando el
-servidor responde de nuevo. El dueño no tiene que hacer nada.
+Después de instalar, la caja **se reinicia sola** y los televisores se recargan solos a los
+pocos minutos.
 
 ---
 
-## Si la versión nueva agrega campos a la base
+## Si algún día el repositorio pasa a ser privado
 
-No hay que hacer nada especial: `apps/pos/db/migraciones.py` compara las tablas
-con el modelo al arrancar y agrega las columnas que falten. Está probado sobre
-una base con 140 ventas: agregó la columna y no se perdió ninguna.
+Hoy es público: cualquiera puede bajar el código. Para cerrarlo sin cortarle las
+actualizaciones a nadie, en este orden:
 
-Lo que **no** cubre: renombrar columnas, cambiar tipos o borrarlas. Si algún día
-hace falta, se hace a mano y se avisa en las novedades.
+1. Crea una clave por local en GitHub (*fine-grained token*, solo lectura de *Contents* de
+   este repositorio). Una por local: si una se filtra, se revoca esa sola.
+2. En cada caja, pon la clave en la variable `POS_CLAVE_DESCARGA` (Kofe.exe la lee al
+   arrancar). Con clave, la caja baja el zip por la API de GitHub, que sí la acepta.
+3. Comprueba que UN local actualiza con su clave.
+4. Recién ahí, pasa el repositorio a privado.
+
+> Esto no está probado contra un repositorio privado de verdad: se probó que la caja arma
+> bien los pedidos con la clave. Hazlo primero con un local.
 
 ---
 
 ## Probar una actualización antes de publicarla
 
-Se puede simular todo el ciclo en tu propio computador, sin tocar GitHub:
+1. Arma el zip con `git archive --format=zip --prefix=pos-cafeteria-X/ HEAD > p.zip` en un
+   commit ya firmado.
+2. Sírvelo: `python -m http.server 9100` en esa carpeta, junto a un `version.json` que
+   apunte a `http://127.0.0.1:9100/p.zip`.
+3. Abre una instalación de prueba con `POS_URL_VERSION=http://127.0.0.1:9100/version.json`.
 
-1. Arma el ZIP nuevo y déjalo en una carpeta junto a un `version.json` que
-   apunte a él con `http://127.0.0.1:9100/Punto-de-venta.zip`.
-2. Sirve esa carpeta: `python -m http.server 9100`
-3. Abre una instalación de prueba con
-   `POS_URL_VERSION=http://127.0.0.1:9100/version.json`.
-
-El actualizador acepta `http` **solo** hacia `127.0.0.1`; para cualquier otra
-dirección exige `https`, porque si no cualquiera en la red del local podría
-meterle código propio a la caja.
-
-Así se probó este mecanismo antes de entregarlo: se instaló la v1.0, se hizo una
-venta, se publicó una v1.1 con un archivo nuevo en `apps/pos/api/`, y después de
-actualizar la venta seguía ahí y el archivo nuevo respondía.
+El actualizador acepta `http` **solo** hacia `127.0.0.1`; para cualquier otra dirección
+exige `https`.
 
 ---
 
@@ -116,10 +138,8 @@ actualizar la venta seguía ahí y el archivo nuevo respondía.
 
 > *"Publiqué el conversor y al papá le llegó todo menos el conversor."*
 
-El actualizador de allá copiaba **solo los archivos de la raíz** del paquete, así
-que un módulo nuevo en una subcarpeta nunca llegaba. Y arreglar la lista no sirve
-para la versión en curso: el que copia los archivos es el programa **ya
-instalado**, o sea la versión vieja.
-
-Acá el actualizador copia el árbol completo desde el principio, y hay un test
-(`test_un_archivo_nuevo_en_una_subcarpeta_si_llega`) que lo cuida.
+El actualizador de allá copiaba **solo los archivos de la raíz** del paquete, así que un
+módulo nuevo en una subcarpeta nunca llegaba. Y arreglar la lista no sirve para la versión
+en curso: el que copia los archivos es el programa **ya instalado**, o sea la versión vieja.
+Acá se copia el árbol completo, y `test_un_archivo_nuevo_en_una_subcarpeta_si_llega` lo
+cuida. Lo mismo vale para la firma: la 2.19 la instalan cajas que no la revisan.

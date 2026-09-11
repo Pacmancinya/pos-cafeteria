@@ -1,39 +1,72 @@
-"""Candado de la caja.
+"""Candado de la RED de la caja.
 
 Por qué existe: el punto de venta escucha en toda la red del local porque las
 pantallas del menú viven en otro computador. Pero en una cafetería el wifi de
-invitados está en la misma red — sin candado, un cliente podría abrir la caja
-desde el celular y registrar o anular ventas.
+invitados suele estar en la misma red — sin candado, un cliente podría abrir la
+caja desde el celular y registrar o anular ventas.
 
 La regla es proporcionada, no paranoica:
 
   · Desde el propio PC de la caja (127.0.0.1) → entra directo, sin PIN.
     El cajero no tiene ninguna fricción extra.
-  · Desde cualquier otro equipo de la red → pide PIN una vez y deja una galleta.
-  · La carta (`/api/v1/carta`) y la salud quedan siempre abiertas: son de solo
-    lectura y muestran precios que ya están a la vista del público.
+  · Desde cualquier otro equipo de la red → pide el PIN de red una vez y deja
+    una galleta firmada con la llave de ESTA caja.
+  · La carta, la salud y el aviso de errores de las pantallas quedan abiertos:
+    los televisores no tienen teclado para escribir un PIN.
+
+Desde la 2.19 el PIN de red lo elige cada local (`local.py`), la galleta va
+firmada, y hay freno de intentos (`freno.py`).
 """
 from __future__ import annotations
+
+import hashlib
+import hmac
+from html import escape
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from core.config import PIN, token_de_acceso
+from apps.pos import local
 
 GALLETA = "pos_acceso"
 # `/api/v1/carta` va libre porque es de solo lectura y muestra precios que ya
-# están a la vista del público. Y porque es de donde el programa de las pantallas
-# —que desde la 2.2 corre aparte— saca la carta: si pidiera el PIN de red, cada
-# TV del local necesitaría que alguien lo escribiera, y un TV colgado en la pared
-# no tiene teclado.
-LIBRES = ("/api/v1/carta", "/api/v1/salud", "/pantallas", "/static/",
-          "/entrar", "/favicon.ico")
+# están a la vista del público, y porque de ahí la sacan los televisores: si
+# pidiera el PIN de red, cada TV necesitaría que alguien lo escribiera, y un TV
+# colgado en la pared no tiene teclado. Por lo mismo va libre el aviso de
+# errores de las pantallas, que tiene su propio tope (api/diagnostico.py).
+LIBRES = ("/api/v1/carta", "/api/v1/salud", "/api/v1/diagnostico/evento",
+          "/pantallas", "/static/", "/entrar", "/favicon.ico")
 LOCALES = {"127.0.0.1", "::1", "localhost"}
 
 
+def ip(request: Request) -> str:
+    return request.client.host if request.client else "?"
+
+
 def es_local(request: Request) -> bool:
-    cliente = request.client.host if request.client else ""
-    return cliente in LOCALES
+    return ip(request) in LOCALES
+
+
+def token_de_acceso() -> str:
+    """La galleta que deja pasar a un equipo de la red.
+
+    Hasta la 2.18 era sha256("pos-cafeteria:" + PIN): SIN ningún secreto de la
+    caja. Quien leyera el código público podía calcularla con el PIN de fábrica
+    —o probar las diez mil de un PIN de 4 dígitos— sin escribir nunca el PIN en
+    la pantalla de entrada, así que el freno de intentos no habría servido de
+    nada. Ahora va firmada con la llave de ESTA caja (`.secreto`, la misma de
+    las sesiones): sin esa llave no hay galleta que sirva. Y cambiar el PIN deja
+    fuera a los equipos que entraron con el viejo, que es lo que se espera de
+    cambiar un PIN.
+    """
+    from apps.pos.sesion import _secreto
+    return hmac.new(_secreto().encode(), ("acceso:" + local.pin_de_red()).encode(),
+                    hashlib.sha256).hexdigest()[:32]
+
+
+def galleta_valida(request: Request) -> bool:
+    return hmac.compare_digest(request.cookies.get(GALLETA, "").encode("utf-8"),
+                               token_de_acceso().encode())
 
 
 def puede_pasar(request: Request) -> bool:
@@ -42,7 +75,7 @@ def puede_pasar(request: Request) -> bool:
         return True
     if es_local(request):
         return True
-    return request.cookies.get(GALLETA) == token_de_acceso()
+    return galleta_valida(request)
 
 
 async def candado(request: Request, call_next):
@@ -77,28 +110,33 @@ PAGINA = """<!doctype html>
 <body>
 <form method="post" action="/entrar">
   <h1>Caja de __LOCAL__</h1>
-  <p>Estás entrando desde otro equipo de la red.<br>Escribe el PIN de la caja.</p>
-  <input name="pin" type="password" inputmode="numeric" autocomplete="off" autofocus placeholder="••••">
+  <p>Estás entrando desde otro equipo de la red.<br>Escribe el PIN de red de la caja.</p>
+  <input name="pin" type="password" inputmode="numeric" autocomplete="off" autofocus placeholder="••••••">
   <button class="btn btn--cobrar" type="submit">Entrar</button>
   __ERROR__
 </form>
 </body></html>"""
 
 
-def pagina_entrar(local: str, error: bool = False) -> HTMLResponse:
-    html = PAGINA.replace("__LOCAL__", local).replace(
-        "__ERROR__", '<p class="mal">Ese PIN no es.</p>' if error else ""
-    )
-    return HTMLResponse(html, status_code=401 if error else 200)
+def pagina_entrar(nombre_local: str, aviso: str = "", estado: int = 200) -> HTMLResponse:
+    html = PAGINA.replace("__LOCAL__", escape(nombre_local)).replace(
+        "__ERROR__", f'<p class="mal">{escape(aviso)}</p>' if aviso else "")
+    return HTMLResponse(html, status_code=estado)
+
+
+def renovar_galleta(respuesta) -> None:
+    # 180 días: el tablet del local no debería tener que reingresar el PIN cada rato.
+    respuesta.set_cookie(GALLETA, token_de_acceso(), max_age=60 * 60 * 24 * 180,
+                         httponly=True, samesite="lax")
 
 
 def respuesta_con_acceso(destino: str = "/") -> RedirectResponse:
     r = RedirectResponse(destino, status_code=303)
-    # 180 días: el tablet del local no debería tener que reingresar el PIN cada rato.
-    r.set_cookie(GALLETA, token_de_acceso(), max_age=60 * 60 * 24 * 180,
-                 httponly=True, samesite="lax")
+    renovar_galleta(r)
     return r
 
 
 def pin_correcto(pin: str) -> bool:
-    return bool(PIN) and pin.strip() == PIN
+    escrito = (pin or "").strip()
+    return bool(escrito) and hmac.compare_digest(escrito.encode("utf-8"),
+                                                 local.pin_de_red().encode())

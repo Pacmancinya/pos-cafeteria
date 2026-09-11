@@ -63,16 +63,22 @@ Pasa **una sola vez**. De ahí en adelante abre directo.
 > certificado cuesta del orden de US$200 al año y solo sirve para que no salga ese aviso;
 > no cambia en nada cómo funciona el programa. Si algún día quieren, se puede comprar.
 
-### 5. Crea tu usuario
+### 5. Los datos del local y tu usuario
 
-La primera vez la caja te va a decir que todavía no hay nadie registrado y te va a pedir
-tu nombre y un **PIN de 4 números**. Ese primer usuario queda como **dueño**: es el único
-que puede cambiar precios, ver los informes y crear a los demás.
+La primera vez, la caja pregunta **cómo se llama el local** (y, si quieres, su RUT y su
+dirección: salen en el comprobante), y después **tu nombre y un PIN de 4 números**. Ese
+primer usuario queda como **dueño**: es el único que puede crear a los cajeros, cambiar
+precios y ver los ajustes.
 
-Después, desde la misma caja, creas a los cajeros.
+Esto se hace **en el computador de la caja**. Desde un tablet no se puede crear el primer
+usuario: así nadie conectado al Wi-Fi se queda con una caja recién instalada.
 
 > Elige un PIN que no sea 1234 y que los cajeros no sepan: es lo que separa lo tuyo de lo
 > de ellos.
+
+Al terminar aparece, en grande, el **PIN de red**: 6 números que son solo de esta caja.
+**Anótalo.** Lo piden los tablets y los otros computadores del local la primera vez que
+abren la caja. Si se te olvida, lo ves en **Ayuda → Ajustes**.
 
 ### 6. Anota la dirección para las pantallas del menú
 
@@ -114,6 +120,14 @@ Configuración de Windows → **Sistema** → **Inicio/apagado** → en "Apagar 
 elige **Nunca**.
 
 ---
+
+### Que las ventas no dependan de este disco
+
+La caja guarda un respaldo al abrir y otro al cerrar, pero en el mismo computador: si el
+disco se muere o se lo roban, se van las ventas junto con sus respaldos. En **Ayuda →
+Ajustes → Copia de afuera** elige una carpeta que se sincronice sola con la nube (OneDrive,
+Google Drive, Dropbox) o un pendrive que quede conectado, y aprieta **Respaldar ahora**.
+Tiene que decir *«se revisó y abre bien»*.
 
 ## Lo primero que hay que hacer adentro
 
@@ -161,7 +175,10 @@ agrega solo a la base al arrancar.
 | Se abre la ventana pero queda en blanco | Espera unos segundos: todavía estaba arrancando. Si sigue así, ciérrala y vuelve a abrir. |
 | **Se abrió en el navegador** y salió un aviso diciéndolo | Es el plan B: funciona igual, pero la ventana propia no pudo abrir. Cierra todo, borra la carpeta, desbloquea el ZIP (paso 1) y extrae de nuevo. Adentro de la carpeta queda `problema-ventana.txt` con el motivo: mándamelo. |
 | Olvidé el PIN del dueño | Se puede resetear desde el mismo computador. Pídemelo: son dos minutos. |
-| Otro equipo del local no entra | Tiene que estar en la misma red, y la primera vez pide el PIN de red (viene `2468`). |
+| Otro equipo del local no entra | Tiene que estar en la misma red, y la primera vez pide el **PIN de red**: el dueño lo ve en Ayuda → Ajustes. |
+| Dice «Demasiados intentos» | Se escribió mal el PIN cinco veces seguidas. Hay que esperar lo que dice (empieza en 30 segundos) y probar de nuevo. |
+| Algo anda raro y hay que avisar | Ayuda → Ajustes → **Descargar diagnóstico**, y manda ese archivo por WhatsApp. No lleva tu PIN ni tus claves. |
+| Se murió el disco o se perdió el computador | Si había copia de afuera, la base está en la carpeta `Kofe-respaldos`. Se vuelve con `tools/restaurar.py`; pídeme ayuda. |
 | Las pantallas no toman los precios | Revisa que pegaste la dirección con la IP (no `127.0.0.1`) y que el computador de la caja esté encendido. |
 
 ---

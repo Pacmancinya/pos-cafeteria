@@ -167,6 +167,8 @@ def crear_si_falta() -> str:
     """Devuelve lo que hizo, para poder mirarlo. Nunca lanza."""
     if sys.platform != "win32":
         return ""
+    if os.getenv("POS_SIN_ACCESO_DIRECTO"):
+        return ""          # las pruebas no tienen por qué tocar el escritorio
 
     destino, args = _destino()
     if not destino:

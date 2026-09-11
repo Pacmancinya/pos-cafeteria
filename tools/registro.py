@@ -20,7 +20,7 @@ import os
 
 from core.config import NOMBRE_MEDIO, RAIZ, a_local
 
-CARPETA = os.path.join(RAIZ, "registros")
+CARPETA = os.getenv("POS_CARPETA_REGISTROS") or os.path.join(RAIZ, "registros")
 
 CABECERA = [
     # "Cerró otra persona" es una columna aparte y no un detalle que se saque

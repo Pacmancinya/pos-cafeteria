@@ -5,6 +5,7 @@ Ese endpoint es la razón por la que el punto de venta es el dueño de los preci
 una sola lista, no dos.
 """
 from __future__ import annotations
+from apps.pos import local as datos_local
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
@@ -69,7 +70,7 @@ def carta(respuesta: Response, s: Session = Depends(get_session)):
             }
         salida.append(bloque)
 
-    return {"local": NOMBRE_LOCAL, "avisos": AVISOS, "categorias": salida}
+    return {"local": datos_local.nombre(), "avisos": AVISOS, "categorias": salida}
 
 
 @router.get("/categorias")

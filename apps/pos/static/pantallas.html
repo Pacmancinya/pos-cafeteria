@@ -1189,13 +1189,54 @@ const dibujar = (a) => {
 /* ==========================================================
    4. El logo liquido — metaballs + luz especular
    ========================================================== */
+/* Cuánto mide un texto con la letra del logo. Con canvas y no con el SVG: el
+   de la vitrina puede estar escondido, y un SVG escondido mide cero. */
+let _regla = null;
+function anchoDelTexto(texto, fs, ls) {
+  try {
+    if (!_regla) _regla = document.createElement("canvas").getContext("2d");
+    _regla.font = `600 ${fs}px Fredoka, "Trebuchet MS", sans-serif`;
+    return _regla.measureText(texto).width + ls * Math.max(0, texto.length - 1);
+  } catch (e) {
+    return texto.length * fs * .6;
+  }
+}
+
+/* Cuánto del cuadro de dibujo se ve. Parado, el cuadro del logo mide 1240 y
+   el televisor 1080: los bordes quedan fuera de la pantalla, y un nombre que
+   cabe en el cuadro igual sale cortado. Si el logo está escondido y no se
+   puede medir, se usa el ancho de la pantalla. */
+function anchoVisible(svg, caja) {
+  try {
+    const rs = svg.getBoundingClientRect();
+    const rp = svg.parentElement && svg.parentElement.getBoundingClientRect();
+    if (rs.width > 0 && rp && rp.width > 0) return caja * Math.min(1, rp.width / rs.width);
+    return Math.min(caja, ANCHO);
+  } catch (e) {
+    return caja;
+  }
+}
+
 function pintarPalabra(svg, texto, filtro, opts) {
   const o = opts || {};
   const idClip = uid();
-  const fs = o.fs || 350, x = o.x || 620, y = o.y || 430, tinta = o.fill || "url(#gCafe)";
+  const x = o.x || 620, ls = o.ls || 2, tinta = o.fill || "url(#gCafe)";
+  // El tamaño se pensó para «Kofe», cuatro letras. Un nombre más largo se
+  // achica hasta caber en su cuadro: «Café Tito» salía cortado en los dos
+  // bordes del televisor parado. La línea base sube con la letra, para que el
+  // nombre siga centrado en su alto. «Kofe» queda exactamente como estaba.
+  const fs0 = o.fs || 350;
+  const caja = (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) || 1240;
+  const visible = anchoVisible(svg, caja);
+  // .88 y no 1: el efecto líquido y las gotas se desbordan de las letras.
+  const libre = (o.anchor === "start" ? visible - x : visible) * .88;
+  const ancho = anchoDelTexto(texto, fs0, ls);
+  const fs = ancho > libre ? Math.round(Math.max(fs0 * .3, fs0 * libre / ancho)) : fs0;
+  const y = Math.round((o.y || 430) - (fs0 - fs) * .35);
+  svg.setAttribute("aria-label", texto);
   const txt = (extra) =>
     `<text x="${x}" y="${y}" text-anchor="${o.anchor || "middle"}" font-family="Fredoka, Trebuchet MS, sans-serif"
-      font-size="${fs}" font-weight="600" letter-spacing="${o.ls || 2}" ${extra}>${texto}</text>`;
+      font-size="${fs}" font-weight="600" letter-spacing="${ls}" ${extra}>${esc(texto)}</text>`;
 
   _seed = 11;
 
@@ -1546,6 +1587,10 @@ function setOrientacion(o) {
   const b = $("#bGiro");
   if (b) b.textContent = v ? "Ver horizontal" : "Ver vertical";
   ajustar();
+  // Al girar cambia cuánto del logo se ve: se vuelve a medir el nombre. Solo si
+  // ya se dibujó; al arrancar lo dibuja pintarVitrina.
+  const palabra = $("#palabra");
+  if (palabra && palabra.childElementCount) pintarPalabra(palabra, CFG.marca, "liquido", { humo: 1 });
 }
 
 let ultW = -1, ultH = -1;
@@ -2144,12 +2189,39 @@ function desdePV(d) {
         : Object.assign(clonar(items[0]), { badge: "Recomendado de hoy" })
     };
   });
-  return { categorias, avisos: Array.isArray(d.avisos) && d.avisos.length ? d.avisos.map(String) : null, n };
+  return { categorias, avisos: Array.isArray(d.avisos) && d.avisos.length ? d.avisos.map(String) : null, n,
+           local: typeof d.local === "string" ? d.local.slice(0, 40) : "" };
+}
+
+/* El nombre del local sale de la caja. La carta de ejemplo trae los textos de
+   Kofe —el primer local—, y hasta la 2.18 una cafetería nueva mostraba en sus
+   televisores «Kofe · Tostado en Graneros». Lo que se escribió a mano en
+   Configurar se respeta: solo se cambia lo que sigue siendo el ejemplo, o lo
+   que puso la caja la vez anterior. Eso último queda anotado en CFG.auto; sin
+   la nota, un local que se cambiaba de nombre seguía con el viejo en sus
+   televisores (lo encontró la revisión de Codex). */
+function ponerNombreEnLaTv(nombre) {
+  const quiere = nombre === CONFIG.marca
+    ? { marca: CONFIG.marca, marcaTxt: CONFIG.marcaTxt, kicker: CONFIG.kicker, bajada: CONFIG.bajada }
+    // Las frases de ejemplo son de Kofe («Tostado en Graneros»): en otro local
+    // quedan en blanco hasta que escriba las suyas en Configurar.
+    : { marca: nombre, marcaTxt: "", kicker: "", bajada: "" };
+  const auto = CFG.auto || {};
+  let cambio = false;
+  for (const k in quiere) {
+    const libre = CFG[k] === CONFIG[k] || (k in auto && CFG[k] === auto[k]);
+    if (!libre) { delete auto[k]; continue; }
+    if (CFG[k] !== quiere[k]) { CFG[k] = quiere[k]; cambio = true; }
+    auto[k] = quiere[k];
+  }
+  CFG.auto = auto;
+  if (cambio) pintarVitrina();
 }
 
 function aplicarCarta(carta) {
   CFG.categorias = carta.categorias;
   if (carta.avisos) CFG.cinta = carta.avisos;
+  if (carta.local) ponerNombreEnLaTv(carta.local);
   cats = CFG.categorias;
   catIdx = Math.min(catIdx, cats.length - 1);
   pintarCabecera();
@@ -2172,7 +2244,13 @@ async function traerPV() {
   try {
     const r = await fetch(f.url, { cache: "no-store" });
     if (!r.ok) throw new Error("el servidor respondió " + r.status);
-    const carta = desdePV(await r.json());
+    const crudo = await r.json();
+    // El nombre llega aunque la carta esté vacía: un local recién instalado,
+    // todavía sin productos, igual tiene que verse con su nombre y no con el
+    // de Kofe. Antes se perdía junto con el error de «no trae categorías».
+    if (crudo && typeof crudo.local === "string" && crudo.local)
+      ponerNombreEnLaTv(crudo.local.slice(0, 40));
+    const carta = desdePV(crudo);
     aplicarCarta(carta);
     try { localStorage.setItem(LLAVE_CARTA, JSON.stringify(carta)); } catch (e) { }
     estadoPV = { estado: "ok", detalle: "", hora: new Date(), productos: carta.n };
@@ -2224,6 +2302,19 @@ async function vigilarVersion() {
 /* ==========================================================
    10. Arranque
    ========================================================== */
+// Los errores de esta pantalla se anotan en la caja (2.19): un TV en blanco no
+// se puede diagnosticar desde lejos si no deja rastro.
+addEventListener("error", (e) => {
+  if (location.protocol === "file:") return;
+  try {
+    fetch("/api/v1/diagnostico/evento", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: "tv", mensaje: String(e.message || "error").slice(0, 500),
+                             donde: String((e.filename || "") + ":" + (e.lineno || "")).slice(0, 200) }) })
+      .catch(() => {});
+  } catch (x) { }
+});
+
 (function iniciar() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
     document.body.classList.add("calma");
@@ -2245,6 +2336,12 @@ async function vigilarVersion() {
   addEventListener("resize", ajustar);
   addEventListener("fullscreenchange", () => setTimeout(ajustar, 60));
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(ajustar);
+  // Con la letra del logo ya cargada, el nombre se vuelve a medir: medido con
+  // la de reemplazo podía quedar más ancho o más angosto de lo que es.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
+    pintarPalabra($("#palabra"), CFG.marca, "liquido", { humo: 1 });
+    pintarCabecera();
+  });
 
   // ?p=1 fija la vitrina, ?p=2 fija el menú (un archivo, dos televisores)
   // ?o=vertical u ?o=horizontal fuerza la orientación de ese televisor

@@ -8,12 +8,14 @@ from zoneinfo import ZoneInfo
 # La versión tiene que coincidir con la de version.json cuando se publica.
 # Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
 # novedades entre versiones, o nadie distingue una de otra.
-APP_VERSION = "2.18"
-APP_NOMBRE = "El dinero sacado, a la vista"
+APP_VERSION = "2.19"
+APP_NOMBRE = "Listo para el segundo local"
 VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
 
-# De dónde se enteran las cajas de que hay una versión nueva.
-# Tiene que ser un archivo público: el actualizador no maneja claves.
+# De dónde se enteran las cajas de que hay una versión nueva (el canal estable;
+# el piloto es version-piloto.json al lado). Si el repositorio pasa a ser
+# privado, cada local necesita su clave en POS_CLAVE_DESCARGA: ver
+# docs/PUBLICAR-ACTUALIZACIONES.md.
 URL_VERSION = os.getenv(
     "POS_URL_VERSION",
     "https://raw.githubusercontent.com/Pacmancinya/pos-cafeteria/main/version.json",
@@ -27,11 +29,9 @@ PUERTO = int(os.getenv("POS_PUERTO", "8090"))
 # en OTRO computador y necesitan alcanzar /api/v1/carta.
 HOST = os.getenv("POS_HOST", "0.0.0.0")
 
-# ...y justamente por eso hay PIN: en una cafetería el wifi de invitados está en
-# la misma red. Sin PIN, cualquier cliente conectado al wifi podría abrir la caja
-# y registrar o anular ventas. Las peticiones desde el propio PC de la caja
-# (127.0.0.1) no lo piden, así que el cajero no tiene fricción.
-PIN = os.getenv("POS_PIN", "2468")
+# ...y justamente por eso hay PIN de red (ver apps/pos/acceso.py). Desde la 2.19
+# lo elige cada local y vive en su base (apps/pos/local.py): antes era "2468" en
+# todas las cajas. POS_PIN sigue sirviendo para que una instalación lo deje fijo.
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_URL = os.getenv("POS_DB_URL", f"sqlite:///{os.path.join(RAIZ, 'pos.db')}")
@@ -115,10 +115,12 @@ def puede(rol: str, permiso: str) -> bool:
     return permiso in PERMISOS.get(rol, ())
 
 
-# Cuántos segundos de no tocar nada antes de que la caja se bloquee sola.
-# Existe para que la presencia sea honesta: una sesión que alguien dejó abierta
-# y se fue diría que esa persona estuvo toda la tarde.
-BLOQUEO_SEGUNDOS = int(os.getenv("POS_BLOQUEO", "90"))
+# Cuántos minutos sin tocar nada antes de que la caja se bloquee sola. Existe
+# para que la presencia sea honesta: una sesión que alguien dejó abierta y se
+# fue diría que esa persona estuvo toda la tarde. Es el valor de fábrica: el
+# dueño lo cambia en Ayuda → Ajustes. Hasta la 2.18 había dos verdades —90
+# segundos acá, sin que nadie los usara, y 3 minutos escritos en la pantalla—.
+BLOQUEO_MINUTOS = 3
 
 # Con qué se firma la galleta de la sesión. Si no se define, se deriva de la
 # base de datos del local: así cada caja tiene su propia firma sin que nadie
@@ -221,12 +223,6 @@ def ip_en_la_red() -> str:
         return "127.0.0.1"
     finally:
         s.close()
-
-
-def token_de_acceso() -> str:
-    """Token derivado del PIN: reiniciar el programa no desloguea al tablet."""
-    import hashlib
-    return hashlib.sha256(("pos-cafeteria:" + PIN).encode()).hexdigest()[:32]
 
 
 def ahora() -> datetime:

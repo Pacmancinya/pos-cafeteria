@@ -75,8 +75,11 @@ async function api(ruta, opciones = {}) {
       ...(corte ? { signal: corte.signal } : {}),
     });
   } catch (e) {
-    throw new Error(e && e.name === "AbortError"
-      ? "La caja no respondió a tiempo" : "No se pudo conectar con la caja");
+    const mensaje = e && e.name === "AbortError"
+      ? "La caja no respondió a tiempo" : "No se pudo conectar con la caja";
+    // El servidor no puede anotar lo que no le llegó: lo anota la pantalla.
+    reportar("red", mensaje, metodo + " " + ruta);
+    throw new Error(mensaje);
   } finally {
     clearTimeout(reloj);
   }
@@ -92,6 +95,37 @@ async function api(ruta, opciones = {}) {
   }
   return r.status === 204 ? null : r.json();
 }
+
+/* Los errores de esta pantalla quedan anotados en la caja (desde la 2.19), en
+   el mismo registro que el dueño baja con «Descargar diagnóstico». Si el
+   problema es justo que la caja no contesta, se guardan y se mandan cuando
+   vuelva: es cuando más importa que queden. */
+const AVISOS_PENDIENTES = [];
+let ultimoReporte = "";
+
+function reportar(tipo, mensaje, donde = "", detalle = "") {
+  const clave = tipo + "|" + mensaje + "|" + donde;
+  if (clave === ultimoReporte) return;          // el mismo error en bucle va una vez
+  ultimoReporte = clave;
+  const evento = { tipo: String(tipo).slice(0, 40), mensaje: String(mensaje).slice(0, 500),
+                   donde: String(donde).slice(0, 200), detalle: String(detalle).slice(0, 2000) };
+  fetch("/api/v1/diagnostico/evento", { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(evento) })
+    .catch(() => { if (AVISOS_PENDIENTES.length < 20) AVISOS_PENDIENTES.push(evento); });
+}
+
+function enviarPendientes() {
+  while (AVISOS_PENDIENTES.length) {
+    const evento = AVISOS_PENDIENTES.shift();
+    fetch("/api/v1/diagnostico/evento", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(evento) }).catch(() => {});
+  }
+}
+
+window.addEventListener("error", (e) => reportar("error", e.message || "error",
+  `${e.filename || ""}:${e.lineno || ""}`, (e.error && e.error.stack) || ""));
+window.addEventListener("unhandledrejection", (e) => reportar("promesa",
+  (e.reason && e.reason.message) || String(e.reason), "", (e.reason && e.reason.stack) || ""));
 
 let tAviso;
 function avisar(texto, malo = false) {
@@ -1357,13 +1391,17 @@ function pintarConectar(salud) {
       <button class="btn btn--chico" data-copiar="${mia}">Copiar</button>
     </div>
     <p style="margin:8px 0 0;font-size:13px;line-height:1.6">Esa es para abrir la
-      caja desde un tablet o desde otro computador del local.</p>` : ""}`;
+      caja desde un tablet o desde otro computador del local. La primera vez pide el
+      <b>PIN de red</b>: el dueño lo ve en Ayuda → Ajustes.</p>` : ""}`;
 }
 
 /* ---------------- actualizaciones ----------------
    El dueño no tiene por qué saber que existe una "versión": el número está
    chico en la barra y solo se pone verde cuando hay algo nuevo. */
 let INFO_VERSION = null;
+
+// Si la última actualización se puede deshacer, y a qué versión.
+let VUELTA = null;
 
 async function cargarVersion() {
   try {
@@ -1379,6 +1417,7 @@ async function cargarVersion() {
       $("#version").textContent = "Actualizar a v" + INFO_VERSION.disponible;
     }
   } catch (e) { }
+  try { VUELTA = await api("/actualizacion/vuelta"); } catch (e) { }
 }
 
 function dialogoVersion() {
@@ -1402,6 +1441,8 @@ function dialogoVersion() {
     ${cuerpo}
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cerrar</button>
+      ${VUELTA && VUELTA.disponible && puedo("config")
+        ? `<button class="btn" data-volver-version>Volver a la v${esc(VUELTA.version)}</button>` : ""}
       ${hay ? `<button class="btn btn--cobrar" id="btnActualizar" style="width:auto">Actualizar ahora</button>` : ""}
     </div>`;
   $("#capaVersion").classList.add("is-on");
@@ -2036,20 +2077,32 @@ async function mostrarCandado(motivo) {
 }
 
 function pintarPrimerUsuario() {
+  // El nombre de fábrica no se sugiere: una cafetería nueva que deja «Kofe»
+  // escrito sale así en el comprobante y en sus televisores.
+  const sugerido = NOMBRE_DEL_LOCAL && NOMBRE_DEL_LOCAL !== "Kofe" ? NOMBRE_DEL_LOCAL : "";
   $("#candadoCaja").innerHTML = `
-    <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
-    <p>Todavía no hay nadie registrado en esta caja.<br>
-       El primero es el dueño: va a poder crear a los demás.</p>
+    <h1>Una caja nueva</h1>
+    <p>Todavía no hay nadie registrado. Primero los datos del local; después el
+       dueño, que va a poder crear a los demás.</p>
+    <label class="campo"><span>¿Cómo se llama el local?</span>
+      <input id="primerLocal" type="text" maxlength="40" value="${esc(sugerido)}"
+             placeholder="Como lo conocen los clientes" autocomplete="off"></label>
+    <div class="dos-campos">
+      <label class="campo"><span>RUT del local (si lo tienes)</span>
+        <input id="primerRut" type="text" maxlength="14" placeholder="12.345.678-9" autocomplete="off"></label>
+      <label class="campo"><span>Dirección (si quieres)</span>
+        <input id="primerDireccion" type="text" maxlength="80" autocomplete="off"></label>
+    </div>
     <label class="campo"><span>¿Cómo te llamas?</span>
       <input id="primerNombre" type="text" placeholder="Tu nombre" autocomplete="off"></label>
     <label class="campo"><span>Inventa un PIN de 4 números</span>
       <input id="primerPin" type="password" inputmode="numeric" data-teclado="entero"
              placeholder="••••" autocomplete="off"></label>
-    <button class="btn btn--cobrar" id="crearPrimero">Crear mi usuario</button>
-    <p class="candado__nota">Con esto la caja va a saber quién abrió, quién cerró
-      y quién estuvo en cada turno.</p>`;
+    <button class="btn btn--cobrar" id="crearPrimero">Crear el local y mi usuario</button>
+    <p class="candado__nota">El RUT y la dirección salen en el comprobante. Todo se cambia
+      después en Ayuda → Ajustes.</p>`;
   $("#candado").hidden = false;
-  setTimeout(() => $("#primerNombre").focus(), 80);
+  setTimeout(() => $(sugerido ? "#primerNombre" : "#primerLocal").focus(), 80);
 }
 
 async function pedirPin(usuarioId) {
@@ -2123,15 +2176,50 @@ async function entrarComo(usuarioId, pin) {
 }
 
 async function crearPrimerUsuario() {
+  const nombreLocal = ($("#primerLocal").value || "").trim();
+  const rut = ($("#primerRut").value || "").trim();
+  const direccion = ($("#primerDireccion").value || "").trim();
   const nombre = ($("#primerNombre").value || "").trim();
   const pin = ($("#primerPin").value || "").replace(/\D/g, "");
+  if (!nombreLocal) return avisar("Escribe el nombre del local", true);
   if (!nombre) return avisar("Escribe tu nombre", true);
   if (pin.length < 4) return avisar("El PIN son 4 números", true);
   try {
+    // El ORDEN importa. Mientras no hay nadie registrado, la caja deja hacer
+    // todo (el dueño provisorio); apenas existe el primer usuario esa puerta se
+    // cierra. Los datos del local y el PIN de red van ANTES, o quedarían sin
+    // poder guardarse hasta que el dueño entre.
+    await api("/local", { method: "PUT", body: JSON.stringify({ nombre: nombreLocal, rut, direccion }) });
+    let pinRed = null;
+    try { pinRed = (await api("/red/pin", { method: "POST", body: "{}" })).pin; }
+    catch (e) { /* lo fijó la instalación: se queda el que está */ }
     const u = await api("/usuarios", { method: "POST",
       body: JSON.stringify({ nombre, pin, rol: "dueno" }) });
+    ponerNombreDelLocal(nombreLocal);
+    if (pinRed) return mostrarPinDeRed(pinRed, () => entrarComo(u.id, pin));
     await entrarComo(u.id, pin);
   } catch (e) { avisar(e.message, true); }
+}
+
+function ponerNombreDelLocal(nombre) {
+  NOMBRE_DEL_LOCAL = nombre;
+  $("#nombreLocal").textContent = nombre;
+  document.title = "Caja · " + nombre;
+}
+
+/* El PIN de red se muestra una vez, al crear el local, en grande. Es el que
+   van a pedir los tablets y los otros computadores la primera vez. Hasta la
+   2.18 era «2468» en todas las cajas; ahora cada local tiene el suyo. */
+function mostrarPinDeRed(pin, seguir) {
+  $("#candadoCaja").innerHTML = `
+    <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
+    <p>Listo. Anota el <b>PIN de red</b> de esta caja: lo piden los tablets y los
+       otros computadores del local la primera vez que la abren.</p>
+    <div class="pin-red pin-red--grande">${esc(pin)}</div>
+    <p class="candado__nota">Es distinto de tu PIN, y de cualquier otra caja. Lo vuelves
+      a ver cuando quieras en Ayuda → Ajustes.</p>
+    <button class="btn btn--cobrar" id="pinRedVisto">Anotado, entrar</button>`;
+  $("#pinRedVisto").onclick = seguir;
 }
 
 /* ---------------- el equipo ----------------
@@ -2320,6 +2408,7 @@ function sesionPerdida() {
 async function vigilarLaCaja() {
   let viva = true;
   try { await api("/salud", { espera: 5000 }); } catch (e) { viva = false; }
+  if (viva) enviarPendientes();
   const aviso = $("#sinCaja");
   if (aviso) aviso.hidden = viva || !$("#candado").hidden;
 }
@@ -2338,7 +2427,7 @@ function reiniciarInactividad() {
     const ocupado = carrito.length || $$(".capa.is-on").length || Teclado.abierto;
     if (ocupado) return reiniciarInactividad();
     salirDeLaCaja("bloqueo");
-  }, MINUTOS_QUIETO * 60000);
+  }, (AJUSTES.bloqueo_minutos || MINUTOS_QUIETO) * 60000);
 }
 
 ["pointerdown", "keydown"].forEach((evt) =>
@@ -3108,23 +3197,218 @@ function pintarGuias(id) {
    prende desde los ajustes" y esa pantalla no existía: el campo se guardaba, se
    leía, y no había ninguna forma de cambiarlo desde el programa. Si por lo que
    fuera quedaba prendido, el dueño no tenía cómo apagarlo. */
+/* ---- Ayuda → Ajustes ----
+   Todo lo de acá es del dueño. Desde la 2.19 están también los datos del local,
+   el PIN de red, cuánto tarda en bloquearse, la copia de afuera, el canal de
+   actualizaciones y el diagnóstico: lo que antes se configuraba con variables
+   de Windows, o no se configuraba. */
 function pintarAjustes() {
   const caja = $("#panelAjustes");
   if (!caja) return;
   if (!puedo("config")) { caja.innerHTML = ""; return; }
 
   const prendido = !!AJUSTES.teclado_en_pantalla;
+  const minutos = AJUSTES.bloqueo_minutos || MINUTOS_QUIETO;
+  const piloto = AJUSTES.canal_actualizaciones === "piloto";
   caja.innerHTML = `
     <h3>Ajustes de esta caja</h3>
-    <label class="marca" style="margin-top:10px">
-      <input type="checkbox" id="ajTeclado" ${prendido ? "checked" : ""}>
-      Usar el teclado numérico en pantalla</label>
-    <p class="ayuda" style="margin:8px 0 0">
-      Préndelo si esta caja tiene <b>pantalla táctil</b>. En un computador con
-      teclado de verdad estorba: se abre solo y tapa media pantalla justo cuando
-      quieres escribir. Apagado, se escribe con el teclado del computador,
-      incluido el PIN.
-    </p>`;
+
+    <div class="ajuste">
+      <h4>El local</h4>
+      <div class="ajuste__campos">
+        <label class="campo"><span>Nombre</span><input id="ajLocalNombre" maxlength="40"></label>
+        <label class="campo"><span>RUT</span>
+          <input id="ajLocalRut" maxlength="14" placeholder="12.345.678-9"></label>
+        <label class="campo ajuste__ancho"><span>Dirección</span>
+          <input id="ajLocalDireccion" maxlength="80"></label>
+      </div>
+      <div class="ajuste__fila">
+        <button class="btn" data-guardar-local>Guardar los datos del local</button>
+        <span class="ayuda" style="margin:0">Salen en el comprobante, en el cierre y en los televisores.</span>
+      </div>
+    </div>
+
+    <div class="ajuste" id="ajRed"><h4>PIN de red</h4><p class="ayuda">Cargando…</p></div>
+
+    <div class="ajuste">
+      <h4>Bloqueo</h4>
+      <label class="campo campo--linea"><span>La caja se bloquea sola después de</span>
+        <select id="ajBloqueo">${[1, 2, 3, 5, 10, 15, 30].map((m) =>
+          `<option value="${m}"${m === minutos ? " selected" : ""}>${m} minuto${m === 1 ? "" : "s"} sin uso</option>`).join("")}
+        </select></label>
+      <p class="ayuda" style="margin:8px 0 0">Nunca corta una venta: si hay un pedido armado o
+        un diálogo abierto, espera.</p>
+    </div>
+
+    <div class="ajuste">
+      <h4>Copia de afuera</h4>
+      <p class="ayuda" style="margin:0">Cada respaldo se copia también a esta carpeta, y se
+        revisa que abra. Conviene una que se sincronice sola con la nube (OneDrive, Google
+        Drive, Dropbox) o un pendrive: si el disco de este computador se muere, o se roban
+        el computador, las ventas quedan ahí.</p>
+      ${estadoAfueraHTML(AJUSTES.respaldo_afuera_estado)}
+      <div class="ajuste__fila">
+        <input id="ajAfuera" class="ajuste__ruta" value="${esc(AJUSTES.respaldo_afuera || "")}"
+               placeholder="Una carpeta de OneDrive, Google Drive o un pendrive">
+        <button class="btn" data-guardar-afuera>Guardar</button>
+        <button class="btn" data-probar-afuera>Respaldar ahora</button>
+      </div>
+      <div class="ajuste__lugares" id="ajLugares"></div>
+    </div>
+
+    <div class="ajuste">
+      <h4>Actualizaciones</h4>
+      <label class="campo campo--linea"><span>Recibir</span>
+        <select id="ajCanal">
+          <option value="estable"${piloto ? "" : " selected"}>Las versiones ya probadas (recomendado)</option>
+          <option value="piloto"${piloto ? " selected" : ""}>Las nuevas, antes que nadie</option>
+        </select></label>
+      <p class="ayuda" style="margin:8px 0 0">Una versión nueva llega primero a un local de
+        confianza y, si anda bien, días después a todos.</p>
+    </div>
+
+    <div class="ajuste">
+      <h4>Si algo falla</h4>
+      <p class="ayuda" style="margin:0">Baja un archivo con el registro de errores y el estado
+        de la caja —sin tu PIN ni tus claves— y mándalo por WhatsApp a soporte.</p>
+      <div class="ajuste__fila"><button class="btn" data-diagnostico>Descargar diagnóstico</button></div>
+    </div>
+
+    <div class="ajuste">
+      <h4>Teclado</h4>
+      <label class="marca">
+        <input type="checkbox" id="ajTeclado" ${prendido ? "checked" : ""}>
+        Usar el teclado numérico en pantalla</label>
+      <p class="ayuda" style="margin:8px 0 0">
+        Préndelo si esta caja tiene <b>pantalla táctil</b>. En un computador con
+        teclado de verdad estorba: se abre solo y tapa media pantalla justo cuando
+        quieres escribir. Apagado, se escribe con el teclado del computador,
+        incluido el PIN.
+      </p>
+    </div>`;
+  cargarAjustesDelLocal();
+}
+
+function estadoAfueraHTML(e) {
+  e = e || {};
+  if (!e.carpeta) {
+    return `<div class="ajuste__alerta">Todavía no hay copia de afuera. Si el disco de este
+      computador se muere, se pierden las ventas junto con sus respaldos.</div>`;
+  }
+  if (!e.cuando) {
+    return `<p class="ayuda" style="margin:8px 0 0">Carpeta elegida. La primera copia sale en el
+      próximo respaldo.</p>`;
+  }
+  const cuando = new Date(e.cuando).toLocaleString("es-CL",
+    { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  return e.ok
+    ? `<p class="ajuste__ok">Última copia: ${esc(cuando)} · se revisó y abre bien${
+        e.ventas != null ? ` (${e.ventas} ventas)` : ""}.</p>`
+    : `<div class="ajuste__alerta">La última copia falló (${esc(cuando)}): ${esc(e.detalle || "")}</div>`;
+}
+
+async function cargarAjustesDelLocal() {
+  try {
+    const d = await api("/local");
+    $("#ajLocalNombre").value = d.nombre || "";
+    $("#ajLocalRut").value = d.rut || "";
+    $("#ajLocalDireccion").value = d.direccion || "";
+  } catch (e) { }
+  try { pintarRed(await api("/red")); }
+  catch (e) { $("#ajRed").innerHTML = `<h4>PIN de red</h4><p class="ayuda">${esc(e.message)}</p>`; }
+  try {
+    const lugares = await api("/respaldo/lugares");
+    $("#ajLugares").innerHTML = !lugares.length ? "" : "En este computador hay: " + lugares.map((l) =>
+      `<button class="btn btn--chico" data-lugar="${esc(l.ruta)}" title="${esc(l.ruta)}">${esc(l.nombre)}</button>`).join(" ");
+  } catch (e) { }
+}
+
+function pintarRed(r) {
+  $("#ajRed").innerHTML = `
+    <h4>PIN de red</h4>
+    <p class="ayuda" style="margin:0">Lo piden los tablets y los otros computadores del local
+      la primera vez que abren la caja. Desde este computador no se pide.</p>
+    ${r.de_fabrica ? `<div class="ajuste__alerta">Es el PIN de fábrica, <b>el mismo de todas
+      las cajas</b>: cualquiera en el Wi-Fi del local que lo sepa puede abrir la caja.
+      Cámbialo por uno propio.</div>` : ""}
+    <div class="ajuste__fila">
+      <span class="pin-red" id="pinRedValor" data-pin="${esc(r.pin)}">••••••</span>
+      <button class="btn btn--chico" data-ver-pin-red>Ver</button>
+      ${r.fijo
+        ? `<span class="ayuda" style="margin:0">Lo fijó la instalación: no se cambia desde acá.</span>`
+        : `<button class="btn" data-nuevo-pin-red>${r.de_fabrica ? "Crear uno propio" : "Cambiar por uno nuevo"}</button>`}
+    </div>`;
+}
+
+async function guardarAjuste(cambios, mensaje) {
+  try {
+    AJUSTES = { ...AJUSTES, ...(await api("/ajustes", { method: "PUT", body: JSON.stringify(cambios) })) };
+    avisar(mensaje);
+    reiniciarInactividad();
+  } catch (e) { avisar(e.message, true); pintarAjustes(); }
+}
+
+async function guardarLocal() {
+  try {
+    const d = await api("/local", { method: "PUT", body: JSON.stringify({
+      nombre: $("#ajLocalNombre").value.trim(), rut: $("#ajLocalRut").value.trim(),
+      direccion: $("#ajLocalDireccion").value.trim() }) });
+    ponerNombreDelLocal(d.nombre);
+    $("#ajLocalRut").value = d.rut;
+    avisar("Guardado. Los televisores lo toman en su próxima revisión.");
+  } catch (e) { avisar(e.message, true); }
+}
+
+async function nuevoPinDeRed() {
+  if (!confirm("¿Cambiar el PIN de red?\nLos tablets y computadores que ya habían entrado " +
+               "van a tener que escribir el nuevo.")) return;
+  try {
+    const r = await api("/red/pin", { method: "POST", body: "{}" });
+    pintarRed(r);
+    $("#pinRedValor").textContent = r.pin;
+    avisar("PIN de red nuevo: " + r.pin + ". Anótalo.");
+  } catch (e) { avisar(e.message, true); }
+}
+
+async function guardarAfuera(ruta) {
+  try {
+    AJUSTES = { ...AJUSTES, ...(await api("/ajustes", { method: "PUT",
+      body: JSON.stringify({ respaldo_afuera: ruta.trim() }) })) };
+    pintarAjustes();
+    avisar(ruta.trim() ? "Carpeta guardada. Aprieta «Respaldar ahora» para probarla." : "Sin copia de afuera");
+  } catch (e) { avisar(e.message, true); }
+}
+
+function afueraCorto(a) {
+  if (!a || !a.configurado) return "";
+  return a.ok ? " y copiado afuera" : " — la copia de afuera falló";
+}
+
+async function probarAfuera() {
+  try {
+    const r = await api("/respaldo", { method: "POST" });
+    AJUSTES = { ...AJUSTES, ...(await api("/ajustes")) };
+    pintarAjustes();
+    if (!r.afuera || !r.afuera.configurado) {
+      return avisar("Respaldo hecho en este computador. Falta elegir la carpeta de afuera.", true);
+    }
+    avisar(r.afuera.ok ? "Respaldo hecho y copiado afuera. La copia abre bien."
+                       : "La copia de afuera falló: " + (r.afuera.detalle || ""), !r.afuera.ok);
+  } catch (e) { avisar(e.message, true); }
+}
+
+async function volverDeVersion() {
+  if (!VUELTA || !VUELTA.disponible) return;
+  if (!confirm(`¿Volver a la v${VUELTA.version}?\nSe deshace la última actualización. ` +
+               "Tus ventas, precios y respaldos no se tocan.")) return;
+  try {
+    const r = await api("/actualizacion/volver", { method: "POST" });
+    if (!r.ok) throw new Error(r.error || "No se pudo volver");
+    $("#dialogoVersion").innerHTML = `
+      <h2>Volviendo a la v${esc(r.version)}</h2>
+      <p class="ayuda">La caja se reinicia sola: la página se recarga en unos segundos.</p>`;
+    esperarQueVuelva();
+  } catch (e) { avisar(e.message, true); }
 }
 
 async function guardarTeclado(prendido) {
@@ -3533,7 +3817,8 @@ document.addEventListener("click", (e) => {
   }
   if (t.id === "btnRespaldar") {
     return api("/respaldo", { method: "POST" })
-      .then((r) => avisar(r.ok ? `Respaldo guardado (${r.archivo}, ${r.tamano_kb} KB)` : r.detalle, !r.ok))
+      .then((r) => avisar(r.ok ? `Respaldo guardado (${r.archivo}, ${r.tamano_kb} KB)${afueraCorto(r.afuera)}`
+                                 : r.detalle, !r.ok || !!(r.afuera && r.afuera.configurado && !r.afuera.ok)))
       .catch((err) => avisar(err.message, true));
   }
   if (t.id === "btnCobrar") return abrirCobro();
@@ -3571,7 +3856,24 @@ document.addEventListener("click", (e) => {
   if (cerca("data-otro-usuario")) return mostrarCandado();
   if (cerca("data-reintentar-candado")) return mostrarCandado();
   if (cerca("data-recargar")) return location.reload();
+  if (cerca("data-guardar-local")) return guardarLocal();
+  if (cerca("data-ver-pin-red")) {
+    const v = $("#pinRedValor");
+    v.textContent = v.textContent.includes("•") ? v.dataset.pin : "••••••";
+    return;
+  }
+  if (cerca("data-nuevo-pin-red")) return nuevoPinDeRed();
+  if (cerca("data-guardar-afuera")) return guardarAfuera($("#ajAfuera").value);
+  if (cerca("data-probar-afuera")) return probarAfuera();
+  if (cerca("data-lugar")) { $("#ajAfuera").value = cerca("data-lugar").dataset.lugar; return; }
+  if (cerca("data-diagnostico")) { window.open("/api/v1/diagnostico", "_blank"); return; }
+  if (cerca("data-volver-version")) return volverDeVersion();
   if (t.id === "ajTeclado") return guardarTeclado(t.checked);
+  if (t.id === "ajBloqueo") return guardarAjuste({ bloqueo_minutos: +t.value },
+    `Listo: la caja se bloquea después de ${t.value} min sin uso`);
+  if (t.id === "ajCanal") return guardarAjuste({ canal_actualizaciones: t.value },
+    t.value === "piloto" ? "Vas a recibir las versiones nuevas antes que nadie"
+                         : "Vas a recibir solo las versiones ya probadas");
   if (t.id === "abrirLaCaja") return dialogoTurno();
   if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");
   if (t.id === "crearPrimero") return crearPrimerUsuario();
@@ -3768,7 +4070,16 @@ document.addEventListener("keydown", (e) => {
   // Y recién ahí, quién está. Si no hay nadie, el candado tapa todo.
   await cargarSesion();
   if (!SESION.entrado) await mostrarCandado();
-  else reiniciarInactividad();
+  else {
+    reiniciarInactividad();
+    // Una caja recién instalada abre con el asistente: el nombre del local, su
+    // RUT y el PIN de red se piden al principio, no cuando alguien se acuerde.
+    // Sin gente la sesión es provisoria y la caja abría directo, así que el
+    // asistente no aparecía nunca. Una caja que ya vende sin usuarios no lo ve.
+    if (SESION.provisorio) {
+      try { if ((await api("/candado")).instalacion_nueva) await mostrarCandado(); } catch (e) { }
+    }
+  }
   await cargarCarta();
   await cargarTurno();
   cargarVersion();

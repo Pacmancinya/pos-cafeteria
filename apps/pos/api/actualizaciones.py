@@ -91,7 +91,26 @@ def instalar(datos: InstalarIn, quien: dict = Depends(sesion.exige("config"))):
     if not info.get("hay_nueva"):
         return {"ok": True, "sin_cambios": True, "aviso": "Ya estás al día."}
 
-    resultado = actualizar.aplicar(info.get("zip", ""))
+    resultado = actualizar.aplicar(info.get("zip", ""), version_esperada=info.get("disponible"))
+    if resultado.get("ok") and resultado.get("archivos"):
+        resultado["reiniciando"] = True
+        threading.Timer(1.5, _cerrar_para_reiniciar).start()
+    return resultado
+
+
+@router.get("/actualizacion/vuelta")
+def vuelta():
+    """¿Se puede volver a la versión anterior? Solo si la última actualización
+    la hizo una caja 2.19 o más nueva, que es la que anota qué cambió."""
+    return actualizar.hay_vuelta()
+
+
+@router.post("/actualizacion/volver")
+def volver(quien: dict = Depends(sesion.exige("config"))):
+    """Deja el programa como estaba antes de la última actualización y reinicia.
+    Existe por la 2.12: un error que tumbaba El día llegó a la caja el mismo día
+    que se publicó, y la única salida era esperar la versión siguiente."""
+    resultado = actualizar.volver_atras()
     if resultado.get("ok") and resultado.get("archivos"):
         resultado["reiniciando"] = True
         threading.Timer(1.5, _cerrar_para_reiniciar).start()

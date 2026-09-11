@@ -2,7 +2,7 @@
 from fastapi.testclient import TestClient
 
 from apps.pos.main import app
-from core.config import PIN
+from apps.pos.local import PIN_DE_FABRICA as PIN
 
 
 def remoto():

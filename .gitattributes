@@ -1,0 +1,3 @@
+# Lo firmado se guarda byte por byte: un CRLF metido por git rompería la firma.
+manifiesto.json -text
+manifiesto.firma -text

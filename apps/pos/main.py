@@ -6,28 +6,40 @@ o con doble clic en INICIAR-POS.bat
 from __future__ import annotations
 
 import os
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
-from apps.pos import acceso
+from apps.pos import acceso, diagnostico, freno, local
 from apps.pos.api import (actualizaciones, ajustes, catalogo, codigos, datos,
                           impresion, importar, inventario, turnos, usuarios,
                           ventas)
+from apps.pos.api import diagnostico as api_diagnostico
 from apps.pos.db.models import Turno
 from apps.pos.db.session import crear_tablas, engine
-from core.config import HOST, NOMBRE_LOCAL, PIN, PUERTO, VERSION, ip_en_la_red
+from core.config import HOST, NOMBRE_LOCAL, PUERTO, VERSION, ip_en_la_red
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 ESTATICOS = os.path.join(AQUI, "static")
 
+# El registro de errores queda listo antes que nada: si algo falla al arrancar,
+# justo eso es lo que hay que poder leer después.
+diagnostico.preparar()
+
 @asynccontextmanager
 async def ciclo(app: FastAPI):
     crear_tablas()
+    diagnostico.log.info("Arranca la caja v%s", VERSION)
+    import apps.pos as paquete
+    if paquete.RECUPERACION:
+        # Una actualización había quedado a medias y se deshizo al abrir (vuelta.py).
+        diagnostico.log.warning("Actualización a medias, deshecha al abrir: %s",
+                                paquete.RECUPERACION)
     # Una copia al abrir en la mañana: si el disco muere durante el día,
     # se pierde el día, no el historial completo.
     try:
@@ -77,6 +89,29 @@ app.add_middleware(
 # El candado va DESPUÉS del CORS para que la carta siga saliendo libre.
 app.middleware("http")(acceso.candado)
 
+
+# Lo que tarda demasiado queda anotado. Un cobro que demora diez segundos en el
+# local se ve como "la caja está lenta" y nada más; acá queda cuál fue y cuánto.
+@app.middleware("http")
+async def lo_que_tarda(request: Request, call_next):
+    inicio = time.perf_counter()
+    respuesta = await call_next(request)
+    ms = (time.perf_counter() - inicio) * 1000
+    if ms > 2000:
+        diagnostico.log.warning("lento: %s %s -> %s en %d ms", request.method,
+                                request.url.path, respuesta.status_code, ms)
+    return respuesta
+
+
+@app.exception_handler(Exception)
+async def error_inesperado(request: Request, exc: Exception):
+    """Un error que nadie esperaba: queda anotado con todo su detalle, y la
+    pantalla recibe un mensaje que se entiende en vez de «Internal Server Error»."""
+    diagnostico.log.error("error en %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        {"detail": "Algo falló en la caja. Quedó anotado en el registro para revisarlo."},
+        status_code=500)
+
 app.include_router(catalogo.router)
 app.include_router(ventas.router)
 app.include_router(turnos.router)
@@ -88,6 +123,7 @@ app.include_router(inventario.router)
 app.include_router(importar.router)
 app.include_router(ajustes.router)
 app.include_router(codigos.router)
+app.include_router(api_diagnostico.router)
 
 
 @app.get("/api/v1/salud")
@@ -96,7 +132,7 @@ def salud():
         t = s.exec(select(Turno).where(Turno.cerrado_at == None)).first()  # noqa: E711
     ip = ip_en_la_red() if HOST == "0.0.0.0" else "127.0.0.1"
     return {
-        "ok": True, "version": VERSION, "local": NOMBRE_LOCAL,
+        "ok": True, "version": VERSION, "local": local.nombre(),
         "turno_abierto": bool(t),
         # Lo que hay que abrir en cada televisor del local.
         "carta_url": f"http://{ip}:{PUERTO}/api/v1/carta",
@@ -107,16 +143,25 @@ def salud():
 
 @app.get("/entrar")
 def entrar(request: Request):
-    if acceso.es_local(request) or request.cookies.get(acceso.GALLETA) == acceso.token_de_acceso():
+    if acceso.es_local(request) or acceso.galleta_valida(request):
         return acceso.respuesta_con_acceso()
-    return acceso.pagina_entrar(NOMBRE_LOCAL)
+    return acceso.pagina_entrar(local.nombre())
 
 
 @app.post("/entrar")
-def entrar_post(pin: str = Form(default="")):
+def entrar_post(request: Request, pin: str = Form(default="")):
+    """El PIN de red, con freno: diez mil combinaciones no se prueban desde un celular."""
+    llave = "red:" + acceso.ip(request)
+    falta = freno.PIN.cuanto_falta(llave)
+    if falta:
+        return acceso.pagina_entrar(local.nombre(), freno.mensaje_de_espera(falta), 429)
     if acceso.pin_correcto(pin):
+        freno.PIN.acierto(llave)
         return acceso.respuesta_con_acceso()
-    return acceso.pagina_entrar(NOMBRE_LOCAL, error=True)
+    espera = freno.PIN.fallo(llave)
+    if espera:
+        return acceso.pagina_entrar(local.nombre(), freno.mensaje_de_espera(espera), 429)
+    return acceso.pagina_entrar(local.nombre(), "Ese PIN no es.", 401)
 
 
 app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
