@@ -5,6 +5,9 @@ ensuciar el catálogo. Un código mal leído o un código de balanza que se cuel
 como producto nuevo significa productos fantasma en la carta de un almacén, y
 eso no lo arregla nadie después.
 """
+import json
+from decimal import Decimal
+
 import pytest
 
 from core import codigos as k
@@ -164,7 +167,7 @@ def test_lee_el_ticket_y_el_total_de_una_etiqueta_real():
     Es la de verdad, no una inventada: si alguien cambia el reparto de los dígitos, este
     test lo caza con el caso que existe en el mostrador.
     """
-    assert k.leer_balanza("2539760001975") == {"ticket": "3976", "total": 197}
+    assert k.leer_balanza("2539760001975") == {"modo": "ticket", "ticket": "3976", "total": 197}
 
 
 def test_el_codigo_de_la_balanza_no_dice_que_producto_es():
@@ -174,7 +177,7 @@ def test_el_codigo_de_la_balanza_no_dice_que_producto_es():
     son dos usos distintos del mismo número y los dos tienen razón.
     """
     leido = k.leer_balanza("2539760001975")
-    assert set(leido) == {"ticket", "total"}
+    assert set(leido) == {"modo", "ticket", "total"}
     assert k.por_que_no_sirve("2539760001975")
 
 
@@ -190,4 +193,252 @@ def test_un_codigo_mal_leido_no_inventa_un_monto():
 
 def test_el_reparto_de_digitos_se_puede_cambiar_por_balanza():
     otro = {"prefijo": "25", "ticket": (2, 7), "total": (7, 12)}
-    assert k.leer_balanza("2539760001975", otro) == {"ticket": "39760", "total": 197}
+    assert k.leer_balanza("2539760001975", otro) == {"modo": "ticket", "ticket": "39760", "total": 197}
+
+
+def _etiqueta(base):
+    return base + str(k.digito_verificador(base))
+
+
+@pytest.mark.parametrize("modo", ["ticket", "plu_peso", "plu_precio"])
+def test_modos_con_prefijo_y_posiciones_distintos(modo):
+    formato = {"modo": modo, "prefijo": "291", "codigo": [8, 12],
+               "valor": [3, 8], "divisor_peso": 100}
+    leido = k.leer_balanza(_etiqueta("291001230007"), formato)
+    esperado = {"modo": modo}
+    if modo == "ticket":
+        esperado.update(ticket="7", total=123)
+    elif modo == "plu_precio":
+        esperado.update(plu="0007", total=123)
+    else:
+        esperado.update(plu="0007", peso_kg=Decimal("1.23"))
+        assert isinstance(leido["peso_kg"], Decimal)
+    assert leido == esperado
+    assert k.leer_balanza(_etiqueta("292001230007"), formato) is None
+    valido = _etiqueta("291001230007")
+    # Estos NO se pueden leer: o no tienen 13 dígitos, o el verificador no calza.
+    for malo in (valido[:-1], valido + "0",
+                 valido[:-1] + str((int(valido[-1]) + 1) % 10),
+                 valido.replace("2", "２"),        # dígito de otro alfabeto: se descarta
+                 None, 291001230007):
+        assert k.leer_balanza(malo, formato) is None, repr(malo)
+    # Y estos SÍ, porque el ruido que mete el lector no cambia ningún dígito y el
+    # verificador sigue calzando. Es la misma regla que usan es_valido y normalizar
+    # desde siempre: limpiar y dejar que el dígito de control haga de guardia.
+    for con_ruido in (" " + valido, valido + chr(13), valido[:5] + "-" + valido[5:]):
+        assert k.leer_balanza(con_ruido, formato) is not None, repr(con_ruido)
+
+
+FORMATOS_ROTOS = [
+    None, [], "texto", 1, {},
+    *[{**k.FORMATO_BALANZA_POR_DEFECTO, **cambio} for cambio in [
+        {"modo": "otro"}, {"modo": []}, {"prefijo": ""}, {"prefijo": 25},
+        {"prefijo": "２５"}, {"prefijo": "2x"}, {"codigo": [True, 6]},
+        {"codigo": [2.0, 6]}, {"codigo": ["2", 6]}, {"codigo": [2]},
+        {"codigo": None}, {"codigo": [-1, 6]}, {"codigo": [1, 6]},
+        {"codigo": [6, 6]}, {"codigo": [7, 6]}, {"codigo": [2, 13]},
+        {"valor": [5, 12]}, {"valor": [6, 13]}, {"valor": "6,12"},
+        {"divisor_peso": 0}, {"divisor_peso": -1}, {"divisor_peso": True},
+        {"divisor_peso": "1000"}, {"divisor_peso": 1000.0},
+    ]],
+]
+
+
+@pytest.mark.parametrize("formato", FORMATOS_ROTOS)
+def test_formato_roto_no_tumba_lector(formato):
+    assert k.leer_balanza("2539760001975", formato) == {
+        "modo": "ticket", "ticket": "3976", "total": 197}
+
+
+def test_peso_en_gramos_y_cero_en_ticket():
+    formato = {**k.FORMATO_BALANZA_POR_DEFECTO, "modo": "plu_peso"}
+    assert k.leer_balanza("2539760001975", formato)["peso_kg"] == Decimal("0.197")
+    assert k.leer_balanza(_etiqueta("250000000000"))["ticket"] == "0"
+
+
+def test_formato_balanza_se_guarda_como_json_y_se_recupera(cliente):
+    from apps.pos.db.models import Ajuste
+    from apps.pos.db.session import engine
+    from sqlmodel import Session
+
+    formato = {"modo": "plu_peso", "prefijo": "20", "codigo": [2, 7],
+               "valor": [7, 12], "divisor_peso": 1000}
+    assert cliente.get("/api/v1/ajustes").json()["formato_balanza"] == k.FORMATO_BALANZA_POR_DEFECTO
+    r = cliente.put("/api/v1/ajustes", json={"formato_balanza": formato})
+    assert r.status_code == 200
+    assert r.json()["formato_balanza"] == formato
+    with Session(engine) as s:
+        assert json.loads(s.get(Ajuste, "formato_balanza").valor) == formato
+    assert cliente.get("/api/v1/ajustes").json()["formato_balanza"] == formato
+    cliente.put("/api/v1/ajustes", json={"margen_sugerido": 30})
+    assert cliente.get("/api/v1/ajustes").json()["formato_balanza"] == formato
+
+
+def test_formato_roto_almacenado_no_tumba_ajustes(cliente):
+    from apps.pos.db.models import Ajuste
+    from apps.pos.db.session import engine
+    from sqlmodel import Session
+
+    for crudo in ["{mal json", str(k.FORMATO_DIGI_SM300), "[" * 10000 + "0" + "]" * 10000,
+                  *[json.dumps(f) for f in FORMATOS_ROTOS]]:
+        with Session(engine) as s:
+            s.merge(Ajuste(clave="formato_balanza", valor=crudo))
+            s.commit()
+        r = cliente.get("/api/v1/ajustes")
+        assert r.status_code == 200
+        assert r.json()["formato_balanza"] == k.FORMATO_BALANZA_POR_DEFECTO
+
+
+def test_api_rechaza_formatos_nuevos_invalidos(cliente):
+    for formato in FORMATOS_ROTOS:
+        assert cliente.put("/api/v1/ajustes", json={"formato_balanza": formato}).status_code == 422
+    assert cliente.get("/api/v1/ajustes").json()["formato_balanza"] == k.FORMATO_BALANZA_POR_DEFECTO
+
+
+def test_api_acepta_formato_anterior_valido(cliente):
+    r = cliente.put("/api/v1/ajustes", json={"formato_balanza": k.FORMATO_DIGI_SM300})
+    assert r.status_code == 200
+    assert r.json()["formato_balanza"] == k.FORMATO_BALANZA_POR_DEFECTO
+
+
+def test_producto_guarda_plu_y_precio_kilo(cliente, carta):
+    datos = {"categoria_id": carta["cafe"]["id"], "nombre": "Pan",
+             "plu": "0007", "precio_kilo": 2490}
+    r = cliente.post("/api/v1/productos", json=datos)
+    assert r.status_code == 200
+    assert r.json()["plu"] == "0007"
+    assert r.json()["precio_kilo"] == 2490
+    from apps.pos.db.models import Producto
+    from apps.pos.db.session import engine
+    from sqlmodel import Session
+    with Session(engine) as s:
+        producto = s.get(Producto, r.json()["id"])
+        assert producto.plu == "0007"
+        assert producto.precio_kilo == 2490
+    assert carta["espresso"]["plu"] == ""
+    assert carta["espresso"]["precio_kilo"] == 0
+    for precio in (-1, 2.5, True, False, "2490", 2490.0, 2**63):
+        assert cliente.post("/api/v1/productos", json={**datos, "precio_kilo": precio}).status_code == 422
+        assert cliente.put(f"/api/v1/productos/{r.json()['id']}",
+                           json={**datos, "precio_kilo": precio}).status_code == 422
+
+
+def test_editar_producto_sin_campos_balanza_los_conserva(cliente, carta):
+    datos = {"categoria_id": carta["cafe"]["id"], "nombre": "Pan",
+             "plu": "0007", "precio_kilo": 2490}
+    creado = cliente.post("/api/v1/productos", json=datos)
+    assert creado.status_code == 200
+    ruta = f"/api/v1/productos/{creado.json()['id']}"
+    legacy = {"categoria_id": datos["categoria_id"], "nombre": "Pan amasado", "precio": 500}
+    r = cliente.put(ruta, json=legacy)
+    assert r.status_code == 200
+    assert r.json()["nombre"] == "Pan amasado"
+    assert r.json()["precio"] == 500
+    assert r.json()["plu"] == "0007"
+    assert r.json()["precio_kilo"] == 2490
+    r = cliente.put(ruta, json={**legacy, "plu": "", "precio_kilo": 0})
+    assert r.status_code == 200
+    assert r.json()["plu"] == ""
+    assert r.json()["precio_kilo"] == 0
+
+
+def test_migracion_agrega_balanza_a_producto_existente_sin_perder_datos(tmp_path, monkeypatch):
+    from sqlalchemy import create_engine, inspect, text
+    from sqlmodel import Session
+
+    from apps.pos.db import migraciones
+    from apps.pos.db.models import Categoria, Insumo, Producto, Receta
+
+    viejo = create_engine(f"sqlite:///{tmp_path / 'local_anterior.db'}")
+    monkeypatch.setattr(migraciones, "engine", viejo)
+    try:
+        # Es la tabla anterior a esta funcionalidad, sin usar el modelo nuevo
+        # para construirla. Una columna desconocida también debe sobrevivir.
+        with viejo.begin() as con:
+            con.execute(text("""
+                CREATE TABLE producto (
+                    id INTEGER PRIMARY KEY, categoria_id INTEGER NOT NULL,
+                    nombre TEXT NOT NULL, descripcion TEXT NOT NULL DEFAULT '',
+                    precio INTEGER NOT NULL DEFAULT 0, activo BOOLEAN NOT NULL DEFAULT 1,
+                    orden INTEGER NOT NULL DEFAULT 0, destacado BOOLEAN NOT NULL DEFAULT 0,
+                    badge TEXT NOT NULL DEFAULT '', antes INTEGER,
+                    etiqueta TEXT NOT NULL DEFAULT '', dibujo TEXT NOT NULL DEFAULT 'mug',
+                    color TEXT NOT NULL DEFAULT '', nota_legacy TEXT
+                )
+            """))
+            con.execute(text("""
+                INSERT INTO producto
+                    (id, categoria_id, nombre, descripcion, precio, activo, orden,
+                     destacado, badge, antes, etiqueta, dibujo, color, nota_legacy)
+                VALUES (17, 1, 'Pan amasado', 'Receta del local', 1550, 1, 4,
+                        1, 'Hoy', 1800, 'Integral', 'croissant', '#ab1234', 'conservar')
+            """))
+            anterior = dict(con.execute(text("SELECT * FROM producto")).mappings().one())
+
+        # Tablas auxiliares que la migración consulta; producto sigue siendo
+        # la tabla antigua. Ningún create_all agrega las columnas bajo prueba.
+        for tabla in (Categoria.__table__, Insumo.__table__, Receta.__table__):
+            tabla.create(viejo)
+        with Session(viejo) as s:
+            s.add(Categoria(id=1, nombre="Panadería"))
+            s.commit()
+
+        assert {c["name"] for c in inspect(viejo).get_columns("producto")}.isdisjoint(
+            {"plu", "precio_kilo"})
+        assert set(migraciones.poner_al_dia()) == {"producto.plu", "producto.precio_kilo"}
+        with viejo.connect() as con:
+            migrado = dict(con.execute(text("SELECT * FROM producto")).mappings().one())
+        assert {clave: migrado[clave] for clave in anterior} == anterior
+        assert migrado["plu"] == ""
+        assert migrado["precio_kilo"] == 0
+
+        # El ORM ya puede leer y guardar el producto que existía. Volver a
+        # arrancar no debe restaurar defaults sobre lo que configuró el local.
+        with Session(viejo) as s:
+            producto = s.get(Producto, 17)
+            assert producto.nombre == anterior["nombre"]
+            assert producto.precio == anterior["precio"]
+            assert producto.categoria.nombre == "Panadería"
+            producto.plu = "00123"
+            producto.precio_kilo = 5990
+            s.add(producto)
+            s.commit()
+        assert migraciones.poner_al_dia() == []
+        with viejo.connect() as con:
+            repetido = dict(con.execute(text("SELECT * FROM producto")).mappings().one())
+        assert {clave: repetido[clave] for clave in anterior} == anterior
+        assert repetido["plu"] == "00123"
+        assert repetido["precio_kilo"] == 5990
+    finally:
+        viejo.dispose()
+
+
+def test_la_etiqueta_se_lee_como_la_manda_el_lector():
+    """Casi todos los lectores mandan un Enter al final, y algunos espacios.
+
+    Sin quitar eso, la etiqueta de verdad no se lee y el cajero se queda mirando la
+    pantalla con la fila esperando. Es el caso normal, no el raro.
+    """
+    esperado = {"modo": "ticket", "ticket": "3976", "total": 197}
+    variantes = [
+        "2539760001975",
+        "2539760001975" + chr(13),      # Enter: el sufijo por defecto de casi todo lector
+        "2539760001975" + chr(10),
+        "2 539760 001975",              # como viene impreso bajo las barras
+        " 2539760001975 ",
+        "2-539760-001975",
+    ]
+    for tal_cual in variantes:
+        assert k.leer_balanza(tal_cual) == esperado, repr(tal_cual)
+
+
+def test_un_digito_de_otro_alfabeto_no_pasa_por_valido():
+    """`str.isdigit()` acepta dígitos de otros alfabetos e `int()` los convierte sin chistar.
+
+    Si se limpiaran como dígitos, un escaneo corrupto podría quedar con el largo y el
+    verificador correctos y cobrarse solo. Se limpia ASCII para que eso no pueda pasar.
+    """
+    arabe = "25397600019" + chr(0x0667) + "5"     # ٧ arábigo-índico en medio
+    assert k.limpiar(arabe) == "253976000195"     # el raro se descarta, no se traduce
+    assert k.leer_balanza(arabe) is None
+    assert not k.es_valido(arabe)

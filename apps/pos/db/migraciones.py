@@ -40,7 +40,11 @@ def _sql_del_tipo(col) -> str:
 
 
 def poner_al_dia() -> list[str]:
-    """Agrega las columnas que falten. Devuelve lo que hizo, para poder mirarlo."""
+    """Agrega las columnas que falten. Devuelve lo que hizo, para poder mirarlo.
+
+    También migra Producto.plu y precio_kilo: sus defaults del modelo dejan
+    las filas anteriores con texto vacío y 0, sin cambiar precios ni ventas.
+    """
     if not engine.url.drivername.startswith("sqlite"):
         return []          # en Postgres esto se hace con una herramienta de verdad
 

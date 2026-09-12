@@ -194,6 +194,25 @@ cambiados, y sin esa validación se crea un producto fantasma.
 > **cambian con cada trozo**. Si se aceptaran, habría un producto nuevo por cada pan
 > vendido. La caja los reconoce y se niega, explicando por qué.
 
+`core.codigos.leer_balanza` interpreta etiquetas EAN-13 según el ajuste
+`formato_balanza`, guardado como texto JSON. El resultado incluye `modo`:
+`plu_peso` entrega `plu` y `peso_kg`; `plu_precio`, `plu` y `total` en pesos;
+`ticket`, `ticket` y `total` en pesos. El PLU es texto y conserva ceros iniciales.
+El prefijo y las posiciones de código y valor se configuran por local, y
+`divisor_peso` convierte el valor a kilos. Se valida el verificador y se rechazan
+lecturas malformadas o de otro prefijo devolviendo `None`.
+
+El formato predeterminado es `{"modo":"ticket","prefijo":"25","codigo":[2,6],
+"valor":[6,12],"divisor_peso":1000}`: la etiqueta real `2539760001975` sigue
+siendo el ticket `3976` por $197. Una configuración guardada rota cae a este
+valor; una nueva configuración inválida se rechaza al guardar. Los rangos no
+pueden pisar el prefijo, el verificador ni otro campo.
+
+Esto prepara lectura y catálogo; el cobro por peso queda pendiente y deberá
+calcularlo el servidor con `Producto.precio_kilo`. Las columnas `plu` y
+`precio_kilo` se agregan a bases instaladas mediante `poner_al_dia`, con defaults
+vacío y 0, conservando los productos existentes.
+
 **16. El escáner intercepta en fase de CAPTURA sobre `window`, y eso no es un detalle.**
 Un lector de pistola es un teclado: manda los dígitos y un Enter. La caja ya tenía dos
 oyentes globales de teclado, y sin interceptar antes que ellos pasaba esto: con el diálogo
@@ -417,10 +436,12 @@ Postgres cambiando `DB_URL` sin tocar código.
 Categoria(id, nombre, orden, activa)
     # "Café caliente", "Fríos", "Pastelería"…
 
-Producto(id, categoria_id→Categoria, nombre, descripcion, precio,
+Producto(id, categoria_id→Categoria, nombre, descripcion, precio, plu, precio_kilo,
          activo, orden, destacado, badge,
          antes, etiqueta, dibujo, color)
     # precio  = bruto en CLP (entero)
+    # plu = identificador textual de balanza; vacío si no es de balanza
+    # precio_kilo = bruto en CLP por kg (entero, por defecto 0)
     # antes   = precio tachado de oferta (opcional, entero)
     # destacado = va al recuadro grande de la pantalla del menú (1 por categoría)
     # dibujo   = "receta" del dibujo: taza, taza-cortado, mug, mug-espuma, mug-arte,

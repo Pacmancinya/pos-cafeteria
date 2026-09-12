@@ -12,6 +12,7 @@ reventar: una preferencia rota no puede dejar al local sin poder cobrar.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import tempfile
@@ -23,6 +24,7 @@ from sqlmodel import Session, select
 from apps.pos import acceso, local, sesion
 from apps.pos.db.models import Ajuste
 from apps.pos.db.session import get_session
+from core.codigos import FORMATO_BALANZA_POR_DEFECTO, validar_formato_balanza
 from core.config import BLOQUEO_MINUTOS, MARGEN_SUGERIDO, REDONDEO_PRECIO, TECLADO_EN_PANTALLA
 from core.schemas import AjustesIn
 
@@ -36,6 +38,7 @@ POR_DEFECTO = {
     "bloqueo_minutos": BLOQUEO_MINUTOS,
     "canal_actualizaciones": "estable",
     "respaldo_afuera": "",
+    "formato_balanza": FORMATO_BALANZA_POR_DEFECTO,
 }
 
 
@@ -44,6 +47,12 @@ def _leer(s: Session) -> dict:
     salida = {}
     for clave, defecto in POR_DEFECTO.items():
         crudo = guardados.get(clave)
+        if clave == "formato_balanza":
+            try:
+                salida[clave] = validar_formato_balanza(json.loads(crudo))
+            except (TypeError, ValueError, RecursionError):
+                salida[clave] = validar_formato_balanza(defecto)
+            continue
         if crudo is None:
             salida[clave] = defecto
             continue
@@ -115,11 +124,12 @@ def guardar(datos: AjustesIn, s: Session = Depends(get_session),
             raise HTTPException(422, problema)
         cambios["respaldo_afuera"] = carpeta
     for clave, valor in cambios.items():
+        texto = json.dumps(valor) if clave == "formato_balanza" else str(valor)
         fila = s.get(Ajuste, clave)
         if fila:
-            fila.valor = str(valor)
+            fila.valor = texto
         else:
-            fila = Ajuste(clave=clave, valor=str(valor))
+            fila = Ajuste(clave=clave, valor=texto)
         s.add(fila)
     s.commit()
     return _completo(s)

@@ -31,6 +31,8 @@ class Producto(SQLModel, table=True):
     nombre: str
     descripcion: str = ""
     precio: int = 0                       # bruto, con IVA incluido
+    plu: str = ""                        # identificador de balanza; vacío = no usa balanza
+    precio_kilo: int = 0                  # CLP por kg, para etiquetas con peso
     activo: bool = True
     orden: int = 0
 

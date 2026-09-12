@@ -21,12 +21,19 @@ reconocerlos para negarse.
 """
 from __future__ import annotations
 
+from decimal import Decimal
+
 LARGOS = (8, 12, 13, 14)
 
 
 def limpiar(codigo: str) -> str:
-    """Deja solo los dígitos. Los lectores a veces mandan espacios o guiones."""
-    return "".join(c for c in str(codigo or "") if c.isdigit())
+    """Deja solo los dígitos 0-9. Los lectores mandan espacios, guiones y un Enter final.
+
+    ASCII a propósito: `str.isdigit()` acepta también dígitos de otros alfabetos
+    (٣, ³) y `int()` los convierte sin chistar, así que un escaneo corrupto podría
+    pasar por un código válido. Acá nunca son legítimos.
+    """
+    return "".join(c for c in str(codigo or "") if c in "0123456789")
 
 
 def digito_verificador(sin_verificador: str) -> int:
@@ -129,18 +136,64 @@ def por_que_no_sirve(codigo: str) -> str:
 FORMATO_DIGI_SM300 = {"prefijo": "25", "ticket": (2, 6), "total": (6, 12)}
 
 
+def validar_formato_balanza(formato: dict) -> dict:
+    """Valida y devuelve una copia en el formato JSON actual; no corrige errores."""
+    if not isinstance(formato, dict):
+        raise ValueError("El formato de balanza debe ser un objeto.")
+    f = dict(formato)
+    if "modo" not in f and set(f) == {"prefijo", "ticket", "total"}:
+        f = {"modo": "ticket", "prefijo": f["prefijo"],
+             "codigo": f["ticket"], "valor": f["total"], "divisor_peso": 1000}
+    if not isinstance(f.get("modo"), str) or f["modo"] not in ("ticket", "plu_peso", "plu_precio"):
+        raise ValueError("Modo de balanza desconocido.")
+    prefijo = f.get("prefijo")
+    if not isinstance(prefijo, str) or not prefijo or any(c not in "0123456789" for c in prefijo):
+        raise ValueError("El prefijo debe contener solo digitos ASCII.")
+    rangos = []
+    for campo in ("codigo", "valor"):
+        rango = f.get(campo)
+        if (not isinstance(rango, (list, tuple)) or len(rango) != 2
+                or any(type(i) is not int for i in rango)
+                or not len(prefijo) <= rango[0] < rango[1] <= 12):
+            raise ValueError("Las posiciones deben quedar despues del prefijo y antes del verificador.")
+        rangos.append(list(rango))
+    codigo, valor = rangos
+    if max(codigo[0], valor[0]) < min(codigo[1], valor[1]):
+        raise ValueError("Las posiciones de codigo y valor no pueden solaparse.")
+    divisor = f.get("divisor_peso")
+    if type(divisor) is not int or divisor <= 0:
+        raise ValueError("El divisor de peso debe ser un entero positivo.")
+    return {"modo": f["modo"], "prefijo": prefijo, "codigo": codigo,
+            "valor": valor, "divisor_peso": divisor}
+
+
+FORMATO_BALANZA_POR_DEFECTO = validar_formato_balanza(FORMATO_DIGI_SM300)
+
+
 def leer_balanza(codigo: str, formato: dict | None = None) -> dict | None:
-    """El ticket y el total que trae una etiqueta de balanza. None si no es una.
+    """Interpreta PLU/peso, PLU/precio o ticket/total. None si no es una etiqueta.
 
     El reparto de los digitos es configurable porque cada balanza se programa distinto; el
     de fabrica es el que se midio en el local (DIGI SM-300). Si el prefijo no calza o el
     codigo esta mal leido se devuelve None en vez de inventar un monto: cobrar de mas por
-    leer mal una etiqueta es peor que no leerla.
+    leer mal una etiqueta es peor que no leerla. El peso se expresa en kilos
+    usando Decimal; el total siempre son pesos enteros. No busca productos ni cobra.
     """
+    try:
+        f = validar_formato_balanza(formato)
+    except ValueError:
+        f = validar_formato_balanza(FORMATO_BALANZA_POR_DEFECTO)
+    # Se limpia: el lector manda un Enter al final y a veces espacios, y sin quitarlos
+    # la etiqueta no se lee. `limpiar` es ASCII, así que no puede convertir un escaneo
+    # corrupto en uno válido — que era el riesgo real.
     c = limpiar(codigo)
-    f = formato or FORMATO_DIGI_SM300
     if len(c) != 13 or not es_valido(c) or not c.startswith(f["prefijo"]):
         return None
-    ticket = c[f["ticket"][0]:f["ticket"][1]]
-    total = c[f["total"][0]:f["total"][1]]
-    return {"ticket": ticket.lstrip("0") or "0", "total": int(total)}
+    identificador = c[slice(*f["codigo"])]
+    valor = int(c[slice(*f["valor"])])
+    if f["modo"] == "ticket":
+        return {"modo": "ticket", "ticket": identificador.lstrip("0") or "0", "total": valor}
+    if f["modo"] == "plu_precio":
+        return {"modo": "plu_precio", "plu": identificador, "total": valor}
+    return {"modo": "plu_peso", "plu": identificador,
+            "peso_kg": Decimal(valor) / Decimal(f["divisor_peso"])}

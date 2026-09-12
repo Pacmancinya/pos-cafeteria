@@ -298,6 +298,10 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
 
     antes = p.nombre
     for k, v in datos.model_dump(exclude=EXTRAS).items():
+        # La pantalla actual no manda estos campos: omitirlos conserva la
+        # configuracion de balanza; enviarlos vacios permite borrarla.
+        if k in {"plu", "precio_kilo"} and k not in datos.model_fields_set:
+            continue
         setattr(p, k, v)
 
     # El insumo de un producto que se vende TAL CUAL lleva su mismo nombre, y

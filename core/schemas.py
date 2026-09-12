@@ -1,13 +1,12 @@
 """Contratos de entrada y salida de la API (Pydantic v2)."""
 from __future__ import annotations
-from core.config import BLOQUEO_MINUTOS
-from typing import Literal
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from core.config import (MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
+from core.codigos import FORMATO_BALANZA_POR_DEFECTO, validar_formato_balanza
+from core.config import (BLOQUEO_MINUTOS, MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
                          TECLADO_EN_PANTALLA, UNIDADES)
 
 
@@ -103,6 +102,8 @@ class ProductoIn(BaseModel):
     nombre: str
     descripcion: str = ""
     precio: int = Field(default=0, ge=0)
+    plu: str = ""
+    precio_kilo: int = Field(default=0, ge=0, le=9223372036854775807, strict=True)
     activo: bool = True
     orden: int = 0
     destacado: bool = False
@@ -295,6 +296,13 @@ class AjustesIn(BaseModel):
     canal_actualizaciones: Literal["estable", "piloto"] = "estable"
     # La carpeta de la copia de afuera. Vacía = no hay copia de afuera.
     respaldo_afuera: str = Field(default="", max_length=300)
+    formato_balanza: dict = Field(
+        default_factory=lambda: validar_formato_balanza(FORMATO_BALANZA_POR_DEFECTO))
+
+    @field_validator("formato_balanza", mode="before")
+    @classmethod
+    def formato_valido(cls, v):
+        return validar_formato_balanza(v)
 
 
 class CodigoIn(BaseModel):
