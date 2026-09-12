@@ -44,3 +44,4 @@ __pycache__/
 despliegue/Kofe/
 despliegue/_construccion/
 *.zip
+.tmp-pytest-*/

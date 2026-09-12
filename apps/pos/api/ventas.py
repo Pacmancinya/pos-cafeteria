@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from apps.pos import sesion
-from apps.pos.api import inventario
+from apps.pos.api import ajustes, inventario
 from apps.pos.db.models import Producto, Turno, Usuario, Venta, VentaLinea
 from apps.pos.db.session import get_session
 from core.config import (MEDIOS_PAGO, a_local, ahora, hoy_local, neto_iva, puede,
@@ -158,7 +158,8 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
     #
     # Se chequea ANTES de escribir un solo Movimiento: una venta rechazada a la
     # mitad dejaría el libro con unos insumos descontados y otros no.
-    faltan = _lo_que_no_alcanza(s, lineas)
+    usar_inventario = ajustes._leer(s)["usar_inventario"] == 1
+    faltan = _lo_que_no_alcanza(s, lineas) if usar_inventario else ""
     if faltan:
         raise HTTPException(409, faltan)
 
@@ -201,7 +202,7 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
         from apps.pos.db.models import Pago
         for p in datos.pagos:
             s.add(Pago(venta_id=venta.id, medio=p.medio, monto=p.monto))
-    avisos = inventario.descontar_venta(s, venta, quien)
+    avisos = inventario.descontar_venta(s, venta, quien) if usar_inventario else []
     s.commit()
     s.refresh(venta)
 

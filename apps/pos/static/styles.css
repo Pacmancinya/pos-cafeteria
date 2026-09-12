@@ -50,6 +50,7 @@ button{font-family:inherit;cursor:pointer}
 }
 .tab:hover{background:#F3E9DB;color:var(--tinta)}
 .tab.is-on{background:var(--clay);color:#fff}
+.tab[hidden]{display:none}
 .barra__der{display:flex;align-items:center;gap:14px;font-size:14px;color:var(--suave)}
 .turno{cursor:pointer;padding:6px 12px;border-radius:8px;border:1px solid var(--linea)}
 .turno:hover{background:#F3E9DB}

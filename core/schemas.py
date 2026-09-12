@@ -281,6 +281,7 @@ class AplicarImportacionIn(BaseModel):
 
 class AjustesIn(BaseModel):
     """Las preferencias del local. Solo lo que hoy se puede cambiar."""
+    usar_inventario: int = Field(default=1, ge=0, le=1)
     # 100% de margen es un precio infinito, y sobre 95 el sugerido se dispara
     # tanto que deja de ser una sugerencia. El tope es para que la pantalla no
     # muestre un disparate, no para decirle al dueño cuánto ganar.

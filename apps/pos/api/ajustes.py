@@ -29,6 +29,7 @@ from core.schemas import AjustesIn
 router = APIRouter(prefix="/api/v1", tags=["ajustes"])
 
 POR_DEFECTO = {
+    "usar_inventario": 1,
     "margen_sugerido": MARGEN_SUGERIDO,
     # Se guarda como 0/1 y no como booleano: la tabla es de texto.
     "teclado_en_pantalla": int(TECLADO_EN_PANTALLA),
@@ -54,6 +55,8 @@ def _leer(s: Session) -> dict:
     # `le=1` del schema solo se aplica al ESCRIBIR, así que un 2 en la tabla
     # pasaba entero y `!!2` prendía el teclado igual.
     salida["teclado_en_pantalla"] = 1 if salida.get("teclado_en_pantalla") else 0
+    if salida["usar_inventario"] not in (0, 1):
+        salida["usar_inventario"] = 1
     salida["margen_sugerido"] = min(max(salida.get("margen_sugerido", 0), 0), 95)
     salida["bloqueo_minutos"] = min(max(salida.get("bloqueo_minutos", BLOQUEO_MINUTOS), 1), 30)
     if salida["canal_actualizaciones"] not in local.CANALES:

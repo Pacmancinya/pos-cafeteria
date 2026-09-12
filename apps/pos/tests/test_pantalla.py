@@ -587,6 +587,117 @@ console.log(JSON.stringify(r));
     ]
 
 
+def test_el_modo_sin_inventario_llega_al_carrito_los_formularios_y_la_ayuda(tmp_path):
+    """Ejecuta las funciones de la caja: ocultar campos no basta si el + sigue
+    topando el pedido o el alta manda ceros que nadie escribió."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no hay Node en este computador")
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    funciones = ["function usarInventario(", "function sumarAlPedido(",
+                 "function cambiarCantidad(", "function productoDeLaCarta(",
+                 "async function dialogoProductoNuevoPorCodigo(",
+                 "async function guardarProductoDelCodigo(", "async function pintarTalCual(",
+                 "function pintarGuias(", "function verVista(", "function aplicarInventario("]
+    prueba = "\n".join(_cuerpo_de(js, firma) + "\n}" for firma in funciones)
+    prueba += "\nconst window = {};\n" + io.open(ESTATICOS / "guias.js", encoding="utf-8").read()
+    prueba += r"""
+const assert = require('node:assert/strict');
+const esc = (s) => String(s);
+const soloNumeros = (s) => parseInt(String(s).replace(/\D/g, ''), 10) || 0;
+const setTimeout = () => {};
+const avisar = () => {};
+const pintarCarrito = () => {};
+const cargarCarta = async () => {};
+const datos = new Map();
+function elemento() {
+  return { innerHTML: '', style: {}, dataset: {}, hidden: false,
+    classList: { add() {}, remove() {}, toggle() {} }, querySelectorAll() { return []; } };
+}
+const $ = (s) => datos.get(s) || null;
+const $$ = () => [];
+for (const id of ['#dialogoCodigo', '#capaCodigo', '#zonaTalCual', '#listaGuias',
+                  '#textoGuia', '#capaBodega', '#capaInsumo', '#ajInventario',
+                  ".tab[data-vista='inventario']"]) datos.set(id, elemento());
+let AJUSTES = {};
+let carrito = [];
+let guiaAbierta = null;
+const p = { id: 1, nombre: 'Queso', precio: 1500, stock: 0 };
+const CATEGORIAS = [{ id: 1, nombre: 'Fiambres', activa: true, productos: [p] }];
+let catActiva = 1;
+const VISTAS = ['caja', 'inventario', 'guias'];
+const location = {};
+let pedidos = [];
+let cargarBodega = () => { throw Error('No debe cargar Bodega'); };
+let api = async (ruta, opciones) => { pedidos.push([ruta, JSON.parse(opciones.body)]); return p; };
+(async () => {
+  sumarAlPedido(p);
+  assert.equal(carrito.length, 0, 'sin ajuste guardado mantiene el tope');
+  AJUSTES.usar_inventario = 0;
+  sumarAlPedido(p); cambiarCantidad(1, 1);
+  assert.equal(carrito[0].cantidad, 2);
+  AJUSTES.usar_inventario = 1;
+  cambiarCantidad(1, 1);
+  assert.equal(carrito[0].cantidad, 2, 'al reactivar vuelve el tope');
+
+  for (const usar of [0, 1]) {
+    AJUSTES.usar_inventario = usar;
+    await dialogoProductoNuevoPorCodigo('', 1);
+    const html = $('#dialogoCodigo').innerHTML;
+    assert.equal(html.includes('id="cdCosto"'), !!usar);
+    assert.equal(html.includes('id="cdStock"'), !!usar);
+    datos.set('#cdNombre', { value: 'Queso' });
+    datos.set('#cdPrecio', { value: '1500' });
+    datos.set('#cdCat', { value: '1' });
+    if (usar) {
+      datos.set('#cdCosto', { value: '800' });
+      datos.set('#cdStock', { value: '10' });
+    } else {
+      datos.delete('#cdCosto'); datos.delete('#cdStock');
+    }
+    await guardarProductoDelCodigo('');
+    const cuerpo = pedidos.at(-1)[1];
+    assert.equal(cuerpo.nombre, 'Queso');
+    if (usar) {
+      assert.equal(cuerpo.tal_cual, true);
+      assert.equal(cuerpo.costo, 800);
+      assert.equal(cuerpo.stock_inicial, 10);
+    } else {
+      for (const clave of ['tal_cual', 'costo', 'stock_inicial', 'minimo']) {
+        assert.equal(clave in cuerpo, false);
+      }
+    }
+  }
+  AJUSTES.usar_inventario = 0;
+  api = async () => { throw Error('No debe consultar inventario'); };
+  const zona = $('#zonaTalCual');
+  zona.innerHTML = 'Bodega';
+  await pintarTalCual(p);
+  assert.equal(zona.innerHTML, '');
+  assert.equal(zona.style.display, 'none');
+  pintarGuias('descuento-automatico');
+  assert.equal($('#listaGuias').innerHTML.includes('data-guia="descuento-automatico"'), false);
+  assert.equal($('#listaGuias').innerHTML.includes('data-guia="compre-pasteles"'), false);
+  assert.equal($('#textoGuia').innerHTML.includes('Por comprar'), false);
+  aplicarInventario();
+  assert.equal($(".tab[data-vista='inventario']").hidden, true);
+  verVista('inventario');
+  assert.equal(location.hash, '#/caja');
+  AJUSTES.usar_inventario = 1;
+  aplicarInventario();
+  assert.equal($(".tab[data-vista='inventario']").hidden, false);
+  assert.equal($('#listaGuias').innerHTML.includes('data-guia="descuento-automatico"'), true);
+})().catch((e) => { console.error(e); process.exitCode = 1; });
+"""
+    archivo = tmp_path / "inventario.js"
+    archivo.write_text(prueba, encoding="utf-8")
+    salida = subprocess.run([node, str(archivo)], capture_output=True, text=True, encoding="utf-8")
+    assert salida.returncode == 0, salida.stderr
+
+
 def test_un_local_sin_productos_igual_se_ve_con_su_nombre():
     """Un local recién instalado todavía no tiene carta: la caja contesta sin
     categorías y la pantalla lo toma como error. El nombre se perdía con ese

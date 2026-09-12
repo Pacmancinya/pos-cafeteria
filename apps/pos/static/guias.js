@@ -25,11 +25,24 @@ window.GUIAS = [
           lista en un Excel, no la copies a mano: mira la guía
           <i>Traer la carta de un Excel</i>.</li>
       <li><b>Vende.</b> Con eso ya funciona. Todo lo demás es opcional.</li>
-      <li><b>Cuando tengas tiempo</b>, carga la bodega para saber cuánto te
+      <li data-con-inventario><b>Cuando tengas tiempo</b>, carga la bodega para saber cuánto te
           queda de cada cosa. Se puede hacer de a poco.</li>
     </ol>
     <div class="ayuda">No hace falta tener todo listo para empezar a cobrar. La
-      caja funciona con la carta a medias y con la bodega vacía.</div>`,
+      caja funciona con la carta a medias<span data-con-inventario> y con la bodega vacía</span>.</div>`,
+},
+{
+  id: "vender-sin-inventario",
+  titulo: "Vender sin llevar inventario",
+  resumen: "Si solo necesitas la caja para cobrar.",
+  html: `
+    <p>Si no llevas la cuenta de lo que queda, entra como dueño a <b>Ayuda →
+       Ajustes</b> y apaga <b>Llevar inventario en este local</b>.</p>
+    <p>Al agregar un producto, basta con su nombre, precio y categoría. Puedes
+       vender aunque no tengas existencias anotadas.</p>
+    <p>Lo que ya tenías guardado no se borra. Si vuelves a prenderlo, retomas
+       los saldos que dejaste: las ventas hechas mientras estuvo apagado no
+       los cambian.</p>`,
 },
 {
   id: "agregar-producto",
@@ -87,6 +100,7 @@ window.GUIAS = [
 },
 {
   id: "compre-pasteles",
+  inventario: true,
   titulo: "Compré pasteles: ¿dónde los pongo?",
   resumen: "En un solo lugar. Ya no hay que escribirlo dos veces.",
   html: `
@@ -175,6 +189,7 @@ window.GUIAS = [
 },
 {
   id: "descuento-automatico",
+  inventario: true,
   titulo: "Que el stock baje solo al vender",
   resumen: "Para lo que preparas: café, jugos, sándwiches.",
   html: `
@@ -473,6 +488,7 @@ window.GUIAS = [
     <div class="ayuda">O sea: <b>nunca</b> escribas el precio sin IVA pensando
       que la caja se lo agrega. Escribe lo que quieres cobrar.</div>
 
+    <div data-con-inventario>
     <h3>Cuánto cobrar por algo que compraste</h3>
     <p>Abre el producto y anda a la parte de abajo, donde dice <b>Bodega</b>.
        Escribe cuánto te cuesta cada uno y aparece un recuadro verde con el
@@ -501,7 +517,8 @@ window.GUIAS = [
        la diferencia.</p>
     <div class="ayuda">El margen que elijas es del local, no de este computador:
       si abres la caja desde otro lado, es el mismo. Cambiarlo es cosa del
-      dueño.</div>`,
+      dueño.</div>
+    </div>`,
 },
 {
   id: "respaldos",

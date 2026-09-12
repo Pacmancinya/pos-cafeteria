@@ -279,7 +279,7 @@ function sumarAlPedido(p) {
   // `null` = no lleva cuenta como tal cual (o es de receta): no se topea.
   const tope = productoDeLaCarta(p.id);
   const stock = tope ? tope.stock : p.stock;
-  if (stock != null && pide > stock) {
+  if (usarInventario() && stock != null && pide > stock) {
     avisar(stock > 0
       ? `Solo quedan ${stock} de ${p.nombre}. Si llegó más, anótalo en Bodega.`
       : `${p.nombre} está en cero. Anota la mercadería en Bodega para venderlo.`, true);
@@ -384,21 +384,23 @@ async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
     <p class="ayuda" id="cdDe">Buscando cómo se llama…</p>` : ""}
     <label class="campo"><span>¿Qué es?</span>
       <input id="cdNombre" type="text" placeholder="Escríbelo" autocomplete="off"></label>
-    <div class="fila2">
+    <div class="${usarInventario() ? "fila2" : ""}">
       <label class="campo"><span>¿A cuánto lo vendes?</span>
         <input id="cdPrecio" type="text" inputmode="numeric" placeholder="0"></label>
-      <label class="campo"><span>¿Cuánto te cuesta?</span>
-        <input id="cdCosto" type="text" inputmode="numeric" placeholder="0"></label>
+      ${usarInventario() ? `<label class="campo"><span>¿Cuánto te cuesta?</span>
+        <input id="cdCosto" type="text" inputmode="numeric" placeholder="0"></label>` : ""}
     </div>
     <div id="cdSugerido"></div>
     <label class="campo"><span>¿Dónde va?</span>
       <select id="cdCat">${cats.map((c) =>
         `<option value="${c.id}"${cual && c.id === cual.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>
-    <label class="campo"><span>¿Cuántos tienes ahora?</span>
-      <input id="cdStock" type="text" inputmode="numeric" placeholder="0"></label>
+    ${usarInventario() ? `<label class="campo"><span>¿Cuántos tienes ahora?</span>
+      <input id="cdStock" type="text" inputmode="numeric" placeholder="0"></label>` : ""}
     <p class="ayuda" style="margin-bottom:0">${codigo
       ? "Queda guardado con su código: la próxima vez que lo pases por el lector, entra solo al pedido."
-      : "Con los que tienes anotados, la caja te avisa cuando se están acabando y no te deja vender de más sin darte cuenta."}</p>
+      : usarInventario()
+        ? "Con los que tienes anotados, la caja te avisa cuando se están acabando y no te deja vender de más sin darte cuenta."
+        : "Queda en la carta, listo para vender."}</p>
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" data-guardar-codigo="${esc(codigo || "")}"
@@ -409,7 +411,7 @@ async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
   if (!codigo) return;                    // sin código no hay a quién preguntarle el nombre
 
   // El sugerido de precio se mueve solo con lo que cuesta.
-  $("#cdCosto").addEventListener("input", () => {
+  $("#cdCosto")?.addEventListener("input", () => {
     const v = soloNumeros($("#cdCosto").value);
     const caja = $(".sugerido");
     if (caja) return repintarSugerido(v);
@@ -443,18 +445,16 @@ async function guardarProductoDelCodigo(codigo) {
   if (!nombre) return avisar("Escribe qué es", true);
   if (!precio) return avisar("Ponle precio", true);
 
-  const costo = soloNumeros($("#cdCosto").value);
-  const stock = soloNumeros($("#cdStock").value);
+  const stock = soloNumeros($("#cdStock")?.value || 0);
+  const inventario = usarInventario() ? {
+    tal_cual: true, costo: soloNumeros($("#cdCosto")?.value || 0), stock_inicial: stock,
+  } : {};
   try {
     const p = await api("/productos", { method: "POST", body: JSON.stringify({
       categoria_id: +$("#cdCat").value,
       nombre, precio, codigo: codigo || "",
-      // SIEMPRE con inventario. Antes había que entrar a la ficha y apretar un
-      // botón que decía "se vende tal cual" —jerga que no significaba nada para
-      // nadie— y hasta entonces el producto no existía en la Bodega y se podía
-      // vender sin límite. Un producto que se compra hecho y se vende igual es
-      // el caso normal de un almacén: no se pregunta, se hace.
-      tal_cual: true, costo, stock_inicial: stock,
+      // Si el local lleva inventario, el producto lleva cuenta desde el alta.
+      ...inventario,
     }) });
     $("#capaCodigo").classList.remove("is-on");
     await cargarCarta();
@@ -462,7 +462,8 @@ async function guardarProductoDelCodigo(codigo) {
       agregarPorId(p);
       avisar(`${nombre} queda guardado. Ya está en el pedido.`);
     } else {
-      avisar(`${nombre} queda guardado, con ${stock || 0} en la bodega.`);
+      avisar(usarInventario() ? `${nombre} queda guardado, con ${stock || 0} en la bodega.`
+                             : `${nombre} queda guardado, listo para vender.`);
     }
   } catch (e) { avisar(e.message, true); }
 }
@@ -2012,6 +2013,11 @@ async function cargarSesion() {
     SESION = { entrado: false, provisorio: false, permisos: [] };
   }
   pintarQuien();
+  if (SESION.entrado) {
+    // Los ajustes pueden haber cambiado mientras la caja estaba bloqueada.
+    await cargarAjustes();
+    pintarAjustes();
+  }
   return SESION;
 }
 
@@ -2409,6 +2415,9 @@ async function vigilarLaCaja() {
   let viva = true;
   try { await api("/salud", { espera: 5000 }); } catch (e) { viva = false; }
   if (viva) enviarPendientes();
+  // El dueño puede cambiar el inventario desde otra pantalla del local.
+  // Se toma al volver o cada minuto, sin cambiar un formulario a medio llenar.
+  if (viva && SESION.entrado && !$$('.capa.is-on').length) await cargarAjustes();
   const aviso = $("#sinCaja");
   if (aviso) aviso.hidden = viva || !$("#candado").hidden;
 }
@@ -2456,6 +2465,7 @@ let BODEGA = { insumos: [], valor_total: 0 };
 const unidadCorta = { g: "g", ml: "ml", un: "un" };
 
 async function cargarBodega() {
+  if (!usarInventario()) return;
   try {
     BODEGA = await api("/inventario");
   } catch (e) { return avisar(e.message, true); }
@@ -3174,7 +3184,7 @@ function bloquePropinas(tu) {
 let guiaAbierta = null;
 
 function pintarGuias(id) {
-  const guias = window.GUIAS || [];
+  const guias = (window.GUIAS || []).filter((g) => usarInventario() || !g.inventario);
   if (!guias.length) {
     $("#textoGuia").innerHTML = "<p class='ayuda'>Todavía no hay guías cargadas.</p>";
     return;
@@ -3189,6 +3199,9 @@ function pintarGuias(id) {
     </button>`).join("");
 
   $("#textoGuia").innerHTML = `<h2>${esc(actual.titulo)}</h2>${actual.html}`;
+  $("#textoGuia").querySelectorAll("[data-con-inventario]").forEach((el) => {
+    el.hidden = !usarInventario();
+  });
   $("#textoGuia").scrollTop = 0;
 }
 
@@ -3229,6 +3242,17 @@ function pintarAjustes() {
     </div>
 
     <div class="ajuste" id="ajRed"><h4>PIN de red</h4><p class="ayuda">Cargando…</p></div>
+
+    <div class="ajuste">
+      <h4>Inventario</h4>
+      <label class="marca">
+        <input type="checkbox" id="ajInventario" ${usarInventario() ? "checked" : ""}>
+        Llevar inventario en este local</label>
+      <p class="ayuda" style="margin:8px 0 0">Apágalo si solo quieres vender, sin llevar
+        la cuenta de lo que queda. Se esconden Bodega y Por comprar, y no se pide costo
+        ni existencias al agregar productos. Lo que ya tenías anotado se conserva:
+        al prenderlo de nuevo, retomas desde esos saldos.</p>
+    </div>
 
     <div class="ajuste">
       <h4>Bloqueo</h4>
@@ -3342,7 +3366,9 @@ function pintarRed(r) {
 
 async function guardarAjuste(cambios, mensaje) {
   try {
+    const antes = usarInventario();
     AJUSTES = { ...AJUSTES, ...(await api("/ajustes", { method: "PUT", body: JSON.stringify(cambios) })) };
+    if (antes !== usarInventario()) aplicarInventario();
     avisar(mensaje);
     reiniciarInactividad();
   } catch (e) { avisar(e.message, true); pintarAjustes(); }
@@ -3549,11 +3575,38 @@ function dialogoCierre(turnoId) {
    La cuenta vive SOLO acá y no también en el servidor a propósito: es una
    sugerencia que se recalcula con cada tecla, nunca un dato que se guarde.
    Lo que sí guarda el servidor es el margen elegido (tabla Ajuste). */
-let AJUSTES = { margen_sugerido: 50, redondeo_precio: 50 };
+let AJUSTES = { margen_sugerido: 50, redondeo_precio: 50, usar_inventario: 1 };
+
+function usarInventario() {
+  return AJUSTES.usar_inventario !== 0;
+}
+
+function aplicarInventario() {
+  const activo = usarInventario();
+  $(".tab[data-vista='inventario']").hidden = !activo;
+  const interruptor = $("#ajInventario");
+  if (interruptor) interruptor.checked = activo;
+  if (!activo) {
+    if ($(".vista.is-on")?.dataset.vista === "inventario") verVista("caja");
+    ["#capaBodega", "#capaInsumo"].forEach((id) => $(id).classList.remove("is-on"));
+  }
+  const zona = $("#zonaTalCual");
+  if (zona) {
+    zona.style.display = activo ? "" : "none";
+    if (!activo) zona.innerHTML = "";
+    else {
+      const p = productoDeLaCarta(+zona.dataset.producto);
+      if (p) pintarTalCual(p);
+    }
+  }
+  pintarGuias();
+}
 
 async function cargarAjustes() {
+  const antes = usarInventario();
   try { AJUSTES = { ...AJUSTES, ...(await api("/ajustes")) }; }
   catch (e) { }        // con los valores por defecto la caja funciona igual
+  if (antes !== usarInventario()) aplicarInventario();
 }
 
 function precioSugerido(costo, margenPct) {
@@ -3645,8 +3698,11 @@ function elegirMargen(pct) {
 async function pintarTalCual(p) {
   const zona = $("#zonaTalCual");
   if (!zona) return;
+  zona.style.display = usarInventario() ? "" : "none";
+  if (!usarInventario()) { zona.innerHTML = ""; return; }
   let receta = null;
   try { receta = await api(`/productos/${p.id}/receta`); } catch (e) { return; }
+  if (!usarInventario()) return;
 
   if (receta.lineas.length) {
     const l = receta.lineas[0];
@@ -3714,6 +3770,7 @@ const VISTAS = ["caja", "dia", "carta", "inventario", "guias"];
 
 function verVista(nombre, empujarHash = true) {
   if (!VISTAS.includes(nombre)) nombre = "caja";
+  if (nombre === "inventario" && !usarInventario()) nombre = "caja";
   $$(".tab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === nombre));
   $$(".vista").forEach((v) => v.classList.toggle("is-on", v.dataset.vista === nombre));
   if (empujarHash) location.hash = "#/" + nombre;
@@ -3869,6 +3926,8 @@ document.addEventListener("click", (e) => {
   if (cerca("data-diagnostico")) { window.open("/api/v1/diagnostico", "_blank"); return; }
   if (cerca("data-volver-version")) return volverDeVersion();
   if (t.id === "ajTeclado") return guardarTeclado(t.checked);
+  if (t.id === "ajInventario") return guardarAjuste({ usar_inventario: t.checked ? 1 : 0 },
+    t.checked ? "Listo: vuelves a llevar inventario" : "Listo: puedes vender sin llevar inventario");
   if (t.id === "ajBloqueo") return guardarAjuste({ bloqueo_minutos: +t.value },
     `Listo: la caja se bloquea después de ${t.value} min sin uso`);
   if (t.id === "ajCanal") return guardarAjuste({ canal_actualizaciones: t.value },

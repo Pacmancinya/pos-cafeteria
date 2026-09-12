@@ -14,6 +14,130 @@ from sqlmodel import select
 from core.config import costo_de, mostrar_cantidad
 
 
+def _foto_inventario():
+    from sqlmodel import Session
+    from apps.pos.db.models import Insumo, Movimiento, Receta
+    from apps.pos.db.session import engine
+    with Session(engine) as s:
+        return {modelo.__name__: [fila.model_dump() for fila in s.exec(
+            select(modelo).order_by(modelo.id)).all()]
+            for modelo in (Insumo, Movimiento, Receta)}
+
+
+@pytest.mark.parametrize("usar", [None, 1])
+def test_inventario_activo_conserva_el_tope_y_el_descuento(cliente, carta, caja, usar):
+    if usar is not None:
+        assert cliente.put("/api/v1/ajustes", json={"usar_inventario": usar}).status_code == 200
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Queso", 1500, 1)
+    pedido = {"lineas": [{"producto_id": p["id"], "cantidad": 1}]}
+    venta = cliente.post("/api/v1/ventas", json=pedido)
+    assert venta.status_code == 200
+    assert _stock(cliente, "Queso") == 0
+    foto = _foto_inventario()
+    movimientos = [m for m in foto["Movimiento"] if m["venta_id"] == venta.json()["id"]]
+    assert len(movimientos) == 1
+    assert movimientos[0]["cantidad"] == -1
+    assert cliente.post("/api/v1/ventas", json=pedido).status_code == 409
+    assert _foto_inventario() == foto
+
+
+def test_sin_inventario_cobra_stock_cero_sin_llamar_helpers(cliente, carta, caja, monkeypatch):
+    from apps.pos.api import inventario, ventas
+
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Queso", 1500, 0)
+    antes = _foto_inventario()
+    assert cliente.put("/api/v1/ajustes", json={"usar_inventario": 0}).status_code == 200
+
+    def no_debe_llamarse(*args, **kwargs):
+        pytest.fail("Con inventario apagado no se revisa ni descuenta stock")
+
+    monkeypatch.setattr(ventas, "_lo_que_no_alcanza", no_debe_llamarse)
+    monkeypatch.setattr(inventario, "descontar_venta", no_debe_llamarse)
+    venta = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 2}]})
+    assert venta.status_code == 200
+    assert venta.json()["estado"] == "pagada"
+    assert venta.json()["cobrado"] == 3000
+    assert venta.json()["inventario"] == []
+    assert _foto_inventario() == antes
+
+
+def test_ajuste_inventario_por_defecto_parcial_y_texto(cliente):
+    from sqlmodel import Session
+    from apps.pos.db.models import Ajuste
+    from apps.pos.db.session import engine
+    assert cliente.get("/api/v1/ajustes").json()["usar_inventario"] == 1
+    assert cliente.put("/api/v1/ajustes", json={"usar_inventario": 0}).json()["usar_inventario"] == 0
+    assert cliente.put("/api/v1/ajustes", json={"margen_sugerido": 40}).json()["usar_inventario"] == 0
+    with Session(engine) as s:
+        assert s.get(Ajuste, "usar_inventario").valor == "0"
+    assert cliente.put("/api/v1/ajustes", json={"usar_inventario": 1}).json()["usar_inventario"] == 1
+    with Session(engine) as s:
+        assert s.get(Ajuste, "usar_inventario").valor == "1"
+    assert cliente.get("/api/v1/ajustes").json()["margen_sugerido"] == 40
+
+
+@pytest.mark.parametrize("valor", [-1, 2, 0.5, "no", None])
+def test_ajuste_inventario_rechaza_valores_invalidos(cliente, valor):
+    assert cliente.put("/api/v1/ajustes", json={"usar_inventario": valor}).status_code == 422
+    assert cliente.get("/api/v1/ajustes").json()["usar_inventario"] == 1
+
+
+@pytest.mark.parametrize("valor", ["roto", "2", "-1"])
+def test_ajuste_inventario_corrupto_recupera_default(cliente, valor):
+    from sqlmodel import Session
+    from apps.pos.db.models import Ajuste
+    from apps.pos.db.session import engine
+    with Session(engine) as s:
+        s.add(Ajuste(clave="usar_inventario", valor=valor))
+        s.commit()
+    assert cliente.get("/api/v1/ajustes").json()["usar_inventario"] == 1
+
+
+def test_apagar_vender_y_reactivar_conserva_inventario(cliente, bodega, carta, caja):
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Botella", 1500, 2)
+    pedido = {"lineas": [{"producto_id": p["id"], "cantidad": 3},
+                          {"producto_id": carta["latte"]["id"], "cantidad": 2}]}
+    antes = _foto_inventario()
+    assert cliente.post("/api/v1/ventas", json=pedido).status_code == 409
+    assert _foto_inventario() == antes
+    cliente.put("/api/v1/ajustes", json={"usar_inventario": 0})
+    venta = cliente.post("/api/v1/ventas", json=pedido)
+    assert venta.status_code == 200
+    assert venta.json()["inventario"] == []
+    assert _foto_inventario() == antes
+    cliente.put("/api/v1/ajustes", json={"usar_inventario": 1})
+    assert _foto_inventario() == antes
+    assert cliente.post("/api/v1/ventas", json=pedido).status_code == 409
+    assert cliente.post(f"/api/v1/ventas/{venta.json()['id']}/anular", json={"motivo": "prueba"}).status_code == 200
+    assert _foto_inventario() == antes
+    pedido["lineas"][0]["cantidad"] = 1
+    con_stock = cliente.post("/api/v1/ventas", json=pedido)
+    assert con_stock.status_code == 200
+    assert _stock(cliente, "Botella") == 1
+    assert _stock(cliente, "Leche entera") == 3600
+    cliente.put("/api/v1/ajustes", json={"usar_inventario": 0})
+    assert cliente.post(f"/api/v1/ventas/{con_stock.json()['id']}/anular", json={"motivo": "prueba"}).status_code == 200
+    assert _stock(cliente, "Botella") == 2
+    assert _stock(cliente, "Leche entera") == 4000
+
+
+def test_crear_y_editar_sin_campos_de_inventario_no_borra_datos(cliente, bodega, carta):
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Botella", 1500, 2)
+    antes = _foto_inventario()
+    cliente.put("/api/v1/ajustes", json={"usar_inventario": 0})
+    for existente in (p, carta["latte"]):
+        assert cliente.put(f"/api/v1/productos/{existente['id']}", json={
+            "nombre": existente["nombre"], "categoria_id": existente["categoria_id"],
+            "precio": 1700}).status_code == 200
+    assert cliente.post("/api/v1/productos", json={
+        "nombre": "Nuevo sin inventario", "categoria_id": carta["cafe"]["id"],
+        "precio": 1800}).status_code == 200
+    assert _foto_inventario() == antes
+    cliente.put("/api/v1/ajustes", json={"usar_inventario": 1})
+    assert _foto_inventario() == antes
+
+
 # ------------------------------------------------------------------ unidades
 @pytest.mark.parametrize("cantidad,unidad,texto", [
     (4200, "ml", "4,2 L"),
@@ -628,3 +752,35 @@ def test_los_insumos_viejos_quedan_contados_en_la_migracion():
         if os.path.exists(ruta):
             try: os.remove(ruta)
             except OSError: pass
+
+
+def test_anular_una_venta_hecha_sin_inventario_no_regala_stock(cliente, carta, caja):
+    """Vender con el inventario APAGADO y anular con el inventario ENCENDIDO.
+
+    Es el cruce peligroso del interruptor: si al anular se repusiera lo que la venta
+    "debería" haber descontado, aparecería stock que nunca salió — mercadería regalada en
+    el papel, y el arqueo dejando de cuadrar con lo que hay en la bodega.
+
+    Está cubierto porque `devolver_venta` lee los MOVIMIENTOS que la venta escribió en vez
+    de recalcular desde el producto; una venta sin movimientos no devuelve nada. Este test
+    existe para que esa propiedad no se pierda sin que nadie se dé cuenta.
+    """
+    p = _tal_cual(cliente, carta["cafe"]["id"], "Jamón", 1500, 10)
+    assert cliente.put("/api/v1/ajustes", json={"usar_inventario": 0}).status_code == 200
+
+    venta = cliente.post("/api/v1/ventas", json={
+        "lineas": [{"producto_id": p["id"], "cantidad": 4}], "medio_pago": "efectivo"}).json()
+    assert _stock(cliente, "Jamón") == 10        # apagado: no descontó nada
+
+    assert cliente.put("/api/v1/ajustes", json={"usar_inventario": 1}).status_code == 200
+    r = cliente.post(f"/api/v1/ventas/{venta['id']}/anular", json={"motivo": "se arrepintió"})
+    assert r.status_code == 200
+
+    assert _stock(cliente, "Jamón") == 10        # y anular tampoco puede sumar 4 de la nada
+    mv = cliente.get(f"/api/v1/inventario/insumos/{_insumo_id(cliente, 'Jamón')}/movimientos").json()
+    assert [m["tipo"] for m in mv["movimientos"]] == ["carga"]
+
+
+def _insumo_id(cliente, nombre):
+    datos = cliente.get("/api/v1/inventario").json()
+    return next(i for i in datos["insumos"] if i["nombre"] == nombre)["id"]
