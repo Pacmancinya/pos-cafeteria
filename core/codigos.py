@@ -110,3 +110,37 @@ def por_que_no_sirve(codigo: str) -> str:
         return ("Ese es el código de la CAJA, no el de la unidad. Escanea una botella "
                 "suelta, no el cartón.")
     return ""
+
+
+# --------------------------------------------------------------- el ticket de la balanza
+#
+# Medido en el local, con una DIGI SM-300 y su ticket en la mano:
+#
+#     RCT# 3976   TOTAL 197        codigo: 2 5 3976 000197 5
+#                                          | |  |     |    |
+#           prefijo GS1 restringido --------  |  |     |    verificador
+#           subtipo de la balanza ------------  |     |
+#           numero de ticket (RCT#) ------------      |
+#           total en pesos ---------------------------
+#
+# Lo importante es lo que NO viene: ni que producto es, ni el peso. El codigo identifica
+# UN TICKET, no una mercaderia. Por eso `por_que_no_sirve` sigue teniendo razon en negarse
+# a guardarlo como codigo de un producto: son dos usos distintos del mismo numero.
+FORMATO_DIGI_SM300 = {"prefijo": "25", "ticket": (2, 6), "total": (6, 12)}
+
+
+def leer_balanza(codigo: str, formato: dict | None = None) -> dict | None:
+    """El ticket y el total que trae una etiqueta de balanza. None si no es una.
+
+    El reparto de los digitos es configurable porque cada balanza se programa distinto; el
+    de fabrica es el que se midio en el local (DIGI SM-300). Si el prefijo no calza o el
+    codigo esta mal leido se devuelve None en vez de inventar un monto: cobrar de mas por
+    leer mal una etiqueta es peor que no leerla.
+    """
+    c = limpiar(codigo)
+    f = formato or FORMATO_DIGI_SM300
+    if len(c) != 13 or not es_valido(c) or not c.startswith(f["prefijo"]):
+        return None
+    ticket = c[f["ticket"][0]:f["ticket"][1]]
+    total = c[f["total"][0]:f["total"][1]]
+    return {"ticket": ticket.lstrip("0") or "0", "total": int(total)}

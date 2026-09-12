@@ -155,3 +155,39 @@ def test_el_nombre_nunca_se_pierde():
     solo el contenido — «1 l» en vez de «Colun Leche Entera 1 l»."""
     from apps.pos.api.codigos import _como_lo_escribiria_una_persona as armar
     assert "Leche Entera" in armar("Leche Entera", "Colun", "1 l")
+
+
+# ------------------------------------------------ el ticket de la balanza del local
+def test_lee_el_ticket_y_el_total_de_una_etiqueta_real():
+    """Etiqueta medida en el local: ticket RCT# 3976, TOTAL $197.
+
+    Es la de verdad, no una inventada: si alguien cambia el reparto de los dígitos, este
+    test lo caza con el caso que existe en el mostrador.
+    """
+    assert k.leer_balanza("2539760001975") == {"ticket": "3976", "total": 197}
+
+
+def test_el_codigo_de_la_balanza_no_dice_que_producto_es():
+    """No hay producto ni peso adentro: identifica un TICKET, no una mercadería.
+
+    De ahí que `por_que_no_sirve` siga negándose a guardarlo como código de un producto:
+    son dos usos distintos del mismo número y los dos tienen razón.
+    """
+    leido = k.leer_balanza("2539760001975")
+    assert set(leido) == {"ticket", "total"}
+    assert k.por_que_no_sirve("2539760001975")
+
+
+def test_un_codigo_normal_no_es_un_ticket_de_balanza():
+    assert k.leer_balanza("7801610001196") is None
+
+
+def test_un_codigo_mal_leido_no_inventa_un_monto():
+    assert k.leer_balanza("2539760001974") is None    # verificador cambiado
+    assert k.leer_balanza("253976000197") is None     # le falta un dígito
+    assert k.leer_balanza("") is None
+
+
+def test_el_reparto_de_digitos_se_puede_cambiar_por_balanza():
+    otro = {"prefijo": "25", "ticket": (2, 7), "total": (7, 12)}
+    assert k.leer_balanza("2539760001975", otro) == {"ticket": "39760", "total": 197}
