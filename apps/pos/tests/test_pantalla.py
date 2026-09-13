@@ -716,3 +716,49 @@ def test_un_nombre_largo_cabe_en_el_logo():
     assert "anchoDelTexto(" in cuerpo and "anchoVisible(" in cuerpo
     assert "pintarPalabra(" in _cuerpo_de(html, "function setOrientacion(")
     assert "esc(texto)" in cuerpo and ">${texto}<" not in cuerpo
+
+
+def _cuerpo(js: str, nombre: str) -> str:
+    ini = js.find(nombre)
+    assert ini != -1, f"se renombró {nombre}: revisa esta prueba"
+    return js[ini:js.find("\n}", ini)]
+
+
+def test_ningun_medio_de_pago_se_saca_del_cierre_aunque_no_se_haya_usado():
+    """Esconder una fila está bien; sacarla vuelve a tapar el descuadre más grande.
+
+    La fila existe para TODOS los medios a propósito: si en la máquina pasó un débito que
+    en la caja quedó como efectivo —o que no quedó—, tiene que haber dónde escribir lo que
+    dice el comprobante. Se escondieron las que no se usaron solo para que la pantalla no
+    sea una lista de casillas vacías, y vuelven con un toque.
+
+    Si alguien algún día "limpia" esto filtrando la lista antes de pintarla, el bug vuelve
+    sin que nadie lo note: la pantalla se vería más ordenada y el descuadre, invisible.
+    """
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo(js, "function bloqueTarjetas")
+
+    assert "${medios.map(" in cuerpo, (
+        "las filas se pintan desde la lista COMPLETA de medios, no desde un subconjunto")
+    assert "${medios.filter" not in cuerpo, (
+        "algo filtra los medios antes de pintarlos: las filas que no se ven tienen que "
+        "existir igual en el formulario, o no hay dónde declarar ese medio")
+    assert "${guardados.map(" in cuerpo, "los tildes salen de los que no se usaron"
+    assert "hidden" in cuerpo, "las que no se usaron se esconden, no se sacan"
+    assert "data-sumar-medio" in cuerpo, "tiene que quedar el tilde para traerlas de vuelta"
+
+
+def test_el_tilde_solo_destapa_la_fila_que_ya_estaba():
+    """No recarga ni crea nada: la fila ya estaba en el formulario, solo oculta."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    i = js.find('cerca("data-sumar-medio")')
+    assert i != -1, "se perdió el manejador del tilde"
+    bloque = js[i:i + 700]
+    assert "hidden = false" in bloque
+    assert "data-medio-fila" in bloque
+
+
+def test_la_fila_escondida_de_verdad_se_esconde():
+    """`.tarjetas__fila` es grid: sin regla propia, el atributo hidden no la tapa."""
+    css = io.open(ESTATICOS / "styles.css", encoding="utf-8").read()
+    assert ".tarjetas__fila[hidden]" in css and "display:none" in css

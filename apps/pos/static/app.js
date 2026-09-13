@@ -3028,8 +3028,29 @@ function filasDeCuadre(tu) {
   });
 }
 
+/* Un medio "se usó" si la caja registró algo con él, o si alguien ya escribió su
+   comprobante. Los demás se esconden para que la pantalla no sea una lista de casillas
+   vacías todas las noches —lo pidió el dueño: "es mucha cosa en pantalla"—, pero NO se
+   sacan del formulario: siguen ahí, ocultos, y vuelven con un toque.
+
+   La diferencia importa. La fila existe para TODOS los medios a propósito (ver arriba):
+   si en la máquina pasó un débito que acá quedó como efectivo, tiene que haber dónde
+   escribir lo que dice el comprobante. Borrarlas volvería a tapar el descuadre más grande
+   que puede haber; esconderlas solo ahorra ruido. */
+function seUso(m) {
+  return (m.cantidad || 0) > 0 || m.declarado != null || m.propina_dicha != null;
+}
+
 function bloqueTarjetas(tu) {
   const medios = filasDeCuadre(tu);
+  const guardados = medios.filter((m) => !seUso(m));
+  const tildes = guardados.length ? `
+      <div class="tarjetas__sumar">
+        <span class="ayuda">¿Hubo también?</span>
+        ${guardados.map((m) => `
+          <button type="button" class="chip" data-sumar-medio="${m.medio}">
+            + ${esc(m.nombre)}</button>`).join("")}
+      </div>` : "";
   return `
     <div class="tarjetas">
       <div class="tarjetas__tit">¿Cuánto dice la máquina?</div>
@@ -3037,7 +3058,7 @@ function bloqueTarjetas(tu) {
         cierre de Transbank y lo que muestre el banco. Es opcional: si lo dejas
         vacío, la caja igual cierra.</p>
       ${medios.map((m) => `
-        <div class="tarjetas__fila" data-medio-fila="${m.medio}">
+        <div class="tarjetas__fila" data-medio-fila="${m.medio}"${seUso(m) ? "" : " hidden"}>
           <div>
             <b>${esc(m.nombre)}</b>
             <div class="tarjetas__detalle">${detalleDelMedio(m)}</div>
@@ -3055,6 +3076,7 @@ function bloqueTarjetas(tu) {
           </div>
           <div class="tarjetas__pista" data-pista="${m.medio}"></div>
         </div>`).join("")}
+      ${tildes}
     </div>`;
 }
 
@@ -4002,6 +4024,18 @@ document.addEventListener("click", (e) => {
     // programa quedaría usable con la caja cerrada, que es justo lo que la
     // puerta existe para impedir.
     return pintarPuertaDeLaCaja(TURNO);
+  }
+
+  if (cerca("data-sumar-medio")) {
+    // Aparece la fila que estaba escondida y se va su tilde. No se recarga nada: la fila
+    // ya estaba en el formulario, solo no se veía.
+    const cual = cerca("data-sumar-medio").dataset.sumarMedio;
+    const fila = $(`[data-medio-fila="${cual}"]`);
+    if (fila) { fila.hidden = false; fila.querySelector("input")?.focus(); }
+    cerca("data-sumar-medio").remove();
+    const barra = $(".tarjetas__sumar");
+    if (barra && !barra.querySelector("[data-sumar-medio]")) barra.remove();
+    return;
   }
 
   if (t.closest("#medios .medio")) {

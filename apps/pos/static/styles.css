@@ -1314,3 +1314,12 @@ html,body{overscroll-behavior:none}
 .pin-red--grande{display:inline-block;margin:12px 0 8px;font-size:42px}
 .dos-campos{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 @media (max-width:640px){.ajuste__campos,.dos-campos{grid-template-columns:1fr}}
+
+/* La fila de un medio que no se usó sigue en el formulario, solo escondida: el tilde de
+   abajo la trae de vuelta. `display:none` explícito porque .tarjetas__fila es grid y se
+   saltaría el atributo hidden. */
+.tarjetas__fila[hidden]{display:none}
+.tarjetas__sumar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tarjetas__sumar .chip{background:#fff;border:1px dashed var(--linea);color:var(--suave);
+  border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.tarjetas__sumar .chip:hover{border-style:solid;color:var(--tinta);background:#F3E9DB}
