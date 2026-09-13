@@ -512,7 +512,13 @@ async function pintarCodigos(productoId) {
   const caja = $("#fCodigos");
   if (!caja) return;
   let lista = [];
-  try { lista = await api(`/productos/${productoId}/codigos`); } catch (e) { }
+  if (productoId == null) {
+    // Producto nuevo: todavía no hay a quién preguntarle, así que se muestran los que
+    // se juntaron en esta ficha.
+    lista = CODIGOS_NUEVOS.map((c) => ({ codigo: c, cuantos: 1 }));
+  } else {
+    try { lista = await api(`/productos/${productoId}/codigos`); } catch (e) { }
+  }
   caja.innerHTML = lista.length
     ? lista.map((c) => `<div class="codigo-fila">
         <code>${esc(c.codigo)}</code>
@@ -526,6 +532,13 @@ async function pegarCodigo(productoId) {
   const campo = $("#fCodigo");
   const codigo = (campo.value || "").trim();
   if (!codigo) return avisar("Pasa el producto por el lector, o escribe el número", true);
+  if (productoId == null || productoId === "") {
+    // El producto todavía no existe: el código se anota y se adjunta al guardarlo.
+    if (!CODIGOS_NUEVOS.includes(codigo)) CODIGOS_NUEVOS.push(codigo);
+    campo.value = "";
+    await pintarCodigos(null);
+    return avisar("Anotado. Queda puesto cuando guardes el producto.");
+  }
   try {
     await api(`/productos/${productoId}/codigos`, { method: "POST",
       body: JSON.stringify({ codigo, cuantos: 1 }) });
@@ -1271,11 +1284,32 @@ function borrarCategoria(id) {
 
 /* Ficha completa del producto: acá viven los datos que usan las PANTALLAS del
    local (el dibujo, la etiqueta, el destacado), que no caben en la lista. */
-function abrirFichaProducto(id) {
-  const cat = CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
-  const p = cat.productos.find((x) => x.id === id);
+/* Los códigos de un producto que TODAVÍA NO EXISTE. Se juntan acá mientras la ficha está
+   abierta y se adjuntan recién después de crearlo: /productos/{id}/codigos necesita un id,
+   y el producto no tiene uno hasta que se aprieta Guardar. */
+let CODIGOS_NUEVOS = [];
+
+const PRODUCTO_EN_BLANCO = {
+  id: null, nombre: "", precio: 0, descripcion: "", etiqueta: "", badge: "",
+  antes: null, dibujo: "", color: "", destacado: false, activo: true, orden: 0,
+  llevar_cuenta: false,
+};
+
+/* `id` nulo = producto nuevo. La ficha es la MISMA: el dueño pedía llenar todo de una vez
+   en vez de crear, cerrar y volver a entrar a editar.
+
+   Lo que no cambia: nada se crea hasta Guardar. Ver el comentario de nuevoProducto(). */
+function abrirFichaProducto(id, categoriaId) {
+  const nuevo = id == null;
+  CODIGOS_NUEVOS = [];
+  const cat = nuevo
+    ? (CATEGORIAS.find((c) => c.id === (categoriaId || catActiva))
+       || CATEGORIAS.filter((c) => c.activa)[0])
+    : CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
+  const p = nuevo ? { ...PRODUCTO_EN_BLANCO, categoria_id: cat && cat.id }
+                  : cat.productos.find((x) => x.id === id);
   const cats = CATEGORIAS
-    .map((c) => `<option value="${c.id}"${c.id === cat.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("");
+    .map((c) => `<option value="${c.id}"${cat && c.id === cat.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("");
 
   // Dos columnas, como el cobro y el cierre. A la izquierda lo que ES el
   // producto —nombre, precio, códigos, cuántos hay—; a la derecha cómo SE VE en
@@ -1285,7 +1319,7 @@ function abrirFichaProducto(id) {
   $("#dialogoProducto").className = "dialogo dialogo--ficha";
   $("#dialogoProducto").innerHTML = `
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>${esc(p.nombre)}</h2>
+    <h2>${nuevo ? "Producto nuevo" : esc(p.nombre)}</h2>
 
     <div class="ficha">
       <div class="ficha__col">
@@ -1293,7 +1327,8 @@ function abrirFichaProducto(id) {
           <label class="campo"><span>Nombre</span>
             <input id="fNombre" type="text" value="${esc(p.nombre)}"></label>
           <label class="campo"><span>Precio</span>
-            <input id="fPrecio" type="text" inputmode="numeric" value="${p.precio}"></label>
+            <input id="fPrecio" type="text" inputmode="numeric"
+                   value="${p.precio || ""}" placeholder="0"></label>
         </div>
         <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
         <label class="campo"><span>Descripción (se ve en la pantalla del menú)</span>
@@ -1307,7 +1342,7 @@ function abrirFichaProducto(id) {
                  pantalla se abre encima cada vez que el lector "escribe" acá. -->
             <input id="fCodigo" type="text" inputmode="none" autocomplete="off"
                    placeholder="Pasa el producto por el lector">
-            <button class="btn btn--chico" data-pegar-codigo="${p.id}">Agregar</button>
+            <button class="btn btn--chico" data-pegar-codigo="${p.id == null ? "" : p.id}">Agregar</button>
           </div>
           <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Un producto puede
             tener varios: la lata suelta y el pack de 6 traen códigos distintos.</p>
@@ -1338,18 +1373,22 @@ function abrirFichaProducto(id) {
     </div>
 
     <div class="dialogo__pie">
-      <button class="btn btn--peligro" id="fBorrar">Borrar para siempre</button>
+      ${nuevo ? "" : `<button class="btn btn--peligro" id="fBorrar">Borrar para siempre</button>`}
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
       <button class="btn btn--cobrar" id="fGuardar" style="width:auto">Guardar</button>
     </div>`;
   $("#capaProducto").classList.add("is-on");
   pintarTalCual(p);
   pintarCodigos(p.id);
+  if (nuevo) setTimeout(() => $("#fNombre") && $("#fNombre").focus(), 60);
 
   $("#fGuardar").onclick = async () => {
     const antes = soloNumeros($("#fAntes").value);
+    if (nuevo && !$("#fNombre").value.trim()) {
+      return avisar("Ponle un nombre antes de guardar", true);
+    }
     try {
-      await api(`/productos/${id}`, { method: "PUT", body: JSON.stringify({
+      const cuerpo = JSON.stringify({
         categoria_id: +$("#fCat").value,
         nombre: $("#fNombre").value.trim() || p.nombre,
         descripcion: $("#fDesc").value.trim(),
@@ -1364,14 +1403,31 @@ function abrirFichaProducto(id) {
         color: p.color || "",
         ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked !== p.llevar_cuenta
           ? { llevar_cuenta: $("#fCuenta").checked } : {}),
-      }) });
+      });
+      const guardado = nuevo
+        ? await api("/productos", { method: "POST", body: cuerpo })
+        : await api(`/productos/${id}`, { method: "PUT", body: cuerpo });
+
+      // Los códigos se adjuntan RECIÉN ahora, que el producto ya tiene id. Si alguno
+      // falla no se pierde el producto: ya está creado y solo se dice cuál no entró.
+      const fallaron = [];
+      for (const c of (nuevo ? CODIGOS_NUEVOS : [])) {
+        try {
+          await api(`/productos/${guardado.id}/codigos`, {
+            method: "POST", body: JSON.stringify({ codigo: c, cuantos: 1 }) });
+        } catch (e) { fallaron.push(c); }
+      }
+      CODIGOS_NUEVOS = [];
       $("#capaProducto").classList.remove("is-on");
       await cargarCarta();
-      avisar("Guardado");
+      avisar(fallaron.length
+        ? `Guardado, pero no pude ponerle ${fallaron.length === 1 ? "el código" : "los códigos"} `
+          + `${fallaron.join(", ")}. Agrégalo editándolo.`
+        : (nuevo ? "Producto creado" : "Guardado"), fallaron.length > 0);
     } catch (e) { avisar(e.message, true); }
   };
 
-  $("#fBorrar").onclick = async () => {
+  if ($("#fBorrar")) $("#fBorrar").onclick = async () => {
     // Borrar es para SIEMPRE y no es lo mismo que esconder. Si solo lo quieren
     // sacar de la venta un rato, está la casilla «A la venta» de acá arriba, que
     // se vuelve a marcar cuando quieran. Esto no.
@@ -1401,7 +1457,13 @@ function nuevoProducto(catId) {
   if (!CATEGORIAS.filter((c) => c.activa).length) {
     return avisar("Primero crea una categoría", true);
   }
-  dialogoProductoNuevoPorCodigo("", catId);
+  // La ficha COMPLETA, no el formulario de tres campos: el dueño pedía poder ponerle el
+  // dibujo, la descripción y los códigos de una vez, en lugar de crear, cerrar y editar.
+  //
+  // El formulario corto NO se va: sigue siendo el de escanear un código desconocido en
+  // medio de una venta (dialogoProductoNuevoPorCodigo), donde con la fila esperando se
+  // quiere poner nombre y precio y seguir cobrando.
+  abrirFichaProducto(null, catId);
 }
 
 async function nuevaCategoria() {
@@ -4251,6 +4313,11 @@ document.addEventListener("click", (e) => {
     return pegarCodigo(+cerca("data-pegar-codigo").dataset.pegarCodigo);
   if (cerca("data-sacar-codigo")) {
     const c = cerca("data-sacar-codigo").dataset.sacarCodigo;
+    if (FICHA_ABIERTA == null) {
+      // Producto nuevo: el código solo está anotado acá, no hay nada que borrar en la base.
+      CODIGOS_NUEVOS = CODIGOS_NUEVOS.filter((x) => x !== c);
+      return pintarCodigos(null);
+    }
     return api("/codigos/" + encodeURIComponent(c), { method: "DELETE" })
       .then(() => { avisar("Código sacado"); pintarCodigos(FICHA_ABIERTA); })
       .catch((e) => avisar(e.message, true));

@@ -904,3 +904,50 @@ def test_una_respuesta_atrasada_no_pisa_el_plan_vigente():
     cuerpo = _cuerpo(js, "const planDelCierre")
     assert "ultimoPlan" in cuerpo, "cada cálculo tiene que llevar número"
     assert "mio !== ultimoPlan" in cuerpo, "una respuesta vieja tiene que descartarse"
+
+
+def test_agregar_un_producto_abre_la_ficha_completa():
+    """El duenno: "me da lata crear, luego cerrar y darle a editar"."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo(js, "function nuevoProducto")
+    assert "abrirFichaProducto(null" in cuerpo, (
+        "+ Producto tiene que abrir la ficha completa, no el formulario de tres campos")
+    # La LLAMADA, no la mención: el comentario de ahí nombra el diálogo corto para
+    # explicar por qué se queda, y eso no es usarlo.
+    assert "dialogoProductoNuevoPorCodigo(" not in cuerpo.replace(
+        "(dialogoProductoNuevoPorCodigo)", "")
+
+
+def test_el_formulario_corto_sigue_para_el_escaneo_en_medio_de_una_venta():
+    """Ahi la fila espera: se quiere nombre y precio y seguir cobrando."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    assert "async function dialogoProductoNuevoPorCodigo" in js, "no se puede borrar"
+    # Alguien lo sigue llamando con un codigo: el camino del escaner.
+    llamadas = js.count("dialogoProductoNuevoPorCodigo(")
+    assert llamadas >= 2, "quedo definido pero ya nadie lo usa"
+
+
+def test_abrir_la_ficha_nueva_no_crea_nada_hasta_guardar():
+    """Es la regresion de los NUEVE "Producto nuevo" a mil pesos.
+
+    Antes la ficha creaba el producto al abrirse, asi que cerrarla sin guardar dejaba uno
+    en la carta del local, vendible y sin stock. Nada puede escribirse antes de Guardar.
+    """
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    ini = js.find("function abrirFichaProducto")
+    fin = js.find('$("#fGuardar").onclick')
+    assert ini != -1 and fin > ini
+    antes_de_guardar = js[ini:fin]
+    for escribe in ('method: "POST"', 'method: "PUT"', 'method: "DELETE"'):
+        assert escribe not in antes_de_guardar, (
+            f"la ficha escribe ({escribe}) antes de que se apriete Guardar: "
+            "asi aparecieron nueve productos fantasma en un local")
+
+
+def test_los_codigos_de_un_producto_que_no_existe_se_guardan_para_despues():
+    """/productos/{id}/codigos necesita un id, y el producto nuevo todavia no tiene."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    assert "CODIGOS_NUEVOS" in js
+    cuerpo = _cuerpo(js, "async function pegarCodigo")
+    assert "CODIGOS_NUEVOS.push" in cuerpo, (
+        "con el producto sin crear, el codigo se anota en memoria")
