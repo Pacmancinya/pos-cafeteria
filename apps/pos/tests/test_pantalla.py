@@ -762,3 +762,39 @@ def test_la_fila_escondida_de_verdad_se_esconde():
     """`.tarjetas__fila` es grid: sin regla propia, el atributo hidden no la tapa."""
     css = io.open(ESTATICOS / "styles.css", encoding="utf-8").read()
     assert ".tarjetas__fila[hidden]" in css and "display:none" in css
+
+
+def test_el_plan_no_vuelve_a_sacar_una_propina_que_ya_salio_del_cajon():
+    """El error más caro que encontró la revisión, y era mío.
+
+    `tPropinasPagadas` es plata que YA salió del cajón: el cuadre la descuenta del efectivo
+    esperado. El plan la usaba como plata por retirar, así que decía qué billetes sacar para
+    una propina ya entregada. Siguiéndolo se pagaba dos veces, sin que quedara registrada la
+    segunda.
+    """
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    i = js.find("const propina = soloNumeros(")
+    assert i != -1, "se renombró la variable del plan: revisa esta prueba"
+    linea = js[i:js.find(";", i)]
+    assert "tPropinaSacar" in linea, "el plan tiene que usar la propina que se saca AHORA"
+    assert "tPropinasPagadas" not in linea, (
+        "el plan volvió a leer la propina YA pagada: eso hace sacarla dos veces")
+
+
+def test_un_fondo_que_no_se_puede_formar_no_se_da_como_instruccion():
+    """Si el plan dice dejar 40.000 y el campo sigue en 30.000, el cierre anota un fondo
+    distinto del que quedó en el cajón, y el descuadre aparece recién mañana."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    i = js.find("Deja en la caja")
+    assert i != -1
+    aviso = js[i:i + 600]
+    assert "cambia el fondo" in aviso.lower(), (
+        "cuando el fondo no se puede formar exacto hay que decir que se cambie el campo")
+
+
+def test_una_respuesta_atrasada_no_pisa_el_plan_vigente():
+    """Al escribir se disparan varios cálculos y no vuelven en orden."""
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    cuerpo = _cuerpo(js, "const planDelCierre")
+    assert "ultimoPlan" in cuerpo, "cada cálculo tiene que llevar número"
+    assert "mio !== ultimoPlan" in cuerpo, "una respuesta vieja tiene que descartarse"

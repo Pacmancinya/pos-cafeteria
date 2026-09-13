@@ -48,11 +48,13 @@ from __future__ import annotations
 from functools import reduce
 from math import gcd
 
-# Si alguien cuenta un cajón con muchísimas piezas (una feria, una caja que no se vació en
-# semanas), el recorrido crece. Por encima de esto se responde con el reparto simple —de
-# la denominación más chica hacia arriba— que es peor pero instantáneo, en vez de dejar la
-# caja pensando mientras el cajero espera para irse.
-MAX_PIEZAS_EXACTO = 4000
+# Lo que de verdad cuesta no son las piezas sino los MONTOS que hay que recorrer. Con dos
+# piezas basta para reventar si una denominación es absurda: {1: 1, 100000000000000000000: 1}
+# pedía una lista de 10^20 posiciones y se caía con OverflowError. Así que el tope es sobre
+# los estados del recorrido, y por encima se responde con el reparto simple —peor, pero
+# instantáneo— en vez de dejar la caja pensando mientras el cajero espera para irse.
+MAX_ESTADOS = 2_000_000
+MAX_PIEZAS_EXACTO = 20_000
 
 
 def _limpio(conteo: dict | None) -> dict[int, int]:
@@ -79,7 +81,16 @@ def _resultado(conteo: dict[int, int], dejar: dict[int, int], objetivo: int) -> 
 
 
 def _aproximado(conteo: dict[int, int], objetivo: int, preferir: str = "sencillo") -> dict:
-    """Reparto de emergencia, sin buscar el exacto: de la punta que corresponda."""
+    """Reparto de emergencia, cuando el recorrido exacto saldría carísimo.
+
+    Antes de rendirse prueba lo obvio: que el objetivo salga con una sola denominación. Es
+    el caso más común de los que el recorrido simple tiraba a la basura —4.000 monedas de
+    50 y un objetivo de 50 daban «no se puede»— y cuesta nada comprobarlo.
+    """
+    for den in sorted(conteo, reverse=(preferir == "grande")):
+        if objetivo % den == 0 and conteo[den] >= objetivo // den:
+            return _resultado(conteo, {den: objetivo // den}, objetivo)
+
     dejar: dict[int, int] = {}
     falta = objetivo
     for den in sorted(conteo, reverse=(preferir == "grande")):
@@ -119,10 +130,20 @@ def repartir(conteo: dict | None, objetivo: int, preferir: str = "sencillo") -> 
         # No alcanza para el fondo: se deja todo y el sobre va vacío. Es exacto solo si
         # justo daba.
         return _resultado(conteo, dict(conteo), objetivo)
-    if sum(conteo.values()) > MAX_PIEZAS_EXACTO:
+    # De cada denominación no puede hacer falta más de lo que cabe en el objetivo: para
+    # juntar 50 pesos sobran 3.999 de las 4.000 monedas de 50 que haya en el cajón. Recortar
+    # antes de recorrer no cambia ninguna respuesta —lo recortado nunca entraría— y evita
+    # que un cajón muy cargado caiga al reparto simple, que ahí tiraba a la basura
+    # soluciones exactas y decía «no se puede» cuando sí se podía.
+    util = {den: min(cant, objetivo // den + 1) for den, cant in conteo.items()}
+    dens = sorted(util)
+    paso_util = reduce(gcd, dens)
+    tope_util = min(sum(d * c for d, c in util.items()), objetivo + dens[-1])
+    if (sum(util.values()) > MAX_PIEZAS_EXACTO
+            or tope_util // paso_util > MAX_ESTADOS):
         return _aproximado(conteo, objetivo, preferir)
 
-    dens = sorted(conteo)
+    conteo_original, conteo = conteo, util
     # Todas las denominaciones son múltiplos de su máximo común divisor (con pesos chilenos,
     # 10). Trabajar en esa unidad divide por diez los estados a recorrer.
     paso = reduce(gcd, dens)
@@ -175,7 +196,9 @@ def repartir(conteo: dict | None, objetivo: int, preferir: str = "sencillo") -> 
         if k:
             dejar[den] = k
             s -= k * (den // paso)
-    return _resultado(conteo, dict(sorted(dejar.items())), objetivo)
+    # Contra el conteo original, no contra el recortado: lo que se recortó sigue en el
+    # cajón y tiene que aparecer en el sobre. Es la regla que no se puede romper.
+    return _resultado(conteo_original, dict(sorted(dejar.items())), objetivo)
 
 
 def plan_de_cierre(conteo: dict | None, propina: int = 0, fondo: int = 0) -> dict:

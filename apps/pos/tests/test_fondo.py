@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from core.fondo import plan_de_cierre, repartir, repartir_fondo
+from core.schemas import PlanCierreIn
 
 # El conteo de esa noche: $467.180 en 167 piezas.
 REAL = {20000: 6, 10000: 23, 5000: 15, 2000: 0, 1000: 36, 500: 0, 100: 39, 50: 45, 10: 3}
@@ -256,3 +257,67 @@ def test_un_monto_negativo_lo_rechaza_el_schema(cliente, caja):
     r = cliente.post("/api/v1/turnos/plan-cierre",
                      json={"conteo": {"1000": 5}, "fondo": -100})
     assert r.status_code == 422
+
+
+# =============================================================================
+# Lo que encontró la revisión adversarial
+# =============================================================================
+
+def test_no_tira_a_la_basura_una_solucion_exacta_por_tener_muchas_monedas():
+    """4.000 monedas de 50 y un objetivo de 50: la respuesta es UNA moneda.
+
+    Antes el cajón cargado se pasaba del tope de piezas y caía al reparto simple, que va de
+    la más chica hacia arriba: devolvía $10 y decía «no se puede formar». Las dos cosas eran
+    falsas, y la pantalla las mostraba como si fueran ciertas.
+    """
+    r = repartir({50: 4000, 10: 1}, 50, preferir="sencillo")
+    _cuadra({50: 4000, 10: 1}, r)
+    assert r["total_dejado"] == 50 and r["exacto"] is True
+
+
+def test_lo_mismo_sacando_en_billetes_grandes():
+    r = repartir({2000: 4000, 5000: 1}, 6000, preferir="grande")
+    assert r["total_dejado"] == 6000 and r["exacto"] is True
+
+
+def test_una_denominacion_absurda_no_tumba_la_caja():
+    """Dos piezas bastaban para reventar: pedía una lista de 10^20 posiciones.
+
+    Lo que cuesta no son las piezas sino los montos que hay que recorrer, así que el tope va
+    sobre eso. Una caja no puede caerse a las once de la noche por un dato raro.
+    """
+    r = repartir({1: 1, 10 ** 20: 1}, 1)
+    assert r["total_dejado"] == 1
+    _cuadra({1: 1, 10 ** 20: 1}, r)
+
+
+def test_un_cajon_gigante_sigue_cuadrando_exacto():
+    conteo = {1000: 50000, 500: 50000, 100: 50000}
+    r = repartir(conteo, 60000)
+    _cuadra(conteo, r)
+    assert r["total_dejado"] == 60000
+
+
+def test_el_recorte_no_se_queda_con_lo_que_no_uso():
+    """Se recortan existencias para no recorrer de más, pero lo recortado sigue en el cajón
+    y tiene que aparecer en el sobre: es la regla que no se puede romper."""
+    conteo = {50: 4000, 10: 1}
+    r = repartir(conteo, 50)
+    assert r["sobre"].get(50) == 3999 and r["sobre"].get(10) == 1
+
+
+# --- el schema ---------------------------------------------------------------
+
+def test_la_api_no_pierde_piezas_con_denominaciones_repetidas():
+    """«1000» y «01000» son la misma moneda y la pantalla puede mandar las dos.
+
+    Reemplazando en vez de sumar se perdían piezas contadas a mano: la cuenta decía 3.000
+    cuando habían llegado 5.000. El núcleo sí las sumaba, así que la API rompía una regla
+    que el cálculo respetaba.
+    """
+    assert PlanCierreIn(conteo={"1000": 2, "01000": 3}).conteo == {1000: 5}
+
+
+def test_la_api_descarta_una_denominacion_imposible():
+    assert PlanCierreIn(conteo={"1": 1, "100000000000000000000": 1}).conteo == {1: 1}
+    assert PlanCierreIn(conteo={"0": 5, "-100": 2, "1000": 1}).conteo == {1000: 1}

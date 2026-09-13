@@ -2000,6 +2000,12 @@ function mostrarCuadre(tu) {
           equipo su propina sacándola del cajón, ponla acá: esa plata salió del
           cajón y el banco todavía no la deposita, así que si no la anotas
           aparece como si faltara.</p>` : ""}
+        <label class="campo"><span>¿Cuánta propina vas a sacar AHORA del cajón?</span>
+          <input id="tPropinaSacar" type="text" inputmode="numeric" placeholder="0"></label>
+        <p class="ayuda" style="margin:-6px 0 12px;font-size:12.5px">Solo para decirte qué
+          billetes separar, del dinero que acabas de contar. <b>Si ya la sacaste antes de
+          contar, déjalo en cero</b>: en ese caso el cajón ya no la tiene y sacarla de nuevo
+          sería pagarla dos veces. El número de arriba es otra cosa: ése es para el cuadre.</p>
         <label class="campo"><span>¿Cuánto dejas de fondo para mañana?</span>
           <input id="tFondo" type="text" inputmode="numeric" value="${fondoPrevio || ""}" placeholder="0"></label>
         <p class="ayuda" style="margin:-6px 0 10px;font-size:12.5px">Es plata en
@@ -2020,13 +2026,21 @@ function mostrarCuadre(tu) {
      acá: dos implementaciones del mismo cuadre terminan dando números distintos, y en
      el cierre eso es exactamente lo que no puede pasar. */
   let pidiendoPlan = null;
+  // Cada cálculo lleva número. Al escribir se disparan varios y no vuelven en orden: sin
+  // esto, la respuesta del fondo viejo puede pisar a la del nuevo y el cajero separaría una
+  // cantidad distinta de la que confirma.
+  let ultimoPlan = 0;
   const planDelCierre = (fondo) => {
     const zonaPlan = $("#tPlanCierre");
     if (!zonaPlan) return;
-    const propina = soloNumeros(($("#tPropinasPagadas") || {}).value || 0);
+    clearTimeout(pidiendoPlan);
+    const mio = ++ultimoPlan;
+    // La propina del plan es la que se va a sacar AHORA, del dinero recién contado. NO se
+    // puede usar tPropinasPagadas: ésa ya salió del cajón —el cuadre la descuenta del
+    // efectivo esperado— así que decir de nuevo qué billetes sacar haría pagarla dos veces.
+    const propina = soloNumeros(($("#tPropinaSacar") || {}).value || 0);
     if (!fondo && !propina) { zonaPlan.innerHTML = ""; return; }
     // Se escribe dígito a dígito: solo se le pregunta al servidor cuando el dedo para.
-    clearTimeout(pidiendoPlan);
     pidiendoPlan = setTimeout(async () => {
       let plan;
       try {
@@ -2034,7 +2048,8 @@ function mostrarCuadre(tu) {
           method: "POST",
           body: JSON.stringify({ conteo: conteoActual, propina, fondo }),
         });
-      } catch (e) { zonaPlan.innerHTML = ""; return; }
+      } catch (e) { if (mio === ultimoPlan) zonaPlan.innerHTML = ""; return; }
+      if (mio !== ultimoPlan) return;        // llegó tarde: ya hay otro cálculo más nuevo
       const pila = (titulo, d, aviso) => {
         const piezas = Object.keys(d.detalle || {}).sort((a, b) => b - a)
           .map((v) => `${d.detalle[v]} de ${clp(v)}`).join(" · ");
@@ -2048,7 +2063,10 @@ function mostrarCuadre(tu) {
              "Con lo que hay en el cajón no se puede juntar esa propina justa; esto es lo "
              + "más cerca que se llega.")
         + pila("Deja en la caja", plan.fondo,
-               "Con lo que hay no se puede formar ese fondo exacto; esto es lo más cerca.")
+               `Con lo que hay en el cajón no se puede dejar justo eso. Lo más cerca es
+                <b>${clp(plan.fondo.total)}</b>: si vas a separar esto,
+                <b>cambia el fondo a esa cifra</b> antes de cerrar, o el cierre va a quedar
+                anotando un fondo distinto del que dejaste.`)
         + pila("Va al sobre", { detalle: plan.sobre.detalle, total: plan.sobre.total,
                                 exacto: true }, "");
     }, 250);
@@ -2068,6 +2086,8 @@ function mostrarCuadre(tu) {
     planDelCierre(fondo);
   };
   $("#tFondo").addEventListener("input", pintarRetiro);
+  const campoSacar = $("#tPropinaSacar");
+  if (campoSacar) campoSacar.addEventListener("input", pintarRetiro);
   pintarRetiro();
   const campoProp = $("#tPropinasPagadas");
   if (campoProp) {

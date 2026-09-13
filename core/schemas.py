@@ -295,14 +295,20 @@ class PlanCierreIn(BaseModel):
     def claves_enteras(cls, v):
         if not isinstance(v, dict):
             return {}
-        salida = {}
+        salida: dict[int, int] = {}
         for den, cant in v.items():
             try:
                 den, cant = int(den), int(cant)
             except (TypeError, ValueError):
                 continue
-            if den > 0 and cant > 0:
-                salida[den] = cant
+            # Un billete de más de un millón no existe; una denominación absurda solo puede
+            # venir de un error, y aceptarla haría trabajar a la caja para nada.
+            if not (0 < den <= 1_000_000) or cant <= 0:
+                continue
+            # SUMAR y no reemplazar: "1000" y "01000" son la misma moneda, y la pantalla
+            # puede mandar las dos. Reemplazando se perdían piezas contadas a mano — la
+            # cuenta decía 3.000 cuando habían llegado 5.000.
+            salida[den] = salida.get(den, 0) + cant
         return salida
 
 
