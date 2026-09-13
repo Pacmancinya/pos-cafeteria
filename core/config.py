@@ -111,8 +111,47 @@ PERMISOS = {
 }
 
 
-def puede(rol: str, permiso: str) -> bool:
-    return permiso in PERMISOS.get(rol, ())
+# Todo lo que se puede dar o quitar, en el orden en que tiene sentido leerlo en la
+# pantalla del equipo. Los nombres son los que ve el dueño, no los de la API.
+CATALOGO_DE_PERMISOS = (
+    ("vender", "Vender"),
+    ("anular", "Anular una venta del día"),
+    ("anular_pasado", "Anular ventas de cajas ya cerradas"),
+    ("turno_abrir", "Abrir la caja"),
+    ("turno_cerrar", "Cerrar su caja"),
+    ("turno_cerrar_ajeno", "Cerrar la caja de otro"),
+    ("caja_retirar", "Sacar plata del cajón"),
+    ("ver_dia", "Ver El día"),
+    ("ver_informes", "Ver los informes"),
+    ("editar_carta", "Editar la carta y los precios"),
+    ("inventario", "Ver la bodega"),
+    ("inventario_ajustar", "Corregir el stock"),
+    ("usuarios", "Crear y editar personas"),
+    ("config", "Cambiar los ajustes"),
+)
+
+TODOS_LOS_PERMISOS = tuple(clave for clave, _ in CATALOGO_DE_PERMISOS)
+
+
+def permisos_de(rol: str, propios: str = "") -> frozenset:
+    """Lo que esta persona puede hacer.
+
+    Sin nada propio manda el rol, que es lo de siempre y lo que tiene el 99% de la gente.
+    Con permisos propios escritos, esos MANDAN sobre el rol: así se puede tener a alguien
+    que solo vende —llega, abre la caja, vende, cierra y se va— sin inventar un rol nuevo
+    por cada combinación que pida un local.
+
+    Se filtran contra el catálogo a propósito: un permiso escrito a mano que ya no existe
+    no puede colarse, y uno que se saque del programa deja de valer aunque esté guardado.
+    """
+    escritos = [p.strip() for p in (propios or "").split(",") if p.strip()]
+    if escritos:
+        return frozenset(p for p in escritos if p in TODOS_LOS_PERMISOS)
+    return frozenset(PERMISOS.get(rol, ()))
+
+
+def puede(rol: str, permiso: str, propios: str = "") -> bool:
+    return permiso in permisos_de(rol, propios)
 
 
 # Cuántos minutos sin tocar nada antes de que la caja se bloquee sola. Existe

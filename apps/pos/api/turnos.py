@@ -567,7 +567,7 @@ def cerrar(datos: CerrarTurnoIn, s: Session = Depends(get_session),
         raise HTTPException(409, "No hay ningún turno abierto")
 
     dueno_del_turno, _ = _quien_la_abrio(s, t)
-    if dueno_del_turno and dueno_del_turno != quien.get("id")             and not puede(quien.get("rol", ""), "turno_cerrar_ajeno"):
+    if dueno_del_turno and dueno_del_turno != quien.get("id")             and not puede(quien.get("rol", ""), "turno_cerrar_ajeno", quien.get("permisos", "")):
         raise HTTPException(403, _no_es_tuya(s, t))
 
     # Las propinas de tarjeta que se pagaron al equipo EN EFECTIVO salieron del

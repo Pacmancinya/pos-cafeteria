@@ -57,6 +57,9 @@ class Usuario(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str = Field(index=True)        # como se le dice en el local: "Javi"
     rol: str = "cajero"                    # dueno | cajero (ver core.config.PERMISOS)
+    # Permisos propios, separados por coma. Vacío = los de su rol, que es lo normal.
+    # Existe para el caso "que solo venda": llega, abre la caja, vende, cierra y se va.
+    permisos: str = ""
     pin_hash: str = ""                     # pbkdf2_sha256$iteraciones$sal$hash
     activo: bool = True                    # borrado lógico: las ventas apuntan acá
     color: str = ""                        # su tarjeta en la pantalla de candado

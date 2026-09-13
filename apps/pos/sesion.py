@@ -202,6 +202,9 @@ def quien_es(request: Request, s: Session = Depends(get_session)) -> dict:
     # El rol se lee de la base y no de la galleta: si al cajero lo ascienden o
     # lo bajan, tiene efecto al toque y no cuando venza la galleta.
     return {"id": u.id, "nombre": u.nombre, "rol": u.rol,
+            # Los permisos propios viajan con el resto: se leen de la base en cada
+            # petición, igual que el rol, así que quitarle uno tiene efecto al toque.
+            "permisos": u.permisos or "",
             "presencia_id": carga.get("pre"), "provisorio": False}
 
 
@@ -217,7 +220,7 @@ def exige(permiso: str):
         @router.post("/productos", dependencies=[Depends(exige("editar_carta"))])
     """
     def guardia(quien: dict = Depends(exige_entrar)) -> dict:
-        if not puede(quien["rol"], permiso):
+        if not puede(quien["rol"], permiso, quien.get("permisos", "")):
             raise HTTPException(
                 403, f"{quien['nombre'] or 'Este usuario'} no tiene permiso para esto. "
                      "Lo puede hacer el dueño.")

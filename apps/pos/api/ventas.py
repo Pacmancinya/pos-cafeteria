@@ -281,7 +281,7 @@ def anular_venta(venta_id: int, datos: AnularIn, s: Session = Depends(get_sessio
     if v.turno_id:
         t = s.get(Turno, v.turno_id)
         de_turno_cerrado = bool(t and t.cerrado_at)
-    if de_turno_cerrado and not puede(quien.get("rol", ""), "anular_pasado"):
+    if de_turno_cerrado and not puede(quien.get("rol", ""), "anular_pasado", quien.get("permisos", "")):
         raise HTTPException(
             403, "Esa venta es de una caja que ya se cerró. Solo el dueño puede anularla.")
 
