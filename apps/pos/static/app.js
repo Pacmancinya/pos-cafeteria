@@ -2006,11 +2006,53 @@ function mostrarCuadre(tu) {
           <b>efectivo</b>, la que queda en el cajón. La tarjeta y las transferencias
           no entran acá: ésas ya están en el banco.</p>
         <div class="medios-turno" id="tRetiro"></div>
+        <div class="medios-turno" id="tPlanCierre"></div>
         <label class="campo"><span>Nota (opcional)</span>
           <input id="tNota" type="text" value="${esc(notaPrevia)}"
                  placeholder="Ej: le di vuelto de más a un cliente"></label>
       </div>
     </div>`;
+
+  /* Qué billetes y monedas apartar, no solo cuánto. Es lo que evita el recuento de
+     las once de la noche: se cuenta el cajón una vez y la caja dice qué separar.
+
+     El reparto lo hace el servidor (core/fondo.py, con sus pruebas) y NO se calcula
+     acá: dos implementaciones del mismo cuadre terminan dando números distintos, y en
+     el cierre eso es exactamente lo que no puede pasar. */
+  let pidiendoPlan = null;
+  const planDelCierre = (fondo) => {
+    const zonaPlan = $("#tPlanCierre");
+    if (!zonaPlan) return;
+    const propina = soloNumeros(($("#tPropinasPagadas") || {}).value || 0);
+    if (!fondo && !propina) { zonaPlan.innerHTML = ""; return; }
+    // Se escribe dígito a dígito: solo se le pregunta al servidor cuando el dedo para.
+    clearTimeout(pidiendoPlan);
+    pidiendoPlan = setTimeout(async () => {
+      let plan;
+      try {
+        plan = await api("/turnos/plan-cierre", {
+          method: "POST",
+          body: JSON.stringify({ conteo: conteoActual, propina, fondo }),
+        });
+      } catch (e) { zonaPlan.innerHTML = ""; return; }
+      const pila = (titulo, d, aviso) => {
+        const piezas = Object.keys(d.detalle || {}).sort((a, b) => b - a)
+          .map((v) => `${d.detalle[v]} de ${clp(v)}`).join(" · ");
+        if (!piezas) return "";
+        return `<div style="margin-top:8px">
+          <b>${titulo}: ${clp(d.total)}</b><div>${piezas}</div>
+          ${d.exacto ? "" : `<div class="ayuda" style="font-size:12px">${aviso}</div>`}</div>`;
+      };
+      zonaPlan.innerHTML =
+        pila("Saca para la propina", plan.propina,
+             "Con lo que hay en el cajón no se puede juntar esa propina justa; esto es lo "
+             + "más cerca que se llega.")
+        + pila("Deja en la caja", plan.fondo,
+               "Con lo que hay no se puede formar ese fondo exacto; esto es lo más cerca.")
+        + pila("Va al sobre", { detalle: plan.sobre.detalle, total: plan.sobre.total,
+                                exacto: true }, "");
+    }, 250);
+  };
 
   const pintarRetiro = () => {
     const escrito = soloNumeros($("#tFondo").value);
@@ -2023,6 +2065,7 @@ function mostrarCuadre(tu) {
          en el cajón, así que no puedes dejar más que eso de fondo.</div>` : "";
     $("#tRetiro").innerHTML =
       `Te llevas del cajón (efectivo): <b>${clp(contado - fondo)}</b>${recorte}`;
+    planDelCierre(fondo);
   };
   $("#tFondo").addEventListener("input", pintarRetiro);
   pintarRetiro();
