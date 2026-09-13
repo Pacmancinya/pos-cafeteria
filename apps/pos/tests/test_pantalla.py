@@ -40,6 +40,111 @@ import pytest
 
 ESTATICOS = Path(__file__).resolve().parents[1] / "static"
 
+
+def test_productos_varios_en_la_pantalla(tmp_path):
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Se necesita Node para ejecutar la pantalla")
+    js = (ESTATICOS / "app.js").read_text(encoding="utf-8")
+    funciones = ["function dialogoVarios()", "function agregarVarios()",
+                 "function lineasParaVenta()", "function cambiarCantidad(",
+                 "function quitarLineaDelPedido(", "function limpiarCarritoDeBorrados()",
+                 "function pintarCarrito()", "function pintarQuien()",
+                 "async function api(", "async function confirmarVenta()"]
+    prueba = "\n".join(_cuerpo_de(js, firma) + "\n}" for firma in funciones)
+    prueba += r"""
+const assert = require('node:assert/strict');
+const datos = new Map();
+const $ = (s) => {
+  if (!datos.has(s)) datos.set(s, {value: '', innerHTML: '', hidden: false,
+    classList: {add() {}, remove() {}}, focus() {}});
+  return datos.get(s);
+};
+const $$ = () => [];
+let permiso = false;
+const puedo = (p) => p === 'cobrar_varios' && permiso;
+const SESION = {provisorio: true};
+let carrito = [];
+let avisos = [];
+const avisar = (s) => avisos.push(s);
+const esc = (s) => String(s).replaceAll('<', '&lt;');
+const clp = (n) => '$' + n;
+const guardarCarrito = () => {};
+const totalCarrito = () => carrito.reduce((s,l) => s + l.precio*l.cantidad, 0);
+const CATEGORIAS = [{productos: [{id: 1}]}];
+const soloNumeros = (s) => Number(s) || 0;
+const medioPago = 'efectivo', mixto = false, ESPERA_LECTURA = 15000;
+const productoDeLaCarta = () => {throw Error('Una línea manual no consulta stock');};
+const sumarAlPedido = () => {throw Error('Una línea manual no es producto');};
+(async () => {
+  pintarQuien();
+  assert.equal($('#btnVarios').hidden, true);
+  dialogoVarios();
+  assert.equal($('#dialogoCodigo').innerHTML, '');
+  permiso = true;
+  pintarQuien();
+  assert.equal($('#btnVarios').hidden, false);
+  dialogoVarios();
+  assert.match($('#dialogoCodigo').innerHTML, /data-teclado="monto"/);
+  for (const monto of ['', '0', '-10', '1,5', '1.5', 'abc', '99000001']) {
+    $('#variosMonto').value = monto;
+    agregarVarios();
+    assert.equal(carrito.length, 0, monto);
+  }
+  $('#variosMonto').value = '1.500';
+  $('#variosNombre').value = '  Bolsa  ';
+  agregarVarios();
+  const id = carrito[0].id;
+  cambiarCantidad(id, 1);
+  assert.equal(carrito[0].cantidad, 2);
+  assert.equal(totalCarrito(), 3000);
+  assert.match($('#lineas').innerHTML, /Productos varios · Monto a mano/);
+  assert.match($('#lineas').innerHTML, /data-quitar-linea/);
+  $('#variosNombre').value = '';
+  agregarVarios();
+  assert.equal(carrito[1].nombre, 'Varios');
+  assert.notEqual(carrito[1].id, id);
+  quitarLineaDelPedido(carrito[1].id);
+  carrito.push({id: 1, nombre: 'Café', precio: 999999, cantidad: 1});
+  carrito.push({id: 2, nombre: 'Borrado', precio: 100, cantidad: 1});
+  limpiarCarritoDeBorrados();
+  assert.equal(carrito.length, 2);
+  assert.deepEqual(lineasParaVenta(), [
+    {nombre: 'Bolsa', precio: 1500, cantidad: 2}, {producto_id: 1, cantidad: 1}
+  ]);
+  let enviado;
+  globalThis.fetch = async (ruta, opciones) => {
+    enviado = JSON.parse(opciones.body);
+    return {ok: false, status: 403, json: async () => ({detail: 'No puedes cobrar varios'})};
+  };
+  await confirmarVenta();
+  assert.deepEqual(enviado.lineas, lineasParaVenta());
+  assert.equal('producto_id' in enviado.lineas[0], false);
+  assert.equal('precio' in enviado.lineas[1], false);
+  assert.equal(avisos.at(-1), 'No puedes cobrar varios');
+  assert.equal(carrito.length, 2, 'El rechazo conserva el pedido');
+  assert.equal($('#cobroConfirmar').disabled, false);
+  permiso = false;
+  pintarQuien();
+  assert.equal($('#btnVarios').hidden, true);
+  agregarVarios();
+  assert.equal(carrito.length, 2);
+  cambiarCantidad(id, -1);
+  assert.equal(carrito[0].cantidad, 1);
+  quitarLineaDelPedido(id);
+  assert.deepEqual(lineasParaVenta(), [{producto_id: 1, cantidad: 1}]);
+})().catch((e) => { console.error(e); process.exitCode = 1; });
+"""
+    archivo = tmp_path / "varios.js"
+    archivo.write_text(prueba, encoding="utf-8")
+    salida = subprocess.run([node, str(archivo)], capture_output=True, text=True, encoding="utf-8")
+    assert salida.returncode == 0, salida.stderr
+    index = (ESTATICOS / "index.html").read_text(encoding="utf-8")
+    assert 'id="btnVarios" hidden' in index
+
 # Los backticks sí pueden abarcar varias líneas: son plantillas y el código
 # está lleno de HTML escrito así. Solo las comillas simples y dobles no pueden.
 DE_UNA_LINEA = ("'", '"')

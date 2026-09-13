@@ -185,9 +185,9 @@ function limpiarCarritoDeBorrados() {
   const vivos = new Set();
   CATEGORIAS.forEach((c) => c.productos.forEach((p) => vivos.add(p.id)));
   const antes = carrito.length;
-  const sacados = carrito.filter((l) => !vivos.has(l.id)).map((l) => l.nombre);
+  const sacados = carrito.filter((l) => !l.manual && !vivos.has(l.id)).map((l) => l.nombre);
   if (!sacados.length) return;
-  carrito = carrito.filter((l) => vivos.has(l.id));
+  carrito = carrito.filter((l) => l.manual || vivos.has(l.id));
   pintarCarrito();
   if (antes !== carrito.length) {
     avisar(`Saqué del pedido ${sacados.length === 1 ? "un producto que ya no existe"
@@ -249,6 +249,46 @@ function buscar(texto) {
 }
 
 /* ---------------- carrito ---------------- */
+function dialogoVarios() {
+  if (!puedo("cobrar_varios")) return;
+  $("#dialogoCodigo").innerHTML = `
+    <h2>Productos varios</h2>
+    <label class="campo">Monto por unidad (obligatorio)
+      <input id="variosMonto" type="text" inputmode="numeric" data-teclado="monto"
+             placeholder="Ej. 1500" autocomplete="off" required></label>
+    <label class="campo">Descripción (opcional)
+      <input id="variosNombre" type="text" maxlength="60" placeholder="Varios"></label>
+    <div class="dialogo__pie">
+      <button type="button" class="btn" data-cerrar-capa>Cancelar</button>
+      <button type="button" class="btn btn--cobrar" id="agregarVarios">Agregar al pedido</button>
+    </div>`;
+  $("#capaCodigo").classList.add("is-on");
+  $("#variosMonto").focus();
+}
+
+function agregarVarios() {
+  if (!puedo("cobrar_varios")) return avisar("No tienes permiso para cobrar productos varios.", true);
+  const texto = $("#variosMonto").value.trim();
+  const precio = Number(texto.replace(/\./g, ""));
+  if (!/^(\d+|\d{1,3}(\.\d{3})+)$/.test(texto)
+      || !Number.isSafeInteger(precio) || precio <= 0 || precio > 99000000) {
+    return avisar("Escribe un monto entre $1 y $99.000.000, sin decimales.", true);
+  }
+  const nombre = $("#variosNombre").value.trim() || "Varios";
+  if (nombre.length > 60) return avisar("La descripción puede tener hasta 60 caracteres.", true);
+  // IDs locales negativos: no se confunden con los productos ni viajan al servidor.
+  const id = carrito.reduce((menor, l) => Math.min(menor, l.id), 0) - 1;
+  carrito.push({ id, manual: true, nombre, precio, cantidad: 1 });
+  pintarCarrito();
+  $("#capaCodigo").classList.remove("is-on");
+}
+
+function lineasParaVenta() {
+  return carrito.map((l) => l.manual
+    ? { nombre: l.nombre, precio: l.precio, cantidad: l.cantidad }
+    : { producto_id: l.id, cantidad: l.cantidad });
+}
+
 /* ---------------- agregar al pedido ----------------
    Con TOPE en lo que queda. Antes se podía poner 12 de algo que tenía 3, y el
    inventario quedaba en −9 sin que nadie lo notara hasta el conteo.
@@ -302,11 +342,12 @@ function cambiarCantidad(id, delta) {
   // hacía: sumaba directo. Así se llegaba a 30 de algo que tenía 0, tocando +
   // treinta veces sin que nada dijera nada — el aviso solo salía al tocar el
   // producto en la grilla.
-  if (delta > 0) {
+  if (delta > 0 && !l.manual) {
     const p = productoDeLaCarta(id) || l;
     return sumarAlPedido(p);
   }
 
+  if (l.manual && l.cantidad + delta > 999) return avisar("El máximo es 999 unidades por línea.", true);
   l.cantidad += delta;
   if (l.cantidad <= 0) carrito = carrito.filter((x) => x.id !== id);
   pintarCarrito();
@@ -535,7 +576,7 @@ function pintarCarrito() {
       <div class="linea">
         <div class="linea__txt">
           <b>${esc(l.nombre)}</b>
-          <small>${clp(l.precio)} c/u</small>
+          <small>${l.manual ? "Productos varios · Monto a mano · " : ""}${clp(l.precio)} c/u</small>
         </div>
         <div class="cant">
           <button data-menos="${l.id}">−</button>
@@ -662,7 +703,7 @@ async function confirmarVenta() {
   boton.disabled = true;
   try {
     const cuerpo = {
-      lineas: carrito.map((l) => ({ producto_id: l.id, cantidad: l.cantidad })),
+      lineas: lineasParaVenta(),
       medio_pago: medioPago,
       descuento: soloNumeros($("#descuento").value),
       propina: soloNumeros($("#propina").value),
@@ -2139,6 +2180,7 @@ async function cargarSesion() {
 }
 
 function pintarQuien() {
+  $("#btnVarios").hidden = !puedo("cobrar_varios");
   const chip = $("#quienEsta");
   const equipo = $("#verEquipo");
   // Sin nadie registrado no hay equipo que administrar, y el candado tapa todo
@@ -4135,6 +4177,8 @@ document.addEventListener("click", (e) => {
       .catch((err) => avisar(err.message, true));
   }
   if (t.id === "btnCobrar") return abrirCobro();
+  if (t.id === "btnVarios") return dialogoVarios();
+  if (t.id === "agregarVarios") return agregarVarios();
   if (t.id === "btnLimpiar") { carrito = []; olvidarAvisos(); return pintarCarrito(); }
   if (t.id === "cobroCancelar") return $("#capaCobro").classList.remove("is-on");
   if (t.id === "cobroConfirmar") return confirmarVenta();
@@ -4370,7 +4414,7 @@ document.addEventListener("keydown", (e) => {
     $("#buscar").focus();
     return;
   }
-  if (e.key === "Enter" && carrito.length && !$("#capaCobro").classList.contains("is-on")) abrirCobro();
+  if (e.key === "Enter" && carrito.length && !$$(".capa.is-on").length) abrirCobro();
 });
 
 (async function iniciar() {
