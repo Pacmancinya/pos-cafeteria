@@ -25,6 +25,17 @@ combinaciones con programación dinámica y se sabe la respuesta exacta. Si el f
 puede formar** con lo que hay (pasa: quedaron puros billetes de 20.000), devuelve lo más
 cercano y lo dice, en vez de fingir que cuadró.
 
+## La propina es el mismo problema al revés
+
+Al cerrar también hay que **sacar la propina en efectivo** para repartirla. Ahí la
+preferencia se da vuelta: conviene sacarla en **billetes grandes**, porque las monedas
+tienen que quedarse en la caja para dar vuelto mañana. Misma cuenta, objetivo opuesto:
+minimizar piezas en vez de maximizarlas.
+
+Y el orden importa. La propina sale **primero**, del cajón completo: si saliera después de
+apartar el fondo se quedaría sin billetes medianos con qué formarse. El sobre es lo que
+queda, y no tiene preferencia: le da lo mismo con qué esté hecho.
+
 ## La regla que no se puede romper
 
 `dejar` + `sobre` tiene que dar **exactamente** el conteo, moneda por moneda. Esto es plata
@@ -67,11 +78,11 @@ def _resultado(conteo: dict[int, int], dejar: dict[int, int], objetivo: int) -> 
             "total_dejado": total, "exacto": total == objetivo}
 
 
-def _aproximado(conteo: dict[int, int], objetivo: int) -> dict:
-    """Reparto de emergencia: sencillo primero, sin buscar el exacto."""
+def _aproximado(conteo: dict[int, int], objetivo: int, preferir: str = "sencillo") -> dict:
+    """Reparto de emergencia, sin buscar el exacto: de la punta que corresponda."""
     dejar: dict[int, int] = {}
     falta = objetivo
-    for den in sorted(conteo):
+    for den in sorted(conteo, reverse=(preferir == "grande")):
         if falta <= 0:
             break
         usar = min(conteo[den], falta // den)
@@ -82,10 +93,21 @@ def _aproximado(conteo: dict[int, int], objetivo: int) -> dict:
 
 
 def repartir_fondo(conteo: dict | None, objetivo: int) -> dict:
-    """Qué dejar en la caja y qué va al sobre.
+    """Qué dejar en la caja y qué va al sobre. Se queda con el sencillo."""
+    return repartir(conteo, objetivo, preferir="sencillo")
 
-    `conteo` es {denominación: cantidad} de lo que se contó. Devuelve `dejar`, `sobre`,
-    `total_dejado` y `exacto` (si se pudo juntar el objetivo justo).
+
+def repartir(conteo: dict | None, objetivo: int, preferir: str = "sencillo") -> dict:
+    """Aparta `objetivo` del conteo. Devuelve `dejar`, `sobre`, `total_dejado` y `exacto`.
+
+    `preferir="sencillo"` aparta la mayor cantidad de piezas posible: es lo que se quiere
+    para el fondo de la caja, porque el sencillo es lo que sirve para dar vuelto.
+    `preferir="grande"` aparta las menos piezas posibles: es lo que se quiere para sacar la
+    propina, porque las monedas tienen que quedarse.
+
+    Cuando no se puede formar el monto justo, `sencillo` se pasa para arriba (quedarse
+    corto de vuelto mañana es peor) y `grande` se queda abajo (no se regala plata que no
+    era propina).
     """
     conteo = _limpio(conteo)
     total = sum(den * cant for den, cant in conteo.items())
@@ -98,7 +120,7 @@ def repartir_fondo(conteo: dict | None, objetivo: int) -> dict:
         # justo daba.
         return _resultado(conteo, dict(conteo), objetivo)
     if sum(conteo.values()) > MAX_PIEZAS_EXACTO:
-        return _aproximado(conteo, objetivo)
+        return _aproximado(conteo, objetivo, preferir)
 
     dens = sorted(conteo)
     # Todas las denominaciones son múltiplos de su máximo común divisor (con pesos chilenos,
@@ -107,8 +129,10 @@ def repartir_fondo(conteo: dict | None, objetivo: int) -> dict:
     tope = min(total, objetivo + dens[-1])   # más allá no puede estar lo más cercano
     n = tope // paso
 
-    # piezas[s] = máximo de piezas para juntar s*paso. -1 = no se puede armar.
-    piezas = [-1] * (n + 1)
+    # piezas[s] = las piezas que cuesta juntar s*paso, con el criterio pedido.
+    # None = ese monto no se puede armar con lo que hay.
+    mas_piezas = preferir != "grande"
+    piezas: list[int | None] = [None] * (n + 1)
     piezas[0] = 0
     usados: list[list[int]] = []
 
@@ -117,28 +141,32 @@ def repartir_fondo(conteo: dict | None, objetivo: int) -> dict:
         nueva = list(piezas)
         usa = [0] * (n + 1)
         for s in range(n + 1):
-            if piezas[s] < 0:
-                continue
             base = piezas[s]
+            if base is None:
+                continue
             for k in range(1, conteo[den] + 1):
                 s2 = s + k * salto
                 if s2 > n:
                     break
-                if base + k > nueva[s2]:
+                actual = nueva[s2]
+                if actual is None or (base + k > actual if mas_piezas else base + k < actual):
                     nueva[s2] = base + k
                     usa[s2] = k
         piezas = nueva
         usados.append(usa)
 
-    # De todo lo que se puede armar, lo más cercano al objetivo. En un empate gana el de
-    # arriba: quedarse corto de sencillo mañana es peor que mandar un poco menos al sobre.
+    # De todo lo que se puede armar, lo más cercano al objetivo. En un empate, para el
+    # fondo gana el de arriba (quedarse corto de vuelto mañana es peor) y para la propina
+    # el de abajo (no se regala plata que no era propina).
     mejor_s, mejor_dist = 0, objetivo
     for s in range(n + 1):
-        if piezas[s] < 0:
+        if piezas[s] is None:
             continue
         dist = abs(s * paso - objetivo)
-        if dist < mejor_dist or (dist == mejor_dist and s * paso > mejor_s * paso):
+        if dist < mejor_dist:
             mejor_s, mejor_dist = s, dist
+        elif dist == mejor_dist and mas_piezas and s * paso > mejor_s * paso:
+            mejor_s = s
 
     dejar: dict[int, int] = {}
     s = mejor_s
@@ -148,3 +176,27 @@ def repartir_fondo(conteo: dict | None, objetivo: int) -> dict:
             dejar[den] = k
             s -= k * (den // paso)
     return _resultado(conteo, dict(sorted(dejar.items())), objetivo)
+
+
+def plan_de_cierre(conteo: dict | None, propina: int = 0, fondo: int = 0) -> dict:
+    """Las tres pilas del cierre: la propina que sale, el fondo que queda y el sobre.
+
+    La propina se aparta PRIMERO, del cajón completo: si se apartara después del fondo se
+    quedaría sin billetes medianos con qué formarse. Después se arma el fondo con lo que
+    queda, quedándose con el sencillo. Y el sobre es, literalmente, lo que sobra.
+
+    Devuelve cada pila con su detalle y su total, y si cada una se pudo formar justa.
+    """
+    conteo = _limpio(conteo)
+    prop = repartir(conteo, propina, preferir="grande")
+    resto = prop["sobre"]
+    caja = repartir(resto, fondo, preferir="sencillo")
+    return {
+        "contado": sum(d * c for d, c in conteo.items()),
+        "propina": {"detalle": prop["dejar"], "total": prop["total_dejado"],
+                    "exacto": prop["exacto"]},
+        "fondo": {"detalle": caja["dejar"], "total": caja["total_dejado"],
+                  "exacto": caja["exacto"]},
+        "sobre": {"detalle": caja["sobre"],
+                  "total": sum(d * c for d, c in caja["sobre"].items())},
+    }

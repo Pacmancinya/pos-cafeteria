@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.fondo import repartir_fondo
+from core.fondo import plan_de_cierre, repartir, repartir_fondo
 
 # El conteo de esa noche: $467.180 en 167 piezas.
 REAL = {20000: 6, 10000: 23, 5000: 15, 2000: 0, 1000: 36, 500: 0, 100: 39, 50: 45, 10: 3}
@@ -126,3 +126,89 @@ def test_un_cajon_enorme_responde_igual_sin_colgarse():
     r = repartir_fondo(conteo, 60000)
     _cuadra(conteo, r)
     assert r["total_dejado"] == 60000
+
+
+# =============================================================================
+# La propina: el mismo problema al revés
+# =============================================================================
+
+def test_la_propina_sale_en_billetes_grandes():
+    """Las monedas tienen que QUEDARSE en la caja: mañana son el vuelto."""
+    r = repartir(REAL, 20000, preferir="grande")
+    _cuadra(REAL, r)
+    assert r["exacto"] is True
+    assert r["dejar"] == {20000: 1}          # un billete, no veinte de mil
+    assert sum(r["dejar"].values()) == 1
+
+
+def test_sacar_la_propina_no_vacia_el_sencillo():
+    conteo = {10000: 2, 1000: 5, 100: 30, 50: 20}
+    r = repartir(conteo, 10000, preferir="grande")
+    _cuadra(conteo, r)
+    assert r["dejar"] == {10000: 1}
+    assert r["sobre"][100] == 30 and r["sobre"][50] == 20
+
+
+def test_si_la_propina_no_es_exacta_se_queda_abajo():
+    """No se regala plata que no era propina."""
+    conteo = {1000: 10}
+    r = repartir(conteo, 2500, preferir="grande")
+    assert r["total_dejado"] == 2000 and r["exacto"] is False
+
+
+def test_el_fondo_en_cambio_se_pasa_para_arriba():
+    """La misma situación, criterio opuesto: quedarse corto de vuelto mañana es peor."""
+    conteo = {1000: 10}
+    assert repartir(conteo, 2500, preferir="sencillo")["total_dejado"] == 3000
+
+
+# =============================================================================
+# El cierre completo: propina, fondo y sobre
+# =============================================================================
+
+def _las_tres_cuadran(conteo: dict, plan: dict) -> None:
+    """La propiedad del cierre: las TRES pilas juntas son exactamente lo contado."""
+    for den in conteo:
+        repartido = (plan["propina"]["detalle"].get(den, 0)
+                     + plan["fondo"]["detalle"].get(den, 0)
+                     + plan["sobre"]["detalle"].get(den, 0))
+        assert repartido == conteo[den], f"no cuadra la denominación {den}"
+    assert (plan["propina"]["total"] + plan["fondo"]["total"]
+            + plan["sobre"]["total"]) == plan["contado"]
+
+
+def test_el_cierre_reparte_las_tres_pilas_sin_perder_una_moneda():
+    plan = plan_de_cierre(REAL, propina=18500, fondo=60000)
+    _las_tres_cuadran(REAL, plan)
+    assert plan["contado"] == 467180
+
+
+def test_la_propina_sale_primero_para_poder_formarse():
+    """Si saliera después del fondo se quedaría sin billetes medianos con qué armarse."""
+    plan = plan_de_cierre(REAL, propina=18500, fondo=60000)
+    assert plan["propina"]["exacto"] is True
+    assert plan["propina"]["total"] == 18500
+    assert plan["fondo"]["exacto"] is True
+    assert plan["fondo"]["total"] == 60000
+
+
+def test_un_cierre_sin_propina_es_solo_fondo_y_sobre():
+    plan = plan_de_cierre(REAL, propina=0, fondo=60000)
+    _las_tres_cuadran(REAL, plan)
+    assert plan["propina"]["detalle"] == {} and plan["propina"]["total"] == 0
+    assert plan["fondo"]["total"] == 60000
+
+
+def test_un_cierre_sin_nada_manda_todo_al_sobre():
+    plan = plan_de_cierre(REAL, propina=0, fondo=0)
+    _las_tres_cuadran(REAL, plan)
+    assert plan["sobre"]["total"] == 467180
+
+
+def test_si_no_alcanza_para_todo_lo_dice_en_vez_de_inventar():
+    conteo = {1000: 10}
+    plan = plan_de_cierre(conteo, propina=5000, fondo=60000)
+    _las_tres_cuadran(conteo, plan)
+    assert plan["propina"]["total"] == 5000 and plan["propina"]["exacto"] is True
+    assert plan["fondo"]["exacto"] is False      # solo quedaban 5.000
+    assert plan["sobre"]["total"] == 0
