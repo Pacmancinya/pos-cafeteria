@@ -11,6 +11,13 @@ const soloNumeros = (t) => parseInt(String(t).replace(/\D/g, ""), 10) || 0;
 const esc = (t) => String(t == null ? "" : t)
   .replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
+/* El mismo 19% que usa el servidor (core/config.py). Acá se usa para una sola
+   cosa: cuando el dueño compra con factura, el precio de la factura viene SIN
+   IVA, y sugerirle un precio sobre ese número le daría un margen que no existe
+   —el 19% que falta se lo come el IVA al vender. Hay una prueba que compara
+   este número con el del servidor. */
+const IVA = 0.19;
+
 let CATEGORIAS = [];
 let catActiva = null;
 // El carrito vive en el navegador, pero guardado: si al cajero se le cierra la
@@ -439,7 +446,6 @@ async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
       <label class="campo"><span>¿A cuánto lo vendes?</span>
         <input id="cdPrecio" type="text" inputmode="numeric" placeholder="0"></label>
     </div>
-    <div id="cdSugerido"></div>
     <label class="campo"><span>¿Dónde va?</span>
       <select id="cdCat">${cats.map((c) =>
         `<option value="${c.id}"${cual && c.id === cual.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>
@@ -1348,7 +1354,20 @@ function abrirFichaProducto(id, categoriaId) {
             tener varios: la lata suelta y el pack de 6 traen códigos distintos.</p>
         </div>
 
-        <div class="tal-cual" id="zonaTalCual" data-producto="${p.id}"></div>
+        <div class="tal-cual" id="zonaTalCual" data-producto="${p.id == null ? "" : p.id}"></div>
+
+        <details class="avanzado" id="fAvanzado">
+          <summary>Sacar el precio desde lo que te cuesta</summary>
+          <div class="avanzado__cuerpo">
+            <label class="campo"><span>¿Cuánto te cuesta a ti?</span>
+              <input id="fCosto" type="text" inputmode="numeric" placeholder="0"></label>
+            <label class="marca" style="margin-bottom:6px">
+              <input type="checkbox" id="fCostoConIva" checked>
+              Ese precio ya trae IVA</label>
+            <p class="ayuda" id="fCostoNota" style="margin:0 0 10px;font-size:12.5px"></p>
+            <div id="fSugerido"></div>
+          </div>
+        </details>
       </div>
 
       <div class="ficha__col">
@@ -1382,6 +1401,47 @@ function abrirFichaProducto(id, categoriaId) {
   pintarCodigos(p.id);
   if (nuevo) setTimeout(() => $("#fNombre") && $("#fNombre").focus(), 60);
 
+  const costoReal = () => costoConIva(
+    soloNumeros(($("#fCosto") || {}).value || 0),
+    !$("#fCostoConIva") || $("#fCostoConIva").checked);
+  const pintarNotaCosto = () => {
+    const nota = $("#fCostoNota");
+    if (!nota) return;
+    const escrito = soloNumeros(($("#fCosto") || {}).value || 0);
+    const conIva = $("#fCostoConIva");
+    nota.innerHTML = !escrito
+      ? "Lo que pagas por cada uno. Si compras con factura, ese precio viene sin "
+        + "IVA: desmarca la casilla y yo le sumo el 19%."
+      : (!conIva || conIva.checked
+        ? `Hago la cuenta con <b>${clp(escrito)}</b> cada uno.`
+        : `${clp(escrito)} sin IVA son <b>${clp(costoConIva(escrito, false))}</b> `
+          + "con IVA. Hago la cuenta con ese.");
+  };
+  const dibujarSugerido = () => {
+    const caja = $("#fSugerido");
+    if (!caja) return;
+    pintarNotaCosto();
+    caja.innerHTML = bloqueSugerido(costoReal(), "fPrecio");
+    if (costoReal()) refrescarSugerido();
+  };
+  if ($("#fCosto")) $("#fCosto").addEventListener("input", dibujarSugerido);
+  if ($("#fCostoConIva")) $("#fCostoConIva").addEventListener("change", dibujarSugerido);
+  dibujarSugerido();
+
+  /* Si el producto ya lleva su cuenta, el costo NO es un dato nuevo: está en la
+     Bodega y es el mismo con el que se valoriza lo que queda. Se trae de ahí para
+     que la sugerencia hable del costo de verdad y no de uno escrito de memoria.
+     Va después de dibujar y sin esperarlo: la ficha se usa igual sin esto. */
+  if (!nuevo && puedo("inventario")) {
+    api(`/productos/${id}/receta`).then((r) => {
+      const campo = $("#fCosto");
+      if (!campo || campo.value || FICHA_ABIERTA !== id) return;   // cerró o ya escribió
+      if (!r || !r.costo_total) return;
+      campo.value = r.costo_total;
+      dibujarSugerido();
+    }).catch(() => { });        // sin permiso o sin receta: se escribe a mano
+  }
+
   $("#fGuardar").onclick = async () => {
     const antes = soloNumeros($("#fAntes").value);
     if (nuevo && !$("#fNombre").value.trim()) {
@@ -1403,6 +1463,11 @@ function abrirFichaProducto(id, categoriaId) {
         color: p.color || "",
         ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked !== p.llevar_cuenta
           ? { llevar_cuenta: $("#fCuenta").checked } : {}),
+        // El costo y la cantidad no son columnas del producto: el servidor se los
+        // pasa a su insumo, que es el mismo que muestra la Bodega.
+        ...(costoReal() ? { costo: costoReal() } : {}),
+        ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked && !p.llevar_cuenta
+          ? { stock_inicial: soloNumeros(($("#fStockInicial") || {}).value || 0) } : {}),
       });
       const guardado = nuevo
         ? await api("/productos", { method: "POST", body: cuerpo })
@@ -3936,6 +4001,18 @@ async function cargarAjustes() {
   if (antes !== usarInventario()) aplicarInventario();
 }
 
+/* Lo que el dueño escribe es lo que PAGA, y puede venir de dos partes.
+
+   Comprando en el supermercado, el precio de la boleta ya trae el IVA. Comprando
+   con factura, el de la factura es NETO: sugerir un precio de venta sobre ese
+   número daría un margen que no existe, porque al vender hay que enterar el 19%
+   que ahí no está. Por eso el precio de venta se saca SIEMPRE del costo con IVA:
+   así el margen que se pide es el margen que queda. */
+function costoConIva(escrito, yaTraeIva) {
+  const n = Math.max(0, Math.round(escrito) || 0);
+  return yaTraeIva ? n : Math.round(n * (1 + IVA));
+}
+
 function precioSugerido(costo, margenPct) {
   costo = Math.max(0, Math.round(costo) || 0);
   if (!costo) return 0;
@@ -3990,18 +4067,6 @@ function refrescarSugerido() {
   if (document.activeElement !== libre) libre.value = m;
 }
 
-function repintarSugerido(costo) {
-  const caja = $(".sugerido");
-  if (!caja) {
-    const zona = $("#zonaSugerido");
-    if (zona) { zona.innerHTML = bloqueSugerido(costo, "fPrecio"); refrescarSugerido(); }
-    return;
-  }
-  if (!costo) return caja.remove();
-  caja.dataset.costo = costo;
-  refrescarSugerido();
-}
-
 /* Guardar el margen es del dueño: es cuánto gana el local, no una preferencia
    de pantalla. Si no puede guardarlo, igual se le mueve el sugerido en su
    pantalla — negarle la cuenta no protege nada. */
@@ -4027,20 +4092,26 @@ async function pintarTalCual(p) {
   if (!zona) return;
   zona.style.display = usarInventario() ? "" : "none";
   if (!usarInventario()) { zona.innerHTML = ""; return; }
+  /* La cantidad se pregunta UNA vez: cuando se empieza a contar algo que no se
+     contaba. Si ya se lleva la cuenta, el número vive en la Bodega — volver a
+     escribirlo acá lo sumaría encima de lo que ya hay. */
+  const empieza = !p.llevar_cuenta;
   zona.innerHTML = `<label class="marca"><input id="fCuenta" type="checkbox" ${p.llevar_cuenta ? "checked" : ""}>
-    Llevar la cuenta de este</label>`;
-}
-
-async function marcarTalCual(id) {
-  try {
-    await api(`/productos/${id}/receta/tal-cual`, { method: "POST", body: JSON.stringify({
-      stock_inicial: soloNumeros(($("#tcStock") || {}).value || 0),
-      compra_costo: soloNumeros(($("#tcCosto") || {}).value || 0),
-      minimo: soloNumeros(($("#tcMinimo") || {}).value || 0) })});
-    const cat = CATEGORIAS.find((c) => c.productos.some((x) => x.id === id));
-    await pintarTalCual(cat.productos.find((x) => x.id === id));
-    avisar("Listo: ahora se descuenta solo al venderlo");
-  } catch (e) { avisar(e.message, true); }
+    Llevar la cuenta de este</label>` + (empieza ? `
+    <div id="fCuantosHay" hidden>
+      <label class="campo" style="margin:10px 0 0"><span>¿Cuántos hay ahora?</span>
+        <input id="fStockInicial" type="text" inputmode="numeric" placeholder="0"></label>
+      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Para partir con la
+        cuenta al día. Si no sabes, déjalo vacío y cuéntalos en Bodega cuando
+        puedas.</p>
+    </div>` : "");
+  const casilla = $("#fCuenta");
+  if (casilla && casilla.addEventListener) {
+    casilla.addEventListener("change", () => {
+      const caja = $("#fCuantosHay");
+      if (caja) caja.hidden = !casilla.checked;
+    });
+  }
 }
 
 /* ---------------- arranque y eventos ---------------- */
@@ -4390,7 +4461,6 @@ document.addEventListener("click", (e) => {
       .catch((err) => avisar(err.message, true));
   }
   if (cerca("data-motivo")) { $("#mMotivo").value = cerca("data-motivo").dataset.motivo; return; }
-  if (cerca("data-tal-cual")) return marcarTalCual(+cerca("data-tal-cual").dataset.talCual);
   if (cerca("data-dibujo")) {
     const b = cerca("data-dibujo");
     $("#fDibujo").value = b.dataset.dibujo;

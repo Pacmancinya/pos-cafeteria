@@ -10,7 +10,8 @@ from apps.pos import local as datos_local
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 
-from apps.pos.db.models import Categoria, CodigoBarra, Insumo, Producto, Receta
+from apps.pos.db.models import (Categoria, CodigoBarra, Insumo, Movimiento,
+                                Producto, Receta)
 from apps.pos import sesion
 from apps.pos.db.session import get_session
 from core.codigos import normalizar, por_que_no_sirve
@@ -201,6 +202,37 @@ def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Product
 EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo", "llevar_cuenta"}
 
 
+def _a_la_bodega(s: Session, p: Producto, datos: ProductoIn, quien: dict) -> None:
+    """Le pasa al insumo del producto lo que se escribió en su ficha.
+
+    Ni el costo ni la cantidad son columnas del producto: viven en el insumo que
+    lo acompaña, que es el mismo que muestra la Bodega. Escribirlos acá es lo que
+    evita crear el producto, cerrar, entrar a la Bodega y escribir lo mismo otra
+    vez — que es exactamente lo que nadie hacía.
+
+    Un producto con receta de verdad (un capuchino: leche y café) no tiene insumo
+    propio, y entonces esto no hace nada. Está bien: su costo no se escribe, se
+    suma de sus ingredientes.
+    """
+    i = s.exec(select(Insumo).where(Insumo.producto_id == p.id)).first()
+    if not i:
+        return
+    if datos.costo:
+        i.compra_costo = datos.costo
+    if datos.minimo:
+        i.minimo = datos.minimo
+    s.add(i)
+
+    # «Inicial» quiere decir que no hay historia. El libro es la prueba: si el
+    # insumo ya tiene movimientos, su saldo es real y sumarle una carga encima lo
+    # dejaría contando de más. Así, guardar la ficha dos veces no duplica nada.
+    if datos.stock_inicial and not s.exec(
+            select(Movimiento).where(Movimiento.insumo_id == i.id)).first():
+        from apps.pos.api.inventario import anotar
+        anotar(s, i, "carga", datos.stock_inicial,
+               motivo="Con lo que había al empezar", quien=quien)
+
+
 @router.post("/productos")
 def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
                    quien: dict = Depends(sesion.exige("editar_carta"))):
@@ -277,6 +309,8 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
     if datos.llevar_cuenta:
         from apps.pos.api.inventario import habilitar_cuenta
         habilitar_cuenta(s, p)
+        s.flush()
+        _a_la_bodega(s, p, datos, quien)
     s.commit()
     s.refresh(p)
     return p
@@ -307,6 +341,7 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
         from apps.pos.api.inventario import habilitar_cuenta
         if datos.llevar_cuenta:
             habilitar_cuenta(s, p)
+            s.flush()
         else:
             p.llevar_cuenta = False
     for k, v in datos.model_dump(exclude=EXTRAS).items():
@@ -325,6 +360,12 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
         if suyo:
             suyo.nombre = p.nombre
             s.add(suyo)
+
+    # Lo de Avanzado: el costo que se escribió para sacar el precio es el mismo
+    # con el que la Bodega valoriza lo que queda. Si el producto tiene su insumo,
+    # se guarda ahí; si no, no se guarda en ninguna parte y solo sirvió de cuenta.
+    if datos.costo or datos.stock_inicial or datos.minimo:
+        _a_la_bodega(s, p, datos, quien)
 
     _un_solo_destacado(s, p)
     s.add(p)
