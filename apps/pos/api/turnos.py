@@ -19,7 +19,8 @@ from apps.pos.db.session import get_session
 from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_MEDIO, a_local, ahora,
                          como_utc, hoy_local, puede, rango_utc_del_dia,
                          total_del_conteo)
-from core.schemas import AbrirTurnoIn, CerrarTurnoIn, RetiroCajaIn
+from core.fondo import plan_de_cierre
+from core.schemas import AbrirTurnoIn, CerrarTurnoIn, PlanCierreIn, RetiroCajaIn
 
 router = APIRouter(prefix="/api/v1/turnos", tags=["turnos"])
 
@@ -361,6 +362,20 @@ def _estuvieron(s: Session, t: Turno) -> list[dict]:
 def denominaciones():
     """Los billetes y monedas con los que se cuenta la caja."""
     return {"denominaciones": list(DENOMINACIONES)}
+
+
+@router.post("/plan-cierre")
+def plan_cierre(datos: PlanCierreIn,
+                quien: dict = Depends(sesion.exige("turno_cerrar"))):
+    """Qué billetes y monedas apartar para la propina y para el fondo de mañana.
+
+    Es un cálculo puro: no toca la base ni el turno. Existe como endpoint —y no en la
+    pantalla— para que el reparto viva en UN solo lugar (`core/fondo.py`, con sus pruebas)
+    en vez de escribirse otra vez en JavaScript y empezar a dar números distintos.
+
+    La cuenta la hace el que está cerrando, con el cajón contado delante.
+    """
+    return plan_de_cierre(datos.conteo, propina=datos.propina, fondo=datos.fondo)
 
 
 @router.get("/actual")

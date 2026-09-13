@@ -280,6 +280,32 @@ class AplicarImportacionIn(BaseModel):
     sacar_lo_que_no_vino: bool = False
 
 
+class PlanCierreIn(BaseModel):
+    """Lo contado en el cajón y cuánto hay que apartar, para que la caja diga QUÉ apartar.
+
+    Las claves de `conteo` llegan como texto desde la web (JSON no tiene claves enteras);
+    el validador las pasa a número para no ensuciar el resto con esa conversión.
+    """
+    conteo: dict[int, int] = Field(default_factory=dict)
+    propina: int = Field(default=0, ge=0)
+    fondo: int = Field(default=0, ge=0)
+
+    @field_validator("conteo", mode="before")
+    @classmethod
+    def claves_enteras(cls, v):
+        if not isinstance(v, dict):
+            return {}
+        salida = {}
+        for den, cant in v.items():
+            try:
+                den, cant = int(den), int(cant)
+            except (TypeError, ValueError):
+                continue
+            if den > 0 and cant > 0:
+                salida[den] = cant
+        return salida
+
+
 class AjustesIn(BaseModel):
     """Las preferencias del local. Solo lo que hoy se puede cambiar."""
     usar_inventario: int = Field(default=1, ge=0, le=1)

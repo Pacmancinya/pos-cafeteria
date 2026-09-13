@@ -212,3 +212,47 @@ def test_si_no_alcanza_para_todo_lo_dice_en_vez_de_inventar():
     assert plan["propina"]["total"] == 5000 and plan["propina"]["exacto"] is True
     assert plan["fondo"]["exacto"] is False      # solo quedaban 5.000
     assert plan["sobre"]["total"] == 0
+
+
+# =============================================================================
+# El endpoint: el mismo reparto, desde la pantalla del cierre
+# =============================================================================
+
+def test_el_endpoint_arma_el_plan_con_el_conteo_de_la_pantalla(cliente, caja):
+    """La web manda las claves como texto (JSON no tiene claves enteras)."""
+    r = cliente.post("/api/v1/turnos/plan-cierre", json={
+        "conteo": {"20000": 6, "10000": 23, "5000": 15, "1000": 36,
+                   "100": 39, "50": 45, "10": 3},
+        "propina": 18500, "fondo": 60000})
+    assert r.status_code == 200
+    plan = r.json()
+    assert plan["contado"] == 467180
+    assert plan["propina"]["total"] == 18500 and plan["propina"]["exacto"] is True
+    assert plan["fondo"]["total"] == 60000 and plan["fondo"]["exacto"] is True
+    # Las tres pilas siguen sumando lo contado, también pasando por la API.
+    assert (plan["propina"]["total"] + plan["fondo"]["total"]
+            + plan["sobre"]["total"]) == plan["contado"]
+
+
+def test_el_endpoint_no_escribe_nada(cliente, caja):
+    """Es una calculadora: preguntar dos veces tiene que dar lo mismo y no tocar el turno."""
+    antes = cliente.get("/api/v1/turnos/actual").json()
+    cuerpo = {"conteo": {"1000": 10}, "propina": 2000, "fondo": 5000}
+    a = cliente.post("/api/v1/turnos/plan-cierre", json=cuerpo).json()
+    b = cliente.post("/api/v1/turnos/plan-cierre", json=cuerpo).json()
+    assert a == b
+    assert cliente.get("/api/v1/turnos/actual").json() == antes
+
+
+def test_el_endpoint_aguanta_basura_sin_reventar(cliente, caja):
+    for cuerpo in ({}, {"conteo": None}, {"conteo": {"abc": "x", "1000": 5}},
+                   {"conteo": {"1000": 5}, "propina": 0, "fondo": 0}):
+        r = cliente.post("/api/v1/turnos/plan-cierre", json=cuerpo)
+        assert r.status_code == 200, cuerpo
+        assert set(r.json()) == {"contado", "propina", "fondo", "sobre"}
+
+
+def test_un_monto_negativo_lo_rechaza_el_schema(cliente, caja):
+    r = cliente.post("/api/v1/turnos/plan-cierre",
+                     json={"conteo": {"1000": 5}, "fondo": -100})
+    assert r.status_code == 422
