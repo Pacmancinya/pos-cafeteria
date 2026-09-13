@@ -1,0 +1,18 @@
+Copia esta carpeta a un pendrive y llevala al local.
+
+En el computador de la caja:
+
+  1. Deja abierto el sistema de la caja y escanea un ticket de la balanza.
+  2. Doble clic en BALANZA.bat
+  3. Escribe la IP de la balanza (si no la sabes, aprieta Enter y te muestra
+     los equipos de la red para buscarla).
+
+Deja un archivo balanza-FECHA.txt al lado. Mandamelo.
+
+Y en la BALANZA misma, en la configuracion de la etiqueta o del codigo impreso,
+mira estas dos:
+
+  a) Puede imprimir un QR en vez del codigo de barras?
+  b) Puede imprimir una etiqueta por producto, con su codigo y el peso?
+
+Con la primera en si, el fiambreria sale en dias y sin tocar la red.
