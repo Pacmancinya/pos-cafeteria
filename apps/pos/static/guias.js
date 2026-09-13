@@ -430,10 +430,12 @@ window.GUIAS = [
     <div class="ayuda">O sea: <b>nunca</b> escribas el precio sin IVA pensando
       que la caja se lo agrega. Escribe lo que quieres cobrar.</div>
 
-    <div data-con-inventario>
     <h3>Cuánto cobrar por algo que compraste</h3>
-    <p>Abre el producto y anda a la parte de abajo, donde dice <b>Bodega</b>.
-       Escribe cuánto te cuesta cada uno y aparece un recuadro verde con el
+    <p>Abre el producto —o créalo— y abajo, en la columna de la izquierda, toca
+       el <b>+</b> que dice <b>Sacar el precio desde lo que te cuesta</b>. Viene
+       plegado porque no hace falta para vender: si ya sabes tu precio, escríbelo
+       arriba y listo.</p>
+    <p>Escribe cuánto te cuesta a ti cada uno y aparece un recuadro verde con el
        precio sugerido.</p>
     <ul>
       <li>El botón <b>Usar este precio</b> lo copia arriba. De ahí lo puedes
@@ -442,6 +444,25 @@ window.GUIAS = [
           guardado para la próxima vez.</li>
       <li>El sugerido siempre <b>sube</b> al múltiplo de $50 más cercano hacia
           arriba: nadie cobra $2.437.</li>
+      <li data-con-inventario>Si el producto lleva la cuenta en Bodega, el costo
+          queda guardado ahí —es el mismo con el que se valoriza lo que te
+          queda— y la próxima vez que abras la ficha ya está escrito.</li>
+    </ul>
+
+    <h3>La casilla «Ese precio ya trae IVA»</h3>
+    <p>Viene marcada, y para la mayoría así está bien: es el caso de ir al
+       supermercado o al mayorista y ver el precio final en la boleta.</p>
+    <p><b>Si compras con factura, desmárcala.</b> El precio de una factura es
+       <b>neto</b>, sin IVA. Si la dejas marcada, la caja cree que ese es el
+       precio final y te sugiere cobrar de menos: el 19% que falta te lo come el
+       IVA cuando vendas, y el margen que pediste no queda. Desmarcada, la caja
+       le suma el 19% antes de hacer la cuenta, y entonces el margen que pides es
+       el que de verdad te llevas.</p>
+    <ul>
+      <li>Factura de <b>$1.000</b> neto, casilla desmarcada, margen 50%: cobras
+          <b>$2.400</b>.</li>
+      <li>La misma factura con la casilla marcada te sugeriría $2.000 — y después
+          de enterar el IVA de esa venta te queda bastante menos de la mitad.</li>
     </ul>
 
     <h3>Ojo con qué significa el porcentaje</h3>
@@ -459,8 +480,7 @@ window.GUIAS = [
        la diferencia.</p>
     <div class="ayuda">El margen que elijas es del local, no de este computador:
       si abres la caja desde otro lado, es el mismo. Cambiarlo es cosa del
-      dueño.</div>
-    </div>`,
+      dueño.</div>`,
 },
 {
   id: "respaldos",
