@@ -312,6 +312,11 @@ function cambiarCantidad(id, delta) {
   pintarCarrito();
 }
 
+function quitarLineaDelPedido(id) {
+  carrito = carrito.filter((l) => l.id !== id);
+  pintarCarrito();
+}
+
 /* El producto como está en la carta, con su saldo al día. Lo del carrito trae
    una copia del saldo de cuando se agregó. */
 function productoDeLaCarta(id) {
@@ -529,7 +534,7 @@ function pintarCarrito() {
     cont.innerHTML = carrito.map((l) => `
       <div class="linea">
         <div class="linea__txt">
-          <b>${l.nombre}</b>
+          <b>${esc(l.nombre)}</b>
           <small>${clp(l.precio)} c/u</small>
         </div>
         <div class="cant">
@@ -538,6 +543,8 @@ function pintarCarrito() {
           <button data-mas="${l.id}">+</button>
         </div>
         <div class="linea__sub">${clp(l.precio * l.cantidad)}</div>
+        <button type="button" class="linea__quitar" data-quitar-linea="${l.id}"
+                aria-label="Quitar ${esc(l.nombre)} del pedido" title="Quitar toda la línea">✕</button>
       </div>`).join("");
   }
   $("#total").textContent = clp(totalCarrito());
@@ -1101,11 +1108,55 @@ function selectorDeDibujo(elegido) {
     </div>`;
 }
 
+function categoriasPlegadasGuardadas() {
+  try {
+    const ids = JSON.parse(localStorage.getItem("pos.carta.plegadas") || "[]");
+    return new Set(Array.isArray(ids) ? ids.filter(Number.isInteger) : []);
+  } catch (e) { return new Set(); }
+}
+
+const categoriasPlegadas = categoriasPlegadasGuardadas();
+
+// Sólo ocultamos filas: buscar o plegar no descarta nombres/precios sin guardar.
+function filtrarEditorCarta() {
+  const q = sinTildes($("#buscarCarta").value.trim());
+  $("#limpiarBuscarCarta").hidden = !q;
+  let hallados = 0;
+  $$("#editorCarta .grupo").forEach((grupo) => {
+    let coincidencias = 0;
+    grupo.querySelectorAll("[data-fila]").forEach((fila) => {
+      const nombre = fila.querySelector('[data-campo="nombre"]').value;
+      fila.hidden = !!q && !sinTildes(nombre).includes(q);
+      if (!fila.hidden) coincidencias++;
+    });
+    grupo.hidden = !!q && coincidencias === 0;
+    hallados += coincidencias;
+    const plegada = !q && categoriasPlegadas.has(+grupo.dataset.grupo);
+    grupo.querySelector(".grupo__productos").hidden = plegada;
+    const boton = grupo.querySelector("[data-plegar-cat]");
+    if (boton) boton.setAttribute("aria-expanded", String(!plegada));
+  });
+  $("#cartaSinResultados").hidden = !q || hallados > 0;
+}
+
+function alternarCategoriaCarta(id) {
+  const grupo = $(`#editorCarta [data-grupo="${id}"]`);
+  if (!grupo) return;
+  const productos = grupo.querySelector(".grupo__productos");
+  productos.hidden = !productos.hidden;
+  grupo.querySelector("[data-plegar-cat]").setAttribute("aria-expanded", String(!productos.hidden));
+  if (productos.hidden) categoriasPlegadas.add(id);
+  else categoriasPlegadas.delete(id);
+  try { localStorage.setItem("pos.carta.plegadas", JSON.stringify([...categoriasPlegadas])); } catch (e) {}
+}
+
 function pintarEditorCarta() {
   $("#editorCarta").innerHTML = CATEGORIAS.map((c) => `
     <div class="grupo" data-grupo="${c.id}">
       <div class="grupo__top">
-        <h3>${esc(c.nombre)}</h3>
+        <h3><button type="button" class="grupo__plegar" data-plegar-cat="${c.id}"
+                    aria-expanded="true" aria-controls="productos-carta-${c.id}">
+          <span class="grupo__flecha" aria-hidden="true">▾</span>${esc(c.nombre)}</button></h3>
         <div class="grupo__acc">
           <button class="btn btn--chico btn--fantasma" data-cat-editar="${c.id}"
                   data-permiso="editar_carta">Editar</button>
@@ -1114,6 +1165,7 @@ function pintarEditorCarta() {
           <button class="btn btn--chico" data-nuevo-en="${c.id}">+ Producto</button>
         </div>
       </div>
+      <div class="grupo__productos" id="productos-carta-${c.id}">
       ${c.productos.map((p) => `
         <div class="fila${p.activo ? "" : " inactivo"}" data-fila="${p.id}">
           <input type="text" value="${esc(p.nombre)}" data-campo="nombre">
@@ -1124,6 +1176,7 @@ function pintarEditorCarta() {
             <button class="btn btn--chico" data-editar="${p.id}" title="Todos los datos">···</button>
           </div>
         </div>`).join("") || `<p class="ayuda" style="margin:0 0 8px">Esta categoría todavía no tiene productos.</p>`}
+      </div>
     </div>`).join("");
   // El editor se redibuja cada vez que cambia la carta, después de que
   // pintarQuien ya corrió, así que los botones que solo puede el dueño hay que
@@ -1133,6 +1186,7 @@ function pintarEditorCarta() {
     b.disabled = falta;
     b.title = falta ? "Esto lo hace el dueño" : "";
   });
+  filtrarEditorCarta();
 }
 
 /* ---- editar y borrar una categoría ----
@@ -1358,7 +1412,8 @@ async function guardarProducto(id) {
 function pintarConectar(salud) {
   const caja = $("#conectar");
   if (!caja) return;
-  if (!salud.en_la_red) { caja.hidden = true; return; }
+  $("#pantallasLocal").hidden = !salud.en_la_red;
+  if (!salud.en_la_red) return;
   const mia = (salud.carta_url || "").replace("/api/v1/carta", "");
   const p = salud.pantallas_url || (mia + "/pantallas");
   const fila = (cual, url) => `
@@ -1369,7 +1424,6 @@ function pintarConectar(salud) {
     </div>`;
 
   caja.innerHTML = `
-    <b>Las pantallas del local</b><br>
     En cada televisor, abre el navegador y entra a la dirección que le toca. No
     hay que instalar ni copiar nada: la carta le llega de esta caja sola.
     ${fila("Vitrina", p + "?p=1")}
@@ -1527,8 +1581,8 @@ async function cargarTurno() {
   const chip = $("#turnoEstado");
   $(".punto").classList.toggle("off", !t.abierto);
   chip.textContent = t.abierto
-    ? `Caja abierta${t.turno.cajero ? " · " + t.turno.cajero : ""}`
-    : "Caja cerrada";
+    ? `Resumen de caja${t.turno.cajero ? " · " + t.turno.cajero : ""}`
+    : "Abrir caja";
   chip.dataset.abierto = t.abierto ? "1" : "0";
   TURNO = t;                    // trae `abierto`, `turno` y `fondo_anterior`
   pintarPuertaDeLaCaja(t);
@@ -3768,6 +3822,58 @@ function reloj() {
    avisar, y se puede dejar "El día" abierto en otra pestaña. */
 const VISTAS = ["caja", "dia", "carta", "inventario", "guias"];
 
+/* En Windows el contenido web no puede quitar el marco de la aplicación.
+   El puente usa la ventana nativa; en navegador usamos su API de pantalla completa. */
+let pantallaCompletaNativa = false;
+let cambiandoPantallaCompleta = false;
+
+function pintarPantallaCompleta() {
+  const activa = pantallaCompletaNativa || !!document.fullscreenElement;
+  const boton = $("#btnPantallaCompleta");
+  const nombre = activa ? "Salir de pantalla completa" : "Pantalla completa";
+  boton.setAttribute("aria-pressed", String(activa));
+  boton.setAttribute("aria-label", nombre);
+  boton.title = nombre + " (F11)";
+  boton.textContent = activa ? "↙" : "⛶";
+}
+
+async function sincronizarPantallaCompleta() {
+  const puente = window.pywebview && window.pywebview.api;
+  if (puente && puente.pantalla_completa) {
+    try { pantallaCompletaNativa = await puente.pantalla_completa(); } catch (e) {}
+  }
+  pintarPantallaCompleta();
+}
+
+async function alternarPantallaCompleta(salir = false) {
+  if (cambiandoPantallaCompleta) return;
+  cambiandoPantallaCompleta = true;
+  const boton = $("#btnPantallaCompleta");
+  boton.disabled = true;
+  try {
+    const puente = window.pywebview && window.pywebview.api;
+    if (puente && puente.pantalla_completa) {
+      const actual = await puente.pantalla_completa();
+      pantallaCompletaNativa = await puente.pantalla_completa(salir ? false : !actual);
+    } else if (window.pywebview) {
+      throw new Error("La ventana todavía se está preparando. Vuelve a intentar en un momento.");
+    } else if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else if (!salir) {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (e) {
+    avisar("No se pudo cambiar la pantalla completa. " + e.message, true);
+  } finally {
+    cambiandoPantallaCompleta = false;
+    boton.disabled = false;
+    pintarPantallaCompleta();
+  }
+}
+
+window.addEventListener("pywebviewready", sincronizarPantallaCompleta);
+document.addEventListener("fullscreenchange", pintarPantallaCompleta);
+
 function verVista(nombre, empujarHash = true) {
   if (!VISTAS.includes(nombre)) nombre = "caja";
   if (nombre === "inventario" && !usarInventario()) nombre = "caja";
@@ -3803,6 +3909,8 @@ document.addEventListener("click", (e) => {
   if (cerca("data-prod")) return agregar(+cerca("data-prod").dataset.prod);
   if (cerca("data-mas")) return cambiarCantidad(+cerca("data-mas").dataset.mas, 1);
   if (cerca("data-menos")) return cambiarCantidad(+cerca("data-menos").dataset.menos, -1);
+  if (cerca("data-quitar-linea")) return quitarLineaDelPedido(+cerca("data-quitar-linea").dataset.quitarLinea);
+  if (cerca("data-plegar-cat")) return alternarCategoriaCarta(+cerca("data-plegar-cat").dataset.plegarCat);
   if (cerca("data-anular")) return anular(+cerca("data-anular").dataset.anular);
   if (cerca("data-imprimir")) return imprimir(`/comprobante/${cerca("data-imprimir").dataset.imprimir}`);
   if (cerca("data-ver-cierre")) return dialogoCierre(+cerca("data-ver-cierre").dataset.verCierre);
@@ -3860,6 +3968,12 @@ document.addEventListener("click", (e) => {
     return calcularVuelto();
   }
   if (t.id === "limpiarBuscar") { $("#buscar").value = ""; $("#buscar").focus(); return buscar(""); }
+  if (t.id === "limpiarBuscarCarta") {
+    $("#buscarCarta").value = "";
+    $("#buscarCarta").focus();
+    return filtrarEditorCarta();
+  }
+  if (t.closest("#btnPantallaCompleta")) return alternarPantallaCompleta();
   if (t.id === "btnNuevaCat") return nuevaCategoria();
   if (t.id === "btnHoy") { $("#fechaDia").value = hoyISO(); turnoElegido = null; return cargarDia(); }
   if (t.id === "btnExportar") {
@@ -4073,6 +4187,10 @@ $("#mixtoGrid").addEventListener("input", (e) => {
 });
 
 $("#buscar").addEventListener("input", (e) => buscar(e.target.value));
+$("#buscarCarta").addEventListener("input", filtrarEditorCarta);
+$("#buscarCarta").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { e.target.value = ""; filtrarEditorCarta(); }
+});
 $("#buscar").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = ""; buscar(""); }
 });
@@ -4088,9 +4206,16 @@ $("#propina").addEventListener("input", actualizarCobro);
 $("#descuento").addEventListener("input", actualizarCobro);
 
 document.addEventListener("keydown", (e) => {
+  if (e.key === "F11") {
+    e.preventDefault();
+    return alternarPantallaCompleta();
+  }
+  if (e.key === "Escape" && pantallaCompletaNativa) alternarPantallaCompleta(true);
   // Escape tampoco: es demasiado fácil apretarlo sin querer y perder el trabajo.
   // Para cerrar están la X y el botón Cancelar de cada diálogo.
   if (e.key === "Escape") return Teclado.cerrar();
+  // Enter y Espacio sobre un botón o un título plegable activan ese control.
+  if (e.target.closest("button, summary")) return;
   if (e.target.tagName === "INPUT") {
     if (e.key === "Enter" && $("#capaCobro").classList.contains("is-on")) confirmarVenta();
     return;
@@ -4105,6 +4230,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 (async function iniciar() {
+  sincronizarPantallaCompleta();
   reloj();
   setInterval(reloj, 20000);
   // La caja se vigila sola: al volver a la ventana y cada minuto.

@@ -36,7 +36,7 @@ button{font-family:inherit;cursor:pointer}
 
 /* ---------- barra superior ---------- */
 .barra{
-  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
   padding:10px 16px;background:var(--tarjeta);border-bottom:1px solid var(--linea);
   flex:none;
 }
@@ -51,8 +51,8 @@ button{font-family:inherit;cursor:pointer}
 .tab:hover{background:#F3E9DB;color:var(--tinta)}
 .tab.is-on{background:var(--clay);color:#fff}
 .tab[hidden]{display:none}
-.barra__der{display:flex;align-items:center;gap:14px;font-size:14px;color:var(--suave)}
-.turno{cursor:pointer;padding:6px 12px;border-radius:8px;border:1px solid var(--linea)}
+.barra__der{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--suave)}
+.turno{cursor:pointer;padding:6px 12px;border-radius:8px;border:1px solid var(--linea);background:transparent;color:inherit}
 .turno:hover{background:#F3E9DB}
 .reloj{font-variant-numeric:tabular-nums;font-weight:600;color:var(--tinta)}
 .version{
@@ -201,9 +201,18 @@ button{font-family:inherit;cursor:pointer}
 .lineas{flex:1;overflow:auto;padding:8px 10px}
 .vacio{color:var(--suave);font-size:14px;text-align:center;padding:34px 12px;line-height:1.5}
 .linea{
-  display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+  display:grid;grid-template-columns:minmax(0,1fr) auto var(--toque);gap:10px;align-items:center;
   padding:9px 6px;border-bottom:1px solid #F1E7DA;
 }
+.linea__txt{grid-column:1 / 3;grid-row:1;min-width:0;overflow-wrap:anywhere}
+.linea .cant{grid-column:1;grid-row:2}
+.linea .linea__sub{grid-column:2 / 4;grid-row:2}
+.linea__quitar{
+  grid-column:3;grid-row:1;width:var(--toque);height:var(--toque);
+  border:1px solid var(--linea);border-radius:10px;background:var(--papel);
+  color:var(--suave);font-size:20px;touch-action:manipulation;
+}
+.linea__quitar:hover,.linea__quitar:active{color:#A52A23;background:#FBECEA}
 .linea__txt b{display:block;font-size:14.5px}
 .linea__txt small{color:var(--suave);font-size:12.5px;font-variant-numeric:tabular-nums}
 .cant{display:flex;align-items:center;gap:2px}
@@ -379,6 +388,17 @@ button{font-family:inherit;cursor:pointer}
 .grupo{margin-bottom:26px}
 .grupo h3{font-size:17px}
 .grupo__top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.grupo__top{flex-wrap:wrap}
+.grupo__plegar{
+  display:flex;align-items:center;gap:10px;min-height:var(--toque);padding:0 10px;
+  border:0;border-radius:10px;background:transparent;color:var(--tinta);
+  font:inherit;text-align:left;touch-action:manipulation;
+}
+.grupo__plegar:hover{background:#F3E9DB}
+.grupo__flecha{display:inline-block}
+.grupo__plegar[aria-expanded="false"] .grupo__flecha{transform:rotate(-90deg)}
+.grupo[hidden],.grupo__productos[hidden],.fila[hidden]{display:none}
+#buscarCarta::-webkit-search-cancel-button{display:none}
 .grupo__acc{display:flex;gap:8px;flex-wrap:wrap}
 .grupo__editar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
 .grupo__editar>input[type=text]{
@@ -411,6 +431,9 @@ button{font-family:inherit;cursor:pointer}
   padding:14px 16px;margin-bottom:22px;font-size:14px;line-height:1.55;color:var(--suave);
 }
 .conectar b{color:var(--tinta)}
+.conectar[hidden]{display:none}
+.conectar summary{cursor:pointer;color:var(--tinta);font-weight:700;min-height:var(--toque);align-content:center}
+.conectar[open] summary{margin-bottom:10px}
 .conectar__url{
   display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap;
 }
@@ -531,6 +554,8 @@ button{font-family:inherit;cursor:pointer}
 .rail__cat.is-on::before{top:12px;bottom:12px;width:5px}
 .rail__n{font-size:14px}
 .turno{min-height:var(--toque);padding:0 16px;font-size:15px;border-radius:10px}
+.pantalla-completa{width:var(--toque);padding:0;font-size:26px;flex:none}
+.pantalla-completa[aria-pressed="true"]{background:var(--clay);color:white}
 .version{min-height:var(--toque);padding:0 14px;font-size:14px;border-radius:10px}
 .barra{padding:8px 16px}
 

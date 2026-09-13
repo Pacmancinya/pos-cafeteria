@@ -70,6 +70,13 @@ async def ciclo(app: FastAPI):
             print("  " + hecho)
     except Exception:
         pass
+    # También vive fuera del ejecutable: una actualización puede conectar
+    # la pantalla completa nativa sin reconstruir Kofe.exe.
+    try:
+        from tools.ventana import iniciar
+        iniciar()
+    except Exception:
+        diagnostico.log.warning("No se pudo preparar la ventana.", exc_info=True)
     yield
 
 
@@ -224,5 +231,4 @@ def pantallas_simple():
     """
     return FileResponse(os.path.join(ESTATICOS, "pantallas-simple.html"),
                         headers={"Cache-Control": "no-store"})
-
 
