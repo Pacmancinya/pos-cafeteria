@@ -54,7 +54,8 @@ def _ventas_entre(s: Session, desde: date, hasta: date) -> list[Venta]:
     ).all()
 
 
-@router.get("/exportar/ventas")
+@router.get("/exportar/ventas",
+            dependencies=[Depends(sesion.exige("ver_informes"))])
 def exportar_ventas(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -89,7 +90,8 @@ def exportar_ventas(
     )
 
 
-@router.get("/exportar/detalle")
+@router.get("/exportar/detalle",
+            dependencies=[Depends(sesion.exige("ver_informes"))])
 def exportar_detalle(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),

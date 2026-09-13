@@ -10,6 +10,10 @@ Ahora una persona puede tener sus propios permisos, y esos mandan sobre los de s
 
 from __future__ import annotations
 
+import io
+import re
+from pathlib import Path
+
 import pytest
 
 from core.config import PERMISOS, TODOS_LOS_PERMISOS, permisos_de, puede
@@ -99,3 +103,38 @@ def test_anular_el_pasado_respeta_los_permisos_propios(cliente, carta, caja):
         assert "permisos" in alrededor, (
             f"la comprobación de {permiso} no mira los permisos propios de la persona: "
             "quitárselo no tendría efecto")
+
+
+# =============================================================================
+# El candado: que la próxima ruta no se olvide de pedir permiso
+# =============================================================================
+
+# Los módulos donde TODA consulta toca algo que se puede restringir. Si mañana alguien
+# agrega ahí un GET sin permiso, este test lo caza — que es mejor que una lista de rutas
+# escrita en otro archivo, porque esa se desincroniza en silencio y nadie se entera hasta
+# que alguien lee algo que no debía.
+MODULOS_CON_PERMISO = {
+    "inventario.py": "inventario",
+    "datos.py": "ver_informes",
+}
+
+
+def test_las_rutas_que_leen_datos_restringidos_piden_permiso():
+    """Quitarle la bodega a una persona no servía de nada: las consultas no lo miraban.
+
+    Lo encontró la revisión de Codex al conectar los permisos por persona. Antes daba casi
+    igual —un cajero tenía «inventario» de todas formas—, pero desde que se le puede quitar,
+    una consulta sin guardia es una puerta abierta con el candado puesto al lado.
+    """
+    api = Path(__file__).resolve().parents[1] / "api"
+    sin_guardia = []
+    for archivo, permiso in MODULOS_CON_PERMISO.items():
+        fuente = io.open(api / archivo, encoding="utf-8").read()
+        for m in re.finditer(r'@router\.get\((["\'])(.+?)\1', fuente):
+            trozo = fuente[m.start():m.start() + 320]
+            if "sesion.exige(" not in trozo and "Depends(exige(" not in trozo:
+                sin_guardia.append(f"{archivo} {m.group(2)}")
+
+    assert not sin_guardia, (
+        "estas consultas no piden ningún permiso, así que se pueden leer aunque a la "
+        f"persona se le haya quitado: {sin_guardia}")

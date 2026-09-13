@@ -174,7 +174,8 @@ def _insumo_dict(i: Insumo) -> dict:
     }
 
 
-@router.get("/inventario")
+@router.get("/inventario",
+            dependencies=[Depends(sesion.exige("inventario"))])
 def ver_inventario(s: Session = Depends(get_session)):
     insumos = s.exec(
         select(Insumo).where(Insumo.activo == True)  # noqa: E712
@@ -194,7 +195,8 @@ def ver_inventario(s: Session = Depends(get_session)):
     }
 
 
-@router.get("/inventario/alertas")
+@router.get("/inventario/alertas",
+            dependencies=[Depends(sesion.exige("inventario"))])
 def alertas(s: Session = Depends(get_session)):
     insumos = s.exec(select(Insumo).where(Insumo.activo == True)).all()  # noqa: E712
     faltan = [_insumo_dict(i) for i in insumos
@@ -203,7 +205,8 @@ def alertas(s: Session = Depends(get_session)):
             "cuantos": len(faltan)}
 
 
-@router.get("/inventario/insumos/{insumo_id}/movimientos")
+@router.get("/inventario/insumos/{insumo_id}/movimientos",
+            dependencies=[Depends(sesion.exige("inventario"))])
 def movimientos(insumo_id: int,
                 desde: str | None = Query(default=None, description="AAAA-MM-DD"),
                 hasta: str | None = Query(default=None),
@@ -435,7 +438,8 @@ def _receta_dict(s: Session, producto: Producto) -> dict:
     }
 
 
-@router.get("/productos/{producto_id}/receta")
+@router.get("/productos/{producto_id}/receta",
+            dependencies=[Depends(sesion.exige("inventario"))])
 def ver_receta(producto_id: int, s: Session = Depends(get_session)):
     p = s.get(Producto, producto_id)
     if not p:

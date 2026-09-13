@@ -9,7 +9,8 @@ from sqlmodel import Session, select
 from apps.pos import acceso, local as datos_local, sesion
 from apps.pos.db.models import Presencia, Turno, Usuario, Venta
 from apps.pos.db.session import get_session
-from core.config import NOMBRE_ROL, PERMISOS, a_local, ahora, como_utc
+from core.config import (CATALOGO_DE_PERMISOS, NOMBRE_ROL, PERMISOS,
+                         a_local, ahora, como_utc, permisos_de, puede)
 from core.schemas import EntrarIn, SalirIn, UsuarioIn
 
 router = APIRouter(prefix="/api/v1", tags=["usuarios"])
@@ -24,6 +25,7 @@ def _usuario_dict(u: Usuario, con_rol: bool = True) -> dict:
     d = {"id": u.id, "nombre": u.nombre, "color": u.color, "orden": u.orden}
     if con_rol:
         d["rol"] = u.rol
+        d["permisos"] = u.permisos or ""
         d["rol_nombre"] = NOMBRE_ROL.get(u.rol, u.rol)
         d["activo"] = u.activo
         d["ultimo_ingreso"] = (
@@ -77,7 +79,7 @@ def mi_sesion(quien: dict = Depends(sesion.quien_es)):
         "nombre": quien.get("nombre"),
         "rol": quien.get("rol"),
         "rol_nombre": NOMBRE_ROL.get(quien.get("rol", ""), ""),
-        "permisos": list(PERMISOS.get(quien.get("rol", ""), ())),
+        "permisos": sorted(permisos_de(quien.get("rol", ""), quien.get("permisos", ""))),
     }
 
 
@@ -107,7 +109,7 @@ def entrar(datos: EntrarIn, respuesta: Response, request: Request,
         sesion.GALLETA, sesion.galleta_de(u, p.id),
         max_age=60 * 60 * sesion.HORAS_DE_SESION, httponly=True, samesite="lax",
     )
-    return {"ok": True, **_usuario_dict(u), "permisos": list(PERMISOS.get(u.rol, ()))}
+    return {"ok": True, **_usuario_dict(u), "permisos": sorted(permisos_de(u.rol, u.permisos))}
 
 
 @router.post("/sesion/salir")
@@ -123,6 +125,19 @@ def salir(datos: SalirIn, respuesta: Response,
 # ---------------------------------------------------------------------------
 # Administrar la gente
 # ---------------------------------------------------------------------------
+@router.get("/usuarios/permisos")
+def catalogo_permisos(quien: dict = Depends(sesion.exige("usuarios"))):
+    return {
+        "catalogo": [{"clave": clave, "nombre": nombre} for clave, nombre in CATALOGO_DE_PERMISOS],
+        "roles": PERMISOS,
+    }
+
+
+def _permisos_guardados(rol: str, propios: str) -> str:
+    # Elegir todo lo del rol debe seguir heredando sus futuros cambios.
+    return "" if permisos_de(rol, propios) == permisos_de(rol) else propios
+
+
 @router.get("/usuarios")
 def listar(s: Session = Depends(get_session),
            quien: dict = Depends(sesion.exige("usuarios"))):
@@ -157,6 +172,8 @@ def crear(datos: UsuarioIn, request: Request, s: Session = Depends(get_session),
         # El primero es SIEMPRE dueño: si se pudiera crear un cajero primero,
         # el local quedaría sin nadie que pueda crear usuarios.
         rol="dueno" if primero else datos.rol,
+        # El primer dueño siempre hereda: todavía no hay quien administre permisos.
+        permisos="" if primero else _permisos_guardados(datos.rol, datos.permisos),
         pin_hash=sesion.cifrar_pin(datos.pin),
         activo=datos.activo,
         color=datos.color or COLORES[len(_activos(s)) % len(COLORES)],
@@ -176,11 +193,16 @@ def editar(usuario_id: int, datos: UsuarioIn, s: Session = Depends(get_session),
         raise HTTPException(404, "No existe ese usuario")
     if _nombre_repetido(s, datos.nombre, usuario_id):
         raise HTTPException(409, f"Ya hay alguien que se llama {datos.nombre}.")
+    propios = datos.permisos if "permisos" in datos.model_fields_set else (u.permisos or "")
+    if quien.get("id") == usuario_id and not puede(datos.rol, "usuarios", propios):
+        raise HTTPException(409, "No puedes quitarte el permiso para crear y editar personas: "
+                                 "lo necesitas para seguir administrando los permisos del equipo.")
     if u.rol == "dueno" and datos.rol != "dueno" and _ultimo_dueno(s, usuario_id):
         raise HTTPException(409, "Es el único dueño: si lo bajas a cajero, nadie "
                                  "podría volver a crear usuarios.")
 
     u.nombre, u.rol = datos.nombre, datos.rol
+    u.permisos = _permisos_guardados(datos.rol, propios)
     u.activo, u.orden = datos.activo, datos.orden
     if datos.color:
         u.color = datos.color
@@ -209,7 +231,7 @@ def sacar(usuario_id: int, s: Session = Depends(get_session),
 
 
 def _puede_usuarios(quien: dict) -> bool:
-    return "usuarios" in PERMISOS.get(quien.get("rol", ""), ())
+    return puede(quien.get("rol", ""), "usuarios", quien.get("permisos", ""))
 
 
 def _nombre_repetido(s: Session, nombre: str, salvo_id: int | None) -> bool:

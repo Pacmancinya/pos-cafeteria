@@ -71,6 +71,95 @@ def dueno(cliente):
     return u
 
 
+SOLO_VENDER = "vender,turno_abrir,turno_cerrar"
+
+
+def test_permisos_se_guardan_leen_y_actualizan(cliente, dueno):
+    from core.config import CATALOGO_DE_PERMISOS, PERMISOS
+
+    meta = cliente.get("/api/v1/usuarios/permisos")
+    assert meta.status_code == 200
+    assert meta.json()["catalogo"] == [
+        {"clave": c, "nombre": n} for c, n in CATALOGO_DE_PERMISOS]
+    assert cliente.get("/api/v1/inventario").status_code == 200
+    assert cliente.get("/api/v1/exportar/ventas").status_code == 200
+    r = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Javi", "pin": "4321", "permisos": SOLO_VENDER})
+    assert r.status_code == 200
+    u = r.json()
+    assert u["permisos"] == SOLO_VENDER
+    assert next(p for p in cliente.get("/api/v1/usuarios").json()
+                if p["id"] == u["id"])["permisos"] == SOLO_VENDER
+    url = f"/api/v1/usuarios/{u['id']}"
+    # Editar el nombre desde un cliente antiguo no borra sus restricciones.
+    assert cliente.put(url, json={"nombre": "Javier"}).json()["permisos"] == SOLO_VENDER
+    assert cliente.put(url, json={"nombre": "Javier", "permisos": "vender"}).json()["permisos"] == "vender"
+    todos = ",".join(reversed(PERMISOS["cajero"])) + ",vender"
+    assert cliente.put(url, json={"nombre": "Javier", "permisos": todos}).json()["permisos"] == ""
+    # Al cambiar de rol sigue heredando, sin congelar la selección anterior.
+    assert cliente.put(url, json={"nombre": "Javier", "rol": "dueno"}).json()["permisos"] == ""
+    assert cliente.put(url, json={"nombre": "Javier", "permisos": "inventado"}).status_code == 422
+    assert cliente.put(url, json={"nombre": "Javier", "permisos": ""}).json()["permisos"] == ""
+    creado = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Hereda", "pin": "5555", "permisos": todos})
+    assert creado.status_code == 200 and creado.json()["permisos"] == ""
+
+
+def test_solo_vender_restringe_api_y_sesion(cliente, dueno):
+    u = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Javi", "pin": "4321", "permisos": SOLO_VENDER}).json()
+    entrada = cliente.post("/api/v1/sesion/entrar", json={"usuario_id": u["id"], "pin": "4321"})
+    assert set(entrada.json()["permisos"]) == set(SOLO_VENDER.split(","))
+    assert set(cliente.get("/api/v1/sesion").json()["permisos"]) == set(SOLO_VENDER.split(","))
+    assert cliente.get("/api/v1/inventario").status_code == 403
+    assert cliente.get("/api/v1/inventario/alertas").status_code == 403
+    assert cliente.get("/api/v1/resumen").status_code == 403
+    assert cliente.get("/api/v1/exportar/ventas").status_code == 403
+    assert cliente.get("/api/v1/exportar/detalle").status_code == 403
+
+
+@pytest.mark.parametrize("rol,permisos", [("dueno", SOLO_VENDER), ("cajero", "")])
+def test_no_puedes_quitarte_administrar_personas(cliente, dueno, rol, permisos):
+    # Incluso con otro dueño, la protección de la propia cuenta se mantiene.
+    cliente.post("/api/v1/usuarios", json={"nombre": "Otro", "pin": "4321", "rol": "dueno"})
+    r = cliente.put(f"/api/v1/usuarios/{dueno['id']}", json={
+        "nombre": "Ruperto", "rol": rol, "permisos": permisos})
+    assert r.status_code == 409
+    assert "No puedes quitarte" in r.json()["detail"]
+    assert "usuarios" in cliente.get("/api/v1/sesion").json()["permisos"]
+
+
+@pytest.mark.parametrize("rol", ["dueno", "cajero"])
+def test_sin_usuarios_no_puedes_cambiar_permisos_ni_crear(cliente, dueno, rol):
+    u = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Restringido", "pin": "4321", "rol": rol, "permisos": SOLO_VENDER}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": u["id"], "pin": "4321"})
+    for id_ in (u["id"], dueno["id"]):
+        assert cliente.put(f"/api/v1/usuarios/{id_}", json={
+            "nombre": "Colado", "rol": "dueno", "permisos": "usuarios"}).status_code == 403
+    assert cliente.post("/api/v1/usuarios", json={
+        "nombre": "Colado", "pin": "5555", "permisos": "usuarios"}).status_code == 403
+    assert cliente.get("/api/v1/usuarios/permisos").status_code == 403
+
+
+def test_cajero_con_permiso_usuarios_puede_administrar(cliente, dueno):
+    u = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Encargado", "pin": "4321", "permisos": "usuarios"}).json()
+    cliente.post("/api/v1/sesion/entrar", json={"usuario_id": u["id"], "pin": "4321"})
+    r = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Nuevo", "pin": "5555", "permisos": SOLO_VENDER})
+    assert r.status_code == 200
+    assert cliente.put(f"/api/v1/usuarios/{r.json()['id']}", json={
+        "nombre": "Nuevo", "permisos": "vender"}).json()["permisos"] == "vender"
+
+
+def test_primer_dueno_no_puede_quedar_restringido(cliente):
+    u = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Ruperto", "pin": "1234", "permisos": SOLO_VENDER}).json()
+    assert u["rol"] == "dueno" and u["permisos"] == ""
+
+
+
 def test_entrar_con_el_pin_bueno_y_con_el_malo(cliente, dueno):
     cliente.post("/api/v1/sesion/salir", json={"por": "salir"})
     assert cliente.post("/api/v1/sesion/entrar",

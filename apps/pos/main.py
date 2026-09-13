@@ -231,4 +231,3 @@ def pantallas_simple():
     """
     return FileResponse(os.path.join(ESTATICOS, "pantallas-simple.html"),
                         headers={"Cache-Control": "no-store"})
-

@@ -603,6 +603,14 @@ button{font-family:inherit;cursor:pointer}
 .fila input[type="text"],.fila input[type="number"]{height:52px;padding:0 12px;font-size:16px}
 .marca{min-height:52px;gap:12px;font-size:15px;cursor:pointer}
 .marca input[type="checkbox"]{width:28px;height:28px;flex:none;accent-color:var(--clay);cursor:pointer}
+.permisos-persona{min-width:0;border:1px solid var(--clay);border-radius:12px;padding:14px;margin:14px 0}
+.permisos-persona legend{font-weight:700;padding:0 6px}
+.permisos-persona .marca{padding:8px 0;white-space:normal}
+.permisos-persona .ayuda{margin:8px 0}
+.permisos-persona input[role="switch"]{appearance:none;width:48px;height:28px;border:2px solid var(--suave);border-radius:20px;background:var(--tarjeta);position:relative}
+.permisos-persona input[role="switch"]::before{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:var(--suave)}
+.permisos-persona input[role="switch"]:checked{border-color:var(--clay);background:var(--clay)}
+.permisos-persona input[role="switch"]:checked::before{transform:translateX(20px);background:white}
 .tabla th{padding:12px}
 .tabla td{padding:14px 12px}
 .conectar code{min-height:var(--toque);display:inline-flex;align-items:center;padding:0 14px;user-select:text}

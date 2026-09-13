@@ -297,7 +297,8 @@ def anular_venta(venta_id: int, datos: AnularIn, s: Session = Depends(get_sessio
     return _venta_dict(v, con_lineas=True, s=s)
 
 
-@router.get("/resumen")
+@router.get("/resumen",
+            dependencies=[Depends(sesion.exige("ver_dia"))])
 def resumen(
     fecha: str | None = Query(default=None, description="un día suelto"),
     desde: str | None = Query(default=None, description="AAAA-MM-DD"),

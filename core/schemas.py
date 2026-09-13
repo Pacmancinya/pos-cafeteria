@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from core.codigos import FORMATO_BALANZA_POR_DEFECTO, validar_formato_balanza
 from core.config import (BLOQUEO_MINUTOS, MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
-                         TECLADO_EN_PANTALLA, UNIDADES)
+                         TECLADO_EN_PANTALLA, TODOS_LOS_PERMISOS, UNIDADES)
 
 
 class LineaIn(BaseModel):
@@ -147,12 +147,22 @@ class CategoriaIn(BaseModel):
 class UsuarioIn(BaseModel):
     nombre: str
     rol: str = "cajero"
+    # Vacío hereda el rol; al editar, omitir el campo conserva lo guardado.
+    permisos: str = ""
     # Vacío al editar significa "déjale el PIN que ya tenía": obligar a
     # reescribirlo para cambiarle el nombre a alguien termina en PINs de 1111.
     pin: str = ""
     activo: bool = True
     color: str = ""
     orden: int = 0
+
+    @field_validator("permisos")
+    @classmethod
+    def permisos_validos(cls, v):
+        claves = {p.strip() for p in v.split(",") if p.strip()}
+        if claves - set(TODOS_LOS_PERMISOS):
+            raise ValueError("Hay permisos que no existen. Vuelve a abrir la persona y elige de la lista.")
+        return ",".join(p for p in TODOS_LOS_PERMISOS if p in claves)
 
     @field_validator("nombre")
     @classmethod

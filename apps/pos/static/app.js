@@ -2353,17 +2353,20 @@ function mostrarPinDeRed(pin, seguir) {
    Sacar a alguien NO lo borra: sus ventas y sus turnos tienen que seguir
    cuadrando. Queda inactivo y desaparece del candado. */
 let EQUIPO = [];
+let PERMISOS_EQUIPO = { catalogo: [], roles: {} };
 
 async function dialogoEquipo() {
-  try { EQUIPO = await api("/usuarios"); }
+  try {
+    [EQUIPO, PERMISOS_EQUIPO] = await Promise.all([api("/usuarios"), api("/usuarios/permisos")]);
+  }
   catch (e) { return avisar(e.message, true); }
 
   $("#dialogoEquipo").innerHTML = `
     <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
     <h2>Quiénes entran a la caja</h2>
-    <p class="ayuda" style="margin-bottom:14px">El <b>dueño</b> puede todo. El
+    <p class="ayuda" style="margin-bottom:14px">Por su rol, el <b>dueño</b> puede todo. El
       <b>cajero</b> vende, cobra y cuadra su caja, pero no cambia precios ni
-      corrige ventas de días pasados.</p>
+      corrige ventas de días pasados. Al editar puedes elegir los permisos de cada persona.</p>
     <div class="equipo">
       ${EQUIPO.map((u) => `
         <button class="equipo__fila ${u.activo ? "" : "es-baja"}" data-editar-usuario="${u.id}">
@@ -2402,6 +2405,25 @@ function formUsuario(id) {
         <button class="medio ${u.rol === "dueno" ? "is-on" : ""}" data-rol="dueno">Dueño</button>
       </div>
     </div>
+    <fieldset class="permisos-persona">
+      <legend>Permisos de esta persona</legend>
+      <label class="marca">
+        <input id="uHeredar" type="checkbox" role="switch" ${u.permisos ? "" : "checked"}
+               aria-controls="uPermisos"> Usar los permisos de su rol
+      </label>
+      <button type="button" class="btn btn--fantasma" id="uSoloVender">Que solo venda</button>
+      <p class="ayuda">Abre la caja, vende y cierra su caja.</p>
+      <div id="uPermisos" ${u.permisos ? "" : "hidden"}>
+        ${PERMISOS_EQUIPO.catalogo.map((p) => `
+          <label class="marca">
+            <input type="checkbox" data-permiso-persona="${esc(p.clave)}"
+              ${(u.permisos ? u.permisos.split(",").map((v) => v.trim()) : PERMISOS_EQUIPO.roles[u.rol] || []).includes(p.clave) ? "checked" : ""}>
+            ${esc(p.nombre)}
+          </label>`).join("")}
+        <p class="ayuda">Marca al menos un permiso. Para impedir que entre, usa «Sacar de la caja».</p>
+      </div>
+      ${u.id === SESION.id ? `<p class="ayuda">No puedes quitarte «Crear y editar personas»: lo necesitas para administrar los permisos del equipo.</p>` : ""}
+    </fieldset>
     ${nuevo ? "" : `<p class="ayuda">${u.activo
       ? "Si lo sacas de la caja deja de aparecer en la pantalla de entrada, pero sus ventas y sus turnos se conservan."
       : "Ahora mismo no aparece en la pantalla de entrada."}</p>`}
@@ -2412,7 +2434,20 @@ function formUsuario(id) {
         : `<button class="btn btn--fantasma" data-revivir-usuario="${u.id}">Dejarlo entrar de nuevo</button>`)}
       <button class="btn btn--cobrar" data-guardar-usuario="${u.id || 0}" style="width:auto">Guardar</button>
     </div>`;
+  $("#uHeredar").addEventListener("change", () => {
+    marcarPermisosPersona(PERMISOS_EQUIPO.roles[$("#uRol .is-on").dataset.rol] || []);
+    $("#uPermisos").hidden = $("#uHeredar").checked;
+  });
+  $("#uSoloVender").addEventListener("click", () => {
+    $("#uHeredar").checked = false;
+    $("#uPermisos").hidden = false;
+    marcarPermisosPersona(["vender", "turno_abrir", "turno_cerrar"]);
+  });
   setTimeout(() => $("#uNombre").focus(), 60);
+}
+
+function marcarPermisosPersona(claves) {
+  $$("[data-permiso-persona]").forEach((c) => { c.checked = claves.includes(c.dataset.permisoPersona); });
 }
 
 async function guardarUsuario(id) {
@@ -2424,10 +2459,19 @@ async function guardarUsuario(id) {
   if (!nombre) return avisar("Escribe el nombre", true);
   if (!id && pin.length < 4) return avisar("Ponle un PIN de 4 números", true);
   if (pin && pin.length < 4) return avisar("El PIN son 4 números", true);
+  const rol = elegido ? elegido.dataset.rol : "cajero";
+  const heredar = $("#uHeredar").checked;
+  const seleccion = $$("[data-permiso-persona]:checked").map((c) => c.dataset.permisoPersona);
+  if (!heredar && !seleccion.length)
+    return avisar("Marca al menos un permiso o activa «Usar los permisos de su rol».", true);
+  const efectivos = heredar ? PERMISOS_EQUIPO.roles[rol] || [] : seleccion;
+  if (id === SESION.id && !efectivos.includes("usuarios"))
+    return avisar("No puedes quitarte «Crear y editar personas»: lo necesitas para administrar los permisos del equipo.", true);
 
   const cuerpo = {
     nombre,
-    rol: elegido ? elegido.dataset.rol : "cajero",
+    rol,
+    permisos: heredar ? "" : seleccion.join(","),
     // Guardar no puede revivir a alguien que sacaron: para eso está su botón.
     activo: previo ? previo.activo : true,
     color: previo ? previo.color : "",
@@ -2438,6 +2482,7 @@ async function guardarUsuario(id) {
   try {
     await api(id ? `/usuarios/${id}` : "/usuarios",
       { method: id ? "PUT" : "POST", body: JSON.stringify(cuerpo) });
+    if (id === SESION.id) await cargarSesion();
     avisar(id ? "Guardado" : `${nombre} ya puede entrar a la caja`);
     dialogoEquipo();
   } catch (e) { avisar(e.message, true); }
@@ -4192,7 +4237,9 @@ document.addEventListener("click", (e) => {
   if (cerca("data-equipo-volver")) return dialogoEquipo();
   if (cerca("data-rol")) {
     const b = cerca("data-rol");
-    return $$("#uRol .medio").forEach((o) => o.classList.toggle("is-on", o === b));
+    $$("#uRol .medio").forEach((o) => o.classList.toggle("is-on", o === b));
+    if ($("#uHeredar").checked) marcarPermisosPersona(PERMISOS_EQUIPO.roles[b.dataset.rol] || []);
+    return;
   }
   if (cerca("data-guardar-usuario"))
     return guardarUsuario(+cerca("data-guardar-usuario").dataset.guardarUsuario);
