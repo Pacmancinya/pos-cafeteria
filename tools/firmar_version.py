@@ -88,11 +88,23 @@ def main() -> int:
         print("  Commitea primero y vuelve a correr esto.")
         return 1
 
-    with open(os.path.join(RAIZ, "version.json"), encoding="utf-8") as f:
-        publicada = json.load(f).get("version")
-    if publicada != APP_VERSION:
-        print(f"  core/config.py dice {APP_VERSION} y version.json dice {publicada}: tienen que coincidir.")
+    # El guardian existe para no firmar una version que no se anuncio en ningun lado.
+    # Anunciarla en el canal PILOTO alcanza: el proceso dice que una version nueva va
+    # primero ahi y se copia al estable cuando lleva unos dias andando (docs/PUBLICAR-
+    # ACTUALIZACIONES.md). Exigir version.json obligaba a publicarle a TODOS los locales
+    # el mismo dia, que es justo lo que la 2.12 dejo como leccion.
+    canales = {}
+    for archivo in ("version.json", "version-piloto.json"):
+        with open(os.path.join(RAIZ, archivo), encoding="utf-8") as f:
+            canales[archivo] = json.load(f).get("version")
+    if APP_VERSION not in canales.values():
+        dichos = ", ".join(f"{a} dice {v}" for a, v in canales.items())
+        print(f"  core/config.py dice {APP_VERSION} y ningun canal la anuncia ({dichos}).")
+        print("  Pon la version en version-piloto.json (o en version.json) y vuelve a correr esto.")
         return 1
+    if canales["version.json"] != APP_VERSION:
+        print(f"  Se firma para el canal PILOTO: el estable sigue en {canales['version.json']}.")
+        print("  Cuando lleve unos dias andando, copia version-piloto.json a version.json.")
 
     archivos = archivos_commiteados()
     crudo = manifiesto_de(archivos, APP_VERSION)
