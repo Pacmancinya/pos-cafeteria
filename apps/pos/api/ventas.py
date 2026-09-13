@@ -116,6 +116,23 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
     lineas: list[VentaLinea] = []
     total = 0
     for item in datos.lineas:
+        if item.producto_id is None:
+            # Cobro a mano. Es la única línea cuyo precio no sale del catálogo, así que es
+            # también la única por la que alguien podría cobrar de más sin que se note. No
+            # se prohíbe —en un mostrador siempre aparece algo que no está en la carta—:
+            # se pide permiso y queda firmada, igual que sacar plata del cajón.
+            if not puede(quien.get("rol", ""), "cobrar_varios", quien.get("permisos", "")):
+                raise HTTPException(
+                    403, f"{quien.get('nombre') or 'Este usuario'} no puede cobrar montos "
+                         "a mano. Se lo puede dar el dueño en Equipo.")
+            precio = item.precio or 0
+            subtotal = precio * item.cantidad
+            total += subtotal
+            lineas.append(VentaLinea(
+                producto_id=None, nombre=(item.nombre.strip() or "Varios"),
+                precio_unitario=precio, cantidad=item.cantidad, subtotal=subtotal,
+            ))
+            continue
         p = s.get(Producto, item.producto_id)
         if not p:
             raise HTTPException(404, f"No existe el producto {item.producto_id}")
@@ -297,6 +314,38 @@ def anular_venta(venta_id: int, datos: AnularIn, s: Session = Depends(get_sessio
     return _venta_dict(v, con_lineas=True, s=s)
 
 
+def _cobros_a_mano(s: Session, ventas) -> dict:
+    """Cuántas líneas se cobraron a mano y por cuánto, con quién las hizo.
+
+    Una línea sin `producto_id` es un cobro a mano: su precio lo escribió alguien en el
+    mostrador. Se cuentan aparte porque son las únicas que no se pueden contrastar con la
+    carta; el resto de las líneas siempre se puede revisar contra su producto.
+    """
+    from apps.pos.db.models import VentaLinea
+
+    ids = [v.id for v in ventas if v.estado == "pagada"]
+    if not ids:
+        return {"cantidad": 0, "total": 0, "por_persona": []}
+    lineas = s.exec(select(VentaLinea).where(
+        VentaLinea.venta_id.in_(ids), VentaLinea.producto_id == None)).all()  # noqa: E711
+    if not lineas:
+        return {"cantidad": 0, "total": 0, "por_persona": []}
+    de_venta = {v.id: v for v in ventas}
+    por_persona: dict[str, dict] = {}
+    for l in lineas:
+        v = de_venta.get(l.venta_id)
+        quien = _nombre(s, v.usuario_id) if v else ""
+        d = por_persona.setdefault(quien or "—", {"nombre": quien or "—",
+                                                  "cantidad": 0, "total": 0})
+        d["cantidad"] += 1
+        d["total"] += l.subtotal
+    return {
+        "cantidad": len(lineas),
+        "total": sum(l.subtotal for l in lineas),
+        "por_persona": sorted(por_persona.values(), key=lambda d: -d["total"]),
+    }
+
+
 @router.get("/resumen",
             dependencies=[Depends(sesion.exige("ver_dia"))])
 def resumen(
@@ -442,6 +491,11 @@ def resumen(
             "hora": a_local(r.creado_at).strftime("%H:%M"),
             "hecho_por": r.hecho_por,
         } for r in movs],
+        # Los cobros a mano, aparte. No es sospecha: es que son las únicas líneas
+        # cuyo precio no salió del catálogo, así que son las únicas que nadie puede
+        # revisar después comparando contra la carta. Verlas sumadas —cuántas y por
+        # cuánto— es lo que le permite al dueño mirarlas si algún día no le cuadran.
+        "varios": _cobros_a_mano(s, ventas),
         # Solo cuando se pidió un turno. `None` es la señal de que lo de arriba
         # es de un rango de días y no de una caja abierta ahora.
         "turno": None,

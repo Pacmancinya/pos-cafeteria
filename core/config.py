@@ -84,7 +84,7 @@ PERMISOS = {
     "dueno": (
         "vender", "anular", "anular_pasado",
         "turno_abrir", "turno_cerrar", "turno_cerrar_ajeno",
-        "caja_retirar",
+        "caja_retirar", "cobrar_varios",
         "ver_dia", "ver_informes", "editar_carta",
         "inventario", "inventario_ajustar",
         "usuarios", "config",
@@ -105,7 +105,7 @@ PERMISOS = {
         # que está solo a las 9 de la mañana cuando hay que ir a comprar pan. No
         # es un descuido dárselo: cada retiro queda firmado con su nombre y su
         # hora, y eso —no un permiso que se lo quite— es lo que lo hace honesto.
-        "caja_retirar",
+        "caja_retirar", "cobrar_varios",
         "ver_dia", "inventario",
     ),
 }
@@ -121,6 +121,7 @@ CATALOGO_DE_PERMISOS = (
     ("turno_cerrar", "Cerrar su caja"),
     ("turno_cerrar_ajeno", "Cerrar la caja de otro"),
     ("caja_retirar", "Sacar plata del cajón"),
+    ("cobrar_varios", "Cobrar un monto a mano"),
     ("ver_dia", "Ver El día"),
     ("ver_informes", "Ver los informes"),
     ("editar_carta", "Editar la carta y los precios"),

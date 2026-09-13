@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from core.codigos import FORMATO_BALANZA_POR_DEFECTO, validar_formato_balanza
 from core.config import (BLOQUEO_MINUTOS, MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
@@ -11,8 +11,23 @@ from core.config import (BLOQUEO_MINUTOS, MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
 
 
 class LineaIn(BaseModel):
-    producto_id: int
+    """Una línea del pedido: un producto de la carta, o un cobro a mano.
+
+    El cobro a mano existe porque en el mostrador siempre aparece algo que no está en la
+    carta. Es la única línea cuyo precio llega desde la pantalla en vez de salir del
+    catálogo, así que pide su propio permiso y queda firmada con quién la cobró.
+    """
+    producto_id: Optional[int] = None
     cantidad: int = Field(default=1, ge=1, le=999)
+    # Solo para el cobro a mano. Con `precio` puesto, la línea es "varios".
+    nombre: str = Field(default="", max_length=60)
+    precio: Optional[int] = Field(default=None, ge=0, le=99_000_000)
+
+    @model_validator(mode="after")
+    def producto_o_monto(self):
+        if self.producto_id is None and self.precio is None:
+            raise ValueError("Una línea lleva un producto de la carta o un monto a mano.")
+        return self
 
 
 class PagoIn(BaseModel):
