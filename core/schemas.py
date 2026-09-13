@@ -136,6 +136,7 @@ class ProductoIn(BaseModel):
     # importe — es que entrar costaba más de lo que daba.
     codigo: str = ""                       # el de barras, si lo escaneó
     tal_cual: bool = False                 # se compra y se vende igual: es su propio insumo
+    llevar_cuenta: bool = False
     costo: int = Field(default=0, ge=0)    # cuánto cuesta cada uno
     stock_inicial: int = Field(default=0, ge=0)
     minimo: int = Field(default=0, ge=0)   # bajo esto aparece en "Por comprar"
@@ -246,6 +247,12 @@ class LineaRecetaIn(BaseModel):
 
 class RecetaIn(BaseModel):
     lineas: list[LineaRecetaIn] = Field(default_factory=list)
+
+
+class CantidadBodegaIn(BaseModel):
+    cantidad: int = Field(ge=0, le=2147483647, strict=True)
+    stock_esperado: int = Field(strict=True)
+    motivo: Literal["llego", "se perdio", "conteo", "ajuste"]
 
 
 class TalCualIn(BaseModel):

@@ -34,6 +34,9 @@ def _lo_que_no_alcanza(s: Session, lineas: list) -> str:
             pedido[l.producto_id] = pedido.get(l.producto_id, 0) + l.cantidad
 
     for producto_id, cantidad in pedido.items():
+        producto = s.get(Producto, producto_id)
+        if producto and producto.llevar_cuenta is False:
+            continue
         insumo = s.exec(
             select(Insumo).where(
                 Insumo.producto_id == producto_id,
@@ -50,9 +53,9 @@ def _lo_que_no_alcanza(s: Session, lineas: list) -> str:
             quedan = insumo.stock
             if quedan <= 0:
                 return (f"«{nombre}» está en cero. Anota la mercadería que llegó en "
-                        "Bodega («Llegó mercadería») y vuelve a cobrar.")
+                        "Bodega y vuelve a cobrar.")
             return (f"De «{nombre}» quedan {quedan}. Estás vendiendo {cantidad}. "
-                    "Si llegó más, anótalo en Bodega («Llegó mercadería»).")
+                    "Si llegó más, actualiza la cantidad en Bodega.")
     return ""
 
 

@@ -33,6 +33,9 @@ class Producto(SQLModel, table=True):
     precio: int = 0                       # bruto, con IVA incluido
     plu: str = ""                        # identificador de balanza; vacío = no usa balanza
     precio_kilo: int = 0                  # CLP por kg, para etiquetas con peso
+    # NULL conserva el comportamiento de recetas de las cajas anteriores.
+    # Las altas de la API guardan False salvo elección explícita.
+    llevar_cuenta: Optional[bool] = None
     activo: bool = True
     orden: int = 0
 

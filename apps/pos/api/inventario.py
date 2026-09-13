@@ -20,12 +20,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from apps.pos import sesion
-from apps.pos.db.models import Insumo, Movimiento, Producto, Receta
+from apps.pos.db.models import CodigoBarra, Insumo, Movimiento, Producto, Receta
 from apps.pos.db.session import get_session
 from core.config import (a_local, costo_de, hoy_local, mostrar_cantidad,
                          rango_utc_del_dia)
 from core.planilla import sin_tildes
-from core.schemas import (CompraIn, ConteoIn, InsumoIn, MermaIn, RecetaIn, TalCualIn)
+from core.schemas import (CantidadBodegaIn, CompraIn, ConteoIn, InsumoIn, MermaIn, RecetaIn, TalCualIn)
 
 router = APIRouter(prefix="/api/v1", tags=["inventario"])
 
@@ -78,14 +78,22 @@ def descontar_venta(s: Session, venta, quien: dict | None = None) -> list[dict]:
     for linea in venta.lineas:
         if not linea.producto_id:
             continue
-        recetas = s.exec(
-            select(Receta).where(Receta.producto_id == linea.producto_id)
-        ).all()
-        for r in recetas:                      # sin receta, este for no corre
-            insumo = s.get(Insumo, r.insumo_id)
+        producto = s.get(Producto, linea.producto_id)
+        if producto and producto.llevar_cuenta is False:
+            continue
+        if producto and producto.llevar_cuenta is True:
+            propio = s.exec(select(Insumo).where(
+                Insumo.producto_id == producto.id, Insumo.activo == True)).first()  # noqa: E712
+            consumos = [(propio, 1)]  # La elección nueva siempre consume unidades.
+        else:
+            recetas = s.exec(
+                select(Receta).where(Receta.producto_id == linea.producto_id)
+            ).all()
+            consumos = [(s.get(Insumo, r.insumo_id), r.cantidad) for r in recetas]
+        for insumo, cantidad in consumos:
             if not insumo or not insumo.activo:
                 continue
-            gasto = r.cantidad * linea.cantidad
+            gasto = cantidad * linea.cantidad
             anotar(s, insumo, "venta", -gasto,
                    motivo=f"Venta #{venta.numero}", venta_id=venta.id,
                    turno_id=venta.turno_id, quien=quien)
@@ -136,6 +144,103 @@ def devolver_venta(s: Session, venta, quien: dict | None = None) -> int:
 # ---------------------------------------------------------------------------
 # Mirar el inventario
 # ---------------------------------------------------------------------------
+def habilitar_cuenta(s: Session, p: Producto) -> None:
+    """Activa unidades sin borrar ni reescribir las recetas anteriores."""
+    i = s.exec(select(Insumo).where(Insumo.producto_id == p.id)).first()
+    if not i:
+        candidato = _insumo_repetido(s, p.nombre, None)
+        if candidato and candidato.producto_id is None and candidato.unidad == "un":
+            usado = s.exec(select(Receta).where(
+                Receta.insumo_id == candidato.id, Receta.producto_id != p.id)).first()
+            if not usado:
+                i = candidato
+                i.producto_id = p.id
+    if not i:
+        i = Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
+                   compra_contenido=1, producto_id=p.id, contado=True)
+        s.add(i)
+        s.flush()
+    if i.unidad != "un":
+        raise HTTPException(409, "Este insumo conserva su medida anterior. Revísalo en Avanzado.")
+    i.activo = True
+    receta = s.exec(select(Receta).where(
+        Receta.producto_id == p.id, Receta.insumo_id == i.id)).first()
+    if not receta:
+        s.add(Receta(producto_id=p.id, insumo_id=i.id, cantidad=1))
+    p.llevar_cuenta = True
+    s.add(i)
+    s.add(p)
+
+
+@router.get("/bodega", dependencies=[Depends(sesion.exige("inventario"))])
+def ver_bodega(q: str = "", s: Session = Depends(get_session)):
+    productos = {p.id: p for p in s.exec(select(Producto)).all()}
+    codigos: dict[int, list[str]] = {}
+    for c in s.exec(select(CodigoBarra)).all():
+        codigos.setdefault(c.producto_id, []).append(c.codigo)
+    filas = []
+    for i in s.exec(select(Insumo).where(Insumo.activo == True)  # noqa: E712
+                    .order_by(Insumo.orden, Insumo.nombre)).all():
+        p = productos.get(i.producto_id)
+        if not p or not p.activo or p.llevar_cuenta is False or i.unidad != "un":
+            continue
+        # Las cuentas automáticas de antes, nunca contadas, quedan en Avanzado.
+        # No se borran ni se cambia su funcionamiento al actualizar la caja.
+        if p.llevar_cuenta is None and not i.contado:
+            continue
+        barras = codigos.get(p.id, [])
+        if q and sin_tildes(q) not in sin_tildes(p.nombre) and q.strip() not in barras:
+            continue
+        filas.append({**_insumo_dict(i), "nombre": p.nombre, "codigos": barras})
+    return {"insumos": filas}
+
+
+@router.put("/bodega/{insumo_id}/cantidad")
+def guardar_cantidad(insumo_id: int, datos: CantidadBodegaIn,
+                     s: Session = Depends(get_session),
+                     quien: dict = Depends(sesion.exige("inventario"))):
+    return _guardar_cantidad(s, insumo_id, datos, quien, solo_bodega=True)
+
+
+@router.put("/inventario/insumos/{insumo_id}/cantidad")
+def guardar_cantidad_anterior(insumo_id: int, datos: CantidadBodegaIn,
+                              s: Session = Depends(get_session),
+                              quien: dict = Depends(sesion.exige("inventario"))):
+    return _guardar_cantidad(s, insumo_id, datos, quien, solo_bodega=False)
+
+
+def _guardar_cantidad(s: Session, insumo_id: int, datos: CantidadBodegaIn,
+                      quien: dict, *, solo_bodega: bool):
+    if datos.motivo in ("conteo", "ajuste"):
+        from core.config import puede
+        if not puede(quien["rol"], "inventario_ajustar", quien.get("permisos", "")):
+            raise HTTPException(403, "No tienes permiso para corregir el stock")
+    # La reserva ocurre antes de leer: dos cajas no pueden pisarse el conteo.
+    if s.get_bind().dialect.name == "sqlite":
+        from sqlalchemy import text
+        s.execute(text("BEGIN IMMEDIATE"))
+    i = s.exec(select(Insumo).where(Insumo.id == insumo_id).with_for_update()).first()
+    p = s.get(Producto, i.producto_id) if i and i.producto_id else None
+    if not i or not i.activo:
+        raise HTTPException(404, "No existe ese insumo activo")
+    if solo_bodega and (i.unidad != "un" or not p or not p.activo or p.llevar_cuenta is False):
+        raise HTTPException(404, "Este producto no lleva cuenta en la bodega")
+    if i.stock != datos.stock_esperado:
+        raise HTTPException(409, "La cantidad cambió. Vuelve a abrir el producto y revisa cuánto hay.")
+    diferencia = datos.cantidad - i.stock
+    if datos.motivo == "llego" and diferencia < 0:
+        raise HTTPException(422, "Si llegó mercadería la cantidad debe aumentar")
+    if datos.motivo == "se perdio" and diferencia > 0:
+        raise HTTPException(422, "Si se perdió mercadería la cantidad debe disminuir")
+    tipos = {"llego": "compra", "se perdio": "merma", "conteo": "ajuste", "ajuste": "ajuste"}
+    motivos = {"llego": "Llegó", "se perdio": "Se perdió", "conteo": "Conteo", "ajuste": "Ajuste"}
+    anotar(s, i, tipos[datos.motivo], diferencia, motivo=motivos[datos.motivo], quien=quien)
+    i.contado = True
+    s.add(i)
+    s.commit()
+    return _insumo_dict(i)
+
+
 def _insumo_repetido(s: Session, nombre: str, salvo_id: int | None) -> Insumo | None:
     """El insumo que ya se llama así, o None. Compara SIN tildes ni mayúsculas.
 
@@ -458,6 +563,8 @@ def guardar_receta(producto_id: int, datos: RecetaIn, s: Session = Depends(get_s
     p = s.get(Producto, producto_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")
+    p.llevar_cuenta = None  # Elección explícita del flujo avanzado de recetas.
+    s.add(p)
     for vieja in s.exec(select(Receta).where(Receta.producto_id == producto_id)).all():
         s.delete(vieja)
     insumos_nuevos = set()
@@ -529,6 +636,8 @@ def dar_cuenta_a_los_que_faltan(s: Session) -> list[str]:
         s.flush()                     # da i.id sin tener que re-buscarlo por nombre
         s.add(Receta(producto_id=p.id, insumo_id=i.id, cantidad=1))
         hechos.append(p.nombre)
+        p.llevar_cuenta = None
+        s.add(p)
     s.commit()
     return hechos
 
@@ -554,6 +663,8 @@ def receta_tal_cual(producto_id: int, datos: TalCualIn, s: Session = Depends(get
     p = s.get(Producto, producto_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")
+    p.llevar_cuenta = None
+    s.add(p)
 
     # Se busca por ID, no por nombre. Antes se comparaba `Insumo.nombre ==
     # p.nombre` y eso tenía tres formas de fallar, las tres vistas en la base

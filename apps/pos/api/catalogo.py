@@ -91,6 +91,7 @@ def listar_categorias(s: Session = Depends(get_session)):
     # todavía nadie contó llega con stock nulo y se vende como antes, hasta que
     # se cuente. Así "inventario obligatorio" no deja la carta entera invendible
     # el día que se actualiza.
+    insumos_propios = s.exec(select(Insumo).where(Insumo.activo == True)).all()  # noqa: E712
     quedan = {i.producto_id: i.stock
               for i in s.exec(select(Insumo).where(
                   Insumo.producto_id != None,          # noqa: E711
@@ -108,7 +109,10 @@ def listar_categorias(s: Session = Depends(get_session)):
                     "etiqueta": p.etiqueta, "dibujo": p.dibujo, "color": p.color,
                     # None = no se lleva stock de esto. Distinto de 0, que es
                     # "se lleva y no queda ninguno".
-                    "stock": quedan.get(p.id),
+                    "stock": quedan.get(p.id) if p.llevar_cuenta is not False else None,
+                    "llevar_cuenta": p.llevar_cuenta if p.llevar_cuenta is not None else any(
+                        i.producto_id == p.id and i.contado and i.unidad == "un"
+                        for i in insumos_propios),
                 }
                 for p in _productos_de(s, c.id, solo_activos=False)
             ],
@@ -194,7 +198,7 @@ def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Product
 
 # Lo que ProductoIn trae de más y no es columna de Producto: son las cosas que
 # antes obligaban a ir a la Bodega a escribir todo de nuevo.
-EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo"}
+EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo", "llevar_cuenta"}
 
 
 @router.post("/productos")
@@ -231,10 +235,10 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
             raise HTTPException(409, f"Ese código ya es de «{otro.nombre if otro else '?'}».")
 
     p = Producto(**datos.model_dump(exclude=EXTRAS))
+    p.llevar_cuenta = None if datos.tal_cual else datos.llevar_cuenta
     _un_solo_destacado(s, p)
     s.add(p)
-    s.commit()
-    s.refresh(p)
+    s.flush()
 
     if codigo:
         s.add(CodigoBarra(codigo=codigo, producto_id=p.id, cuantos=1))
@@ -261,8 +265,7 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
                        compra_contenido=1, compra_costo=datos.costo,
                        minimo=datos.minimo, producto_id=p.id)
         s.add(i)
-        s.commit()
-        s.refresh(i)
+        s.flush()
         for vieja in s.exec(select(Receta).where(Receta.producto_id == p.id)).all():
             s.delete(vieja)                # el huérfano pudo traer una receta a sí mismo
         s.add(Receta(producto_id=p.id, insumo_id=i.id, cantidad=1))
@@ -271,6 +274,9 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
             anotar(s, i, "carga", datos.stock_inicial,
                    motivo="Con lo que había al empezar", quien=quien)
 
+    if datos.llevar_cuenta:
+        from apps.pos.api.inventario import habilitar_cuenta
+        habilitar_cuenta(s, p)
     s.commit()
     s.refresh(p)
     return p
@@ -297,6 +303,12 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
                                      "Dos con el mismo nombre no se distinguen en la caja.")
 
     antes = p.nombre
+    if "llevar_cuenta" in datos.model_fields_set:
+        from apps.pos.api.inventario import habilitar_cuenta
+        if datos.llevar_cuenta:
+            habilitar_cuenta(s, p)
+        else:
+            p.llevar_cuenta = False
     for k, v in datos.model_dump(exclude=EXTRAS).items():
         # La pantalla actual no manda estos campos: omitirlos conserva la
         # configuracion de balanza; enviarlos vacios permite borrarla.

@@ -437,11 +437,14 @@ Categoria(id, nombre, orden, activa)
     # "Café caliente", "Fríos", "Pastelería"…
 
 Producto(id, categoria_id→Categoria, nombre, descripcion, precio, plu, precio_kilo,
-         activo, orden, destacado, badge,
+         activo, llevar_cuenta, orden, destacado, badge,
          antes, etiqueta, dibujo, color)
     # precio  = bruto en CLP (entero)
     # plu = identificador textual de balanza; vacío si no es de balanza
     # precio_kilo = bruto en CLP por kg (entero, por defecto 0)
+    # llevar_cuenta = elección por producto. Altas/importaciones: False.
+    # NULL conserva recetas y comportamiento anteriores; al actualizar no se
+    # crean insumos ni se modifica ningún saldo. True cuenta unidades.
     # antes   = precio tachado de oferta (opcional, entero)
     # destacado = va al recuadro grande de la pantalla del menú (1 por categoría)
     # dibujo   = "receta" del dibujo: taza, taza-cortado, mug, mug-espuma, mug-arte,
@@ -792,6 +795,8 @@ exactamente una cosa — todos marcan su PIN una vez más.
 ### Inventario `[IMPL]`
 ```
 GET  /api/v1/inventario                      → insumos, valor, qué falta comprar
+GET  /api/v1/bodega?q=nombre_o_codigo         → productos unitarios con cuenta
+PUT  /api/v1/bodega/{insumo_id}/cantidad      → cantidad absoluta, stock_esperado, motivo
 GET  /api/v1/inventario/alertas
 GET  /api/v1/inventario/insumos/{id}/movimientos   → el libro de ese insumo
 POST/PUT/DELETE /api/v1/inventario/insumos[/{id}]

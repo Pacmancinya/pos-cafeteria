@@ -379,6 +379,11 @@ const totalCarrito = () => carrito.reduce((s, l) => s + l.precio * l.cantidad, 0
    se conoce, se ofrece guardarlo, pero el pedido que estaba armado se queda
    donde está. */
 async function alEscanear(codigo) {
+  if ($(".vista.is-on")?.dataset.vista === "inventario" && usarInventario()) {
+    $("#buscarBodega").value = codigo;
+    pintarBodega();
+    return;
+  }
   // Con un diálogo abierto que no sea el de la carta, el escaneo no es para
   // vender: puede ser el dueño pegándole un código a un producto.
   const ficha = $("#capaProducto.is-on") && $("#fCodigo");
@@ -430,22 +435,20 @@ async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
     <p class="ayuda" id="cdDe">Buscando cómo se llama…</p>` : ""}
     <label class="campo"><span>¿Qué es?</span>
       <input id="cdNombre" type="text" placeholder="Escríbelo" autocomplete="off"></label>
-    <div class="${usarInventario() ? "fila2" : ""}">
+    <div>
       <label class="campo"><span>¿A cuánto lo vendes?</span>
         <input id="cdPrecio" type="text" inputmode="numeric" placeholder="0"></label>
-      ${usarInventario() ? `<label class="campo"><span>¿Cuánto te cuesta?</span>
-        <input id="cdCosto" type="text" inputmode="numeric" placeholder="0"></label>` : ""}
     </div>
     <div id="cdSugerido"></div>
     <label class="campo"><span>¿Dónde va?</span>
       <select id="cdCat">${cats.map((c) =>
         `<option value="${c.id}"${cual && c.id === cual.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>
-    ${usarInventario() ? `<label class="campo"><span>¿Cuántos tienes ahora?</span>
-      <input id="cdStock" type="text" inputmode="numeric" placeholder="0"></label>` : ""}
+    ${usarInventario() ? `<label class="marca"><input id="cdCuenta" type="checkbox">
+      Llevar la cuenta de este</label>` : ""}
     <p class="ayuda" style="margin-bottom:0">${codigo
       ? "Queda guardado con su código: la próxima vez que lo pases por el lector, entra solo al pedido."
       : usarInventario()
-        ? "Con los que tienes anotados, la caja te avisa cuando se están acabando y no te deja vender de más sin darte cuenta."
+        ? "Si llevas la cuenta, anota cuántos hay en Bodega. Todo se cuenta por unidades."
         : "Queda en la carta, listo para vender."}</p>
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
@@ -455,15 +458,6 @@ async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
   $("#capaCodigo").classList.add("is-on");
   setTimeout(() => $("#cdNombre").focus(), 60);
   if (!codigo) return;                    // sin código no hay a quién preguntarle el nombre
-
-  // El sugerido de precio se mueve solo con lo que cuesta.
-  $("#cdCosto")?.addEventListener("input", () => {
-    const v = soloNumeros($("#cdCosto").value);
-    const caja = $(".sugerido");
-    if (caja) return repintarSugerido(v);
-    $("#cdSugerido").innerHTML = bloqueSugerido(v, "cdPrecio");
-    refrescarSugerido();
-  });
 
   // Preguntar el nombre va DESPUÉS de dibujar: que la pantalla esté lista
   // aunque no haya internet. Nunca se espera por esto para poder escribir.
@@ -491,15 +485,11 @@ async function guardarProductoDelCodigo(codigo) {
   if (!nombre) return avisar("Escribe qué es", true);
   if (!precio) return avisar("Ponle precio", true);
 
-  const stock = soloNumeros($("#cdStock")?.value || 0);
-  const inventario = usarInventario() ? {
-    tal_cual: true, costo: soloNumeros($("#cdCosto")?.value || 0), stock_inicial: stock,
-  } : {};
+  const inventario = { llevar_cuenta: usarInventario() && !!$("#cdCuenta")?.checked };
   try {
     const p = await api("/productos", { method: "POST", body: JSON.stringify({
       categoria_id: +$("#cdCat").value,
       nombre, precio, codigo: codigo || "",
-      // Si el local lleva inventario, el producto lleva cuenta desde el alta.
       ...inventario,
     }) });
     $("#capaCodigo").classList.remove("is-on");
@@ -508,8 +498,7 @@ async function guardarProductoDelCodigo(codigo) {
       agregarPorId(p);
       avisar(`${nombre} queda guardado. Ya está en el pedido.`);
     } else {
-      avisar(usarInventario() ? `${nombre} queda guardado, con ${stock || 0} en la bodega.`
-                             : `${nombre} queda guardado, listo para vender.`);
+      avisar(`${nombre} queda guardado${inventario.llevar_cuenta ? ". Anota cuántos hay en Bodega." : ", listo para vender."}`);
     }
   } catch (e) { avisar(e.message, true); }
 }
@@ -1373,6 +1362,8 @@ function abrirFichaProducto(id) {
         etiqueta: $("#fEtiqueta").value.trim(),
         dibujo: $("#fDibujo").value,
         color: p.color || "",
+        ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked !== p.llevar_cuenta
+          ? { llevar_cuenta: $("#fCuenta").checked } : {}),
       }) });
       $("#capaProducto").classList.remove("is-on");
       await cargarCarta();
@@ -2672,59 +2663,107 @@ async function cargarBodega() {
   if (!usarInventario()) return;
   try {
     BODEGA = await api("/inventario");
+    BODEGA.productos = (await api("/bodega")).insumos;
   } catch (e) { return avisar(e.message, true); }
+  pintarBodega();
+  $("#buscarBodega").oninput = pintarBodega;
+  $("#tablaInsumosAnteriores").innerHTML = BODEGA.insumos.filter((i) =>
+    !BODEGA.productos.some((p) => p.id === i.id)).map((i) => `
+    <tr><td>${esc(i.nombre)}</td><td>${esc(i.muestra)}</td><td>
+      <button class="btn btn--chico" data-cantidad-bodega="${i.id}">Cambiar cantidad</button>
+      <button class="btn btn--chico" data-libro="${i.id}">Ver movimientos</button>
+      <button class="btn btn--chico" data-insumo="${i.id}">Editar insumo</button>
+    </td></tr><tr id="editarCantidad${i.id}" hidden><td colspan="3"></td></tr>`).join("");
+  $("#recetasAnteriores").innerHTML = CATEGORIAS.flatMap((c) => c.productos).map((p) =>
+    `<button class="btn btn--chico" data-ver-receta="${p.id}">Receta: ${esc(p.nombre)}</button>`).join(" ");
+}
 
-  const faltan = BODEGA.por_comprar || [];
-  // Desde que el inventario es obligatorio, todo producto lleva cuenta: los
-  // nuevos al crearse, los importados al importar, y los que venían de antes se
-  // pusieron al día solos al arrancar. Este cartel ya casi nunca aparece; si lo
-  // hace es porque alguien editó la base a mano, y se arregla solo al reiniciar.
-  const sinCuenta = BODEGA.productos_totales - BODEGA.productos_con_receta;
-  const caja = $("#sinCuenta");
-  if (caja) {
-    caja.innerHTML = sinCuenta > 0 ? `
-      <div class="pista" style="margin:0 0 14px">
-        <b>Hay ${sinCuenta} producto${sinCuenta === 1 ? "" : "s"} sin cuenta en la bodega.</b>
-        <p class="ayuda" style="margin:6px 0 0;font-size:13px">Se ponen al día solos
-          la próxima vez que se abra el programa.</p>
-      </div>` : "";
+function filtrarBodega(filas, consulta) {
+  const nombre = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const q = nombre(consulta);
+  return filas.filter((i) => nombre(i.nombre).includes(q) || (i.codigos || []).includes(consulta.trim()));
+}
+
+function pintarBodega() {
+  const filas = filtrarBodega(BODEGA.productos || [], $("#buscarBodega").value || "");
+  $("#tablaInsumos").innerHTML = filas.length ? `
+    <tr><th>Producto</th><th class="num">Cantidad</th><th></th></tr>
+    ${filas.map((i) => `<tr>
+      <td><button class="btn btn--fantasma" data-cantidad-bodega="${i.id}">${esc(i.nombre)}</button></td>
+      <td class="num"><button class="btn btn--fantasma" data-cantidad-bodega="${i.id}">${i.stock} un</button></td>
+      <td><button class="btn btn--chico" data-libro="${i.id}">Ver movimientos</button></td>
+    </tr><tr id="editarCantidad${i.id}" hidden><td colspan="3"></td></tr>`).join("")}`
+    : '<tr><td class="vacio">No hay productos para mostrar. Marca «Llevar la cuenta de este» en su ficha de la Carta.</td></tr>';
+}
+
+function editarCantidadBodega(id) {
+  const i = (BODEGA.productos || []).find((p) => p.id === id)
+    || BODEGA.insumos.find((p) => p.id === id);
+  if (!i) return;
+  const fila = $("#editarCantidad" + id);
+  fila.hidden = false;
+  fila.querySelector("td").innerHTML = `
+    <label class="campo"><span>Cuántos hay de ${esc(i.nombre)} (${esc(i.unidad || "un")})</span>
+      <div class="cantidad-bodega">
+        <button class="btn" data-paso-bodega="-1" data-id="${id}" aria-label="Restar uno">−</button>
+        <input id="cantidadBodega${id}" type="number" min="0" max="2147483647" step="1" inputmode="numeric" value="${Math.max(0, i.stock)}">
+        <button class="btn" data-paso-bodega="1" data-id="${id}" aria-label="Sumar una unidad">+</button>
+        <button class="btn" data-pedir-motivo="${id}">Guardar</button>
+        <button class="btn btn--fantasma" data-cancelar-cantidad="${id}">Cancelar</button>
+      </div></label>
+    <div id="motivoBodega${id}" hidden>
+      <p>¿Por qué cambió?</p>
+      ${[["llego", "Llegó"], ["se perdio", "Se perdió"], ["conteo", "Conteo"], ["ajuste", "Ajuste"]].map(([valor, titulo]) =>
+        `<button class="btn" data-guardar-cantidad="${id}" data-razon="${valor}">${titulo}</button>`).join(" ")}
+    </div>`;
+  $("#cantidadBodega" + id).oninput = () => { $("#motivoBodega" + id).hidden = true; };
+  $("#cantidadBodega" + id).focus();
+  $("#cantidadBodega" + id).select();
+}
+
+function cantidadBodegaValida(id) {
+  const campo = $("#cantidadBodega" + id);
+  const n = Number(campo.value);
+  if (!campo.value.trim() || !Number.isInteger(n) || n < 0 || n > 2147483647) {
+    avisar("Escribe una cantidad entera de unidades, desde cero", true);
+    return null;
   }
+  return n;
+}
 
-  $("#kpisBodega").innerHTML = `
-    <div class="kpi"><span>Insumos</span><b>${BODEGA.insumos.length}</b>
-      <small>${BODEGA.productos_con_receta} de ${BODEGA.productos_totales} productos con receta</small></div>
-    <div class="kpi"><span>Vale la bodega</span><b>${clp(BODEGA.valor_total)}</b>
-      <small>a precio de la última compra</small></div>
-    <div class="kpi"><span>Por comprar</span><b class="${faltan.length ? "mal" : "ok"}">${faltan.length}</b>
-      <small>${faltan.length ? faltan.map((f) => esc(f.nombre)).join(", ") : "no falta nada"}</small></div>`;
+async function guardarCantidadBodega(id, motivo) {
+  const cantidad = cantidadBodegaValida(id);
+  if (cantidad === null) return;
+  const principal = BODEGA.productos.find((p) => p.id === id);
+  const i = principal || BODEGA.insumos.find((p) => p.id === id);
+  const fila = $("#editarCantidad" + id);
+  if (fila.dataset.guardando) return;
+  fila.dataset.guardando = "1";
+  fila.querySelectorAll("button, input").forEach((b) => { b.disabled = true; });
+  try {
+    const ruta = principal ? `/bodega/${id}/cantidad` : `/inventario/insumos/${id}/cantidad`;
+    await api(ruta, { method: "PUT", body: JSON.stringify({
+      cantidad, stock_esperado: i.stock, motivo }) });
+    await cargarBodega();
+    await cargarCarta();
+    avisar("Cantidad guardada en el libro");
+  } catch (e) {
+    avisar(e.message, true);
+    delete fila.dataset.guardando;
+    fila.querySelectorAll("button, input").forEach((b) => { b.disabled = false; });
+  }
+}
 
-  $("#avisoBodega").innerHTML = faltan.length ? `
-    <div class="conectar" style="border-color:#E8C9C6;background:#FBECEA">
-      <b>Hay que comprar:</b>
-      ${faltan.map((f) => `${esc(f.nombre)} (queda ${esc(f.muestra)})`).join(" · ")}
-    </div>` : "";
-
-  $("#tablaInsumos").innerHTML = !BODEGA.insumos.length ? `
-    <tr><td class="vacio" style="padding:34px">Todavía no hay nada en la bodega.<br>
-      Los productos que crees desde ahora llevan su cuenta solos.<br>
-      Para los que ya estaban: entra al producto en la <b>Carta</b> y abajo usa
-      <b>«Llevar la cuenta de este producto»</b>.</td></tr>` : `
-    <tr><th>Insumo</th><th class="num">Queda</th><th class="num">Mínimo</th>
-        <th class="num">Vale</th><th>Cómo se compra</th><th></th></tr>
-    ${BODEGA.insumos.map((i) => `
-      <tr class="${i.bajo_cero ? "bajo-cero" : i.bajo_minimo ? "bajo-minimo" : ""}">
-        <td><b>${esc(i.nombre)}</b></td>
-        <td class="num"><b>${esc(i.muestra)}</b>
-          ${i.bajo_cero ? '<div class="mal" style="font-size:12px">falta registrar una compra</div>'
-                        : i.bajo_minimo ? '<div class="mal" style="font-size:12px">bajo el mínimo</div>' : ""}</td>
-        <td class="num">${i.minimo ? esc(i.minimo_muestra) : "—"}</td>
-        <td class="num">${clp(i.valor)}</td>
-        <td>${esc(i.formato || "—")}${i.compra_costo ? ` · ${clp(i.compra_costo)}` : ""}</td>
-        <td>
-          <button class="btn btn--chico" data-libro="${i.id}">Ver movimientos</button>
-          <button class="btn btn--chico" data-insumo="${i.id}">Editar</button>
-        </td>
-      </tr>`).join("")}`;
+async function verRecetaAnterior(id) {
+  try {
+    const r = await api(`/productos/${id}/receta`);
+    $("#dialogoBodega").innerHTML = `
+      <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+      <h2>Receta anterior</h2>
+      <p class="ayuda">Los ingredientes y sus medidas se conservan.</p>
+      <table class="tabla">${r.lineas.map((l) => `<tr><td>${esc(l.nombre)}</td><td>${esc(l.muestra)}</td></tr>`).join("") || '<tr><td>Sin receta</td></tr>'}</table>`;
+    $("#capaBodega").classList.add("is-on");
+  } catch (e) { avisar(e.message, true); }
 }
 
 /* ---- el libro de un insumo: contesta "¿por qué me faltan 3 litros?" ---- */
@@ -3926,51 +3965,8 @@ async function pintarTalCual(p) {
   if (!zona) return;
   zona.style.display = usarInventario() ? "" : "none";
   if (!usarInventario()) { zona.innerHTML = ""; return; }
-  let receta = null;
-  try { receta = await api(`/productos/${p.id}/receta`); } catch (e) { return; }
-  if (!usarInventario()) return;
-
-  if (receta.lineas.length) {
-    const l = receta.lineas[0];
-    const simple = receta.lineas.length === 1 && l.nombre === p.nombre;
-    zona.innerHTML = `
-      <div class="tal-cual__tit">Bodega</div>
-      <p class="ayuda" style="margin:0 0 8px">
-        ${simple
-          ? `Se descuenta de <b>${esc(l.nombre)}</b>. Quedan <b>${esc(l.stock_muestra)}</b>.`
-          : `Lleva ${receta.lineas.length} ingredientes.`}
-        ${receta.alcanza_para != null
-          ? ` Con lo que hay alcanza para <b>${receta.alcanza_para}</b>.` : ""}
-      </p>
-      ${receta.costo_total ? `
-        <p class="ayuda" style="margin:0 0 10px">Te cuesta
-          <b>${clp(receta.costo_total)}</b> y lo vendes a <b>${clp(p.precio)}</b>:
-          te quedan <b>${clp(receta.margen)}</b> (${receta.margen_pct}%).</p>
-        ${bloqueSugerido(receta.costo_total, "fPrecio")}` : ""}`;
-    refrescarSugerido();
-    return;
-  }
-
-  zona.innerHTML = `
-    <div class="tal-cual__tit">Bodega</div>
-    <p class="ayuda" style="margin:0 0 10px">De este producto <b>no se lleva la
-      cuenta</b>: se puede vender sin límite y no aparece en la Bodega. Anota
-      cuántos tienes y empieza a llevarla.</p>
-    <div class="tal-cual__campos">
-      <label class="campo"><span>¿Cuántos tienes?</span>
-        <input id="tcStock" type="text" inputmode="numeric" placeholder="0"></label>
-      <label class="campo"><span>¿Cuánto te cuesta cada uno?</span>
-        <input id="tcCosto" type="text" inputmode="numeric" placeholder="0"></label>
-      <label class="campo"><span>Avísame bajo</span>
-        <input id="tcMinimo" type="text" inputmode="numeric" placeholder="0"></label>
-    </div>
-    <div id="zonaSugerido"></div>
-    <button class="btn btn--cobrar" data-tal-cual="${p.id}"
-            style="width:auto">Llevar la cuenta de este producto</button>`;
-
-  // El sugerido aparece en cuanto hay un costo escrito, y se recalcula solo.
-  const costo = $("#tcCosto");
-  costo.addEventListener("input", () => repintarSugerido(soloNumeros(costo.value)));
+  zona.innerHTML = `<label class="marca"><input id="fCuenta" type="checkbox" ${p.llevar_cuenta ? "checked" : ""}>
+    Llevar la cuenta de este</label>`;
 }
 
 async function marcarTalCual(id) {
@@ -4293,6 +4289,28 @@ document.addEventListener("click", (e) => {
     return revivirUsuario(+cerca("data-revivir-usuario").dataset.revivirUsuario);
 
   // ---- bodega ----
+  if (cerca("data-cantidad-bodega")) return editarCantidadBodega(+cerca("data-cantidad-bodega").dataset.cantidadBodega);
+  if (cerca("data-cancelar-cantidad")) {
+    $("#editarCantidad" + cerca("data-cancelar-cantidad").dataset.cancelarCantidad).hidden = true;
+    return;
+  }
+  if (cerca("data-paso-bodega")) {
+    const b = cerca("data-paso-bodega");
+    const campo = $("#cantidadBodega" + b.dataset.id);
+    campo.value = Math.min(2147483647, Math.max(0, (Number(campo.value) || 0) + Number(b.dataset.pasoBodega)));
+    $("#motivoBodega" + b.dataset.id).hidden = true;
+    return;
+  }
+  if (cerca("data-pedir-motivo")) {
+    const id = +cerca("data-pedir-motivo").dataset.pedirMotivo;
+    if (cantidadBodegaValida(id) !== null) $("#motivoBodega" + id).hidden = false;
+    return;
+  }
+  if (cerca("data-guardar-cantidad")) {
+    const b = cerca("data-guardar-cantidad");
+    return guardarCantidadBodega(+b.dataset.guardarCantidad, b.dataset.razon);
+  }
+  if (cerca("data-ver-receta")) return verRecetaAnterior(+cerca("data-ver-receta").dataset.verReceta);
   if (cerca("data-libro")) return verLibro(+cerca("data-libro").dataset.libro);
   if (cerca("data-insumo")) return dialogoInsumo(+cerca("data-insumo").dataset.insumo);
   if (cerca("data-guardar-insumo"))

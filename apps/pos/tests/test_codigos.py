@@ -385,12 +385,14 @@ def test_migracion_agrega_balanza_a_producto_existente_sin_perder_datos(tmp_path
 
         assert {c["name"] for c in inspect(viejo).get_columns("producto")}.isdisjoint(
             {"plu", "precio_kilo"})
-        assert set(migraciones.poner_al_dia()) == {"producto.plu", "producto.precio_kilo"}
+        assert set(migraciones.poner_al_dia()) == {
+            "producto.plu", "producto.precio_kilo", "producto.llevar_cuenta"}
         with viejo.connect() as con:
             migrado = dict(con.execute(text("SELECT * FROM producto")).mappings().one())
         assert {clave: migrado[clave] for clave in anterior} == anterior
         assert migrado["plu"] == ""
         assert migrado["precio_kilo"] == 0
+        assert migrado["llevar_cuenta"] is None
 
         # El ORM ya puede leer y guardar el producto que existía. Volver a
         # arrancar no debe restaurar defaults sobre lo que configuró el local.

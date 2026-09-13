@@ -104,35 +104,17 @@ window.GUIAS = [
   titulo: "Compré pasteles: ¿dónde los pongo?",
   resumen: "En un solo lugar. Ya no hay que escribirlo dos veces.",
   html: `
-    <p>En <b>un solo lugar</b>: la pestaña <b>Carta</b>. Antes había que crearlo
-       acá y después otra vez en la Bodega, escribiendo el mismo nombre a mano.
-       Eso se acabó.</p>
-
-    <h3>Cómo se hace</h3>
-    <ol>
-      <li>Carta → <b>+ Producto</b>. Nombre y precio.</li>
-      <li>Más abajo, en <b>Bodega</b>, escribe <b>cuántos tienes</b> y
-          <b>cuánto te cuesta cada uno</b>, y toca <b>Se vende tal cual</b>.</li>
-    </ol>
-    <p>Listo. Cada vez que vendas uno, el stock baja solo.</p>
-
-    <div class="ayuda"><b>Si tienes lector de códigos</b>, es todavía más corto:
-      pasa el producto por el lector en la pantalla de venta. Como no lo conoce,
-      te lo pregunta ahí mismo — y queda guardado con su código para siempre.
-      Mira la guía <i>Vender con lector de códigos</i>.</div>
-
-    <h3>Cuando llegue más mercadería</h3>
-    <p>Bodega → <b>Llegó mercadería</b> → eliges el pastel y pones cuántos
-       llegaron.</p>
-
-    <h3>¿Cuándo NO sirve esto?</h3>
-    <p>Cuando lo que vendes <b>se prepara</b> con cosas que comparte con otros
-       productos. Un latte gasta leche, y esa misma leche la gastan el capuchino
-       y el cortado. Ahí necesitas una receta, que está en la guía de al lado.</p>
-
-    <div class="ayuda"><b>Si la bodega te dice que ya existe algo con ese
-      nombre</b>, no lo crees de nuevo: es lo mismo. Antes se creaban dos en
-      silencio y quedaban dos saldos, cada uno con la mitad de la verdad.</div>`,
+    <p>En <b>Carta ? + Producto</b>, escribe el nombre y el precio y marca
+       <b>Llevar la cuenta de este</b>. La casilla empieza apagada.</p>
+    <p>Despu?s abre <b>Bodega</b>, busca el pastel por nombre o c?digo de barras,
+       t?calo y escribe cu?ntas unidades hay. Tambi?n puedes usar + y ?.</p>
+    <p>Toca <b>Guardar</b> y elige el motivo: <b>Lleg?</b>, <b>Se perdi?</b>,
+       <b>Conteo</b> o <b>Ajuste</b>. El cambio queda en <b>Ver movimientos</b>,
+       con la fecha y la persona que lo guard?.</p>
+    <p>Cada venta descuenta las unidades. Si no quedan, actualiza la cantidad
+       real en Bodega antes de volver a cobrar.</p>
+    <p>Para preparaciones como panes, caf? o leche, deja la casilla apagada.
+       Solo llevas la cuenta de los productos que eliges.</p>`,
 },
 {
   id: "lector-de-codigos",
@@ -193,60 +175,20 @@ window.GUIAS = [
   titulo: "Que el stock baje solo al vender",
   resumen: "Para lo que preparas: café, jugos, sándwiches.",
   html: `
-    <p>Sirve cuando varios productos gastan de <b>lo mismo</b>. Ejemplo: la
-       leche la gastan el latte, el capuchino y el cortado.</p>
-
-    <h3>Paso 1 — carga lo que se gasta</h3>
-    <p>Pestaña <b>Bodega</b> → <b>+ Insumo</b>. Para la leche:</p>
-    <ul>
-      <li><b>Qué es:</b> Leche entera</li>
-      <li><b>En qué se mide:</b> Mililitros</li>
-      <li><b>Cómo se compra:</b> Caja de 1 litro</li>
-      <li><b>Cuánto trae el envase:</b> 1000</li>
-      <li><b>Cuánto cuesta el envase:</b> 1200</li>
-      <li><b>Cuánto hay ahora:</b> lo que tengas, en mililitros</li>
-      <li><b>Avísame cuando queden menos de:</b> 2000 (o sea, 2 litros)</li>
-    </ul>
-
-    <h3>Paso 2 — dile a cada producto cuánto usa</h3>
-    <p>Abre el producto en la <b>Carta</b> y ponle su <b>receta</b>: un latte
-       lleva 200 ml de leche y 18 g de café.</p>
-
-    <p>Desde ahí, cada latte que vendas descuenta 200 ml solo. Y cuando la leche
-       baje de 2 litros, aparece en <b>Por comprar</b>.</p>
-
-    <div class="ayuda"><b>No hace falta cargar todo.</b> Un producto sin receta
-      se vende igual y no descuenta nada. Puedes empezar con la leche y el café
-      —que son los que más se van— y dejar el resto para después.</div>
-
-    <h3>Los tres botones de la Bodega</h3>
-    <ul>
-      <li><b>Llegó mercadería</b> — se anota en envases, como se compra: 6 cajas
-          de leche, no 6.000 mililitros.</li>
-      <li><b>Se perdió algo</b> — se cayó, se venció, lo probamos. El motivo es
-          obligatorio: sin motivo, una pérdida no se distingue de un faltante.</li>
-      <li><b>Contar la bodega</b> — cuentas lo que hay de verdad y el programa
-          ajusta la diferencia. No te muestra lo que debería haber hasta el
-          final, igual que el arqueo de caja.</li>
-    </ul>
-
-    <h3>«Hay X productos sin cuenta en la bodega»</h3>
-    <p>Si te sale ese cartel arriba, léelo: esos productos <b>no tienen tope</b>.
-       La caja no sabe cuántos hay, así que no tiene con qué compararte y te deja
-       vender los que quieras. Así se vendieron 27 unidades de algo que estaba
-       en cero.</p>
-    <p>El botón <b>Empezar a llevar la cuenta de todos</b> los deja a todos
-       contando, <b>partiendo de cero</b>. Después anota lo que tienes de verdad
-       con <b>Llegó mercadería</b> o <b>Contar la bodega</b>. No toca los que ya
-       llevaban cuenta ni los que tienen receta: un capuchino no se cuenta, se
-       hace con leche y café.</p>
-
-    <div class="ayuda"><b>El stock nunca te impide cobrar, pero ahora te
-      pregunta.</b> Si vas a pasarte de lo que hay, sale una pregunta con
-      cuántos quedan y en cuánto va a quedar el inventario. Dices que sí y
-      vendes igual: el número queda en negativo y ese negativo no es un error,
-      te está avisando que hay una compra que nadie anotó. Se pregunta una vez
-      por producto en cada venta, no en cada toque.</div>`,
+    <p>En <b>Bodega</b> busca por nombre o pasa el c?digo por el lector.
+       Toca el producto para cambiar la cantidad, guarda y elige el motivo.</p>
+    <p>Solo aparecen los productos que llevan cuenta por unidades. Puedes marcar
+       o desmarcar <b>Llevar la cuenta de este</b> en su ficha de la Carta.</p>
+    <p>Las cuentas anteriores se conservan. En <b>Avanzado: insumos y recetas
+       anteriores</b> puedes consultar sus medidas, recetas y movimientos.</p>
+    <p><b>Ver movimientos</b> muestra por qu? cambi? cada saldo, cu?ndo y qui?n
+       lo hizo. Desmarcar un producto conserva ese historial.</p>
+    <p>La caja impide vender m?s unidades que las contadas. Los productos
+       antiguos que nunca se contaron conservan su funcionamiento hasta
+       registrar la cantidad real. Las recetas anteriores siguen descontando
+       sus ingredientes mientras no desmarques la cuenta del producto.</p>
+    <p>Los motivos <b>Conteo</b> y <b>Ajuste</b> requieren permiso para corregir
+       el stock. Si apagas <b>Llevar inventario en este local</b>, se oculta Bodega.</p>`,
 },
 {
   id: "abrir-cerrar-caja",

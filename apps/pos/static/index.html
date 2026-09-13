@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
-<link rel="stylesheet" href="/static/styles.css?v=51">
+<link rel="stylesheet" href="/static/styles.css?v=52">
 </head>
 <body>
 
@@ -148,23 +148,21 @@
     <div class="barra-dia">
       <div>
         <h3 style="margin-bottom:4px">Lo que hay en la bodega</h3>
-        <p class="ayuda" style="margin:0">Se descuenta solo al vender. De lo que ya
-          contaste no se puede vender más de lo que hay: anota la mercadería que
-          llegó y vuelve a cobrar.</p>
-      </div>
-      <div class="barra-dia__acc">
-        <button class="btn" id="btnCompra">Llegó mercadería</button>
-        <button class="btn" id="btnMerma">Se perdió algo</button>
-        <button class="btn" id="btnConteo">Contar la bodega</button>
-        <button class="btn" id="btnNuevoInsumo">+ Insumo</button>
+        <p class="ayuda" style="margin:0">Toca un producto para cambiar cuántos hay. Se descuenta solo al vender.</p>
       </div>
     </div>
-    <!-- Los productos que todavía no llevan cuenta: sin inventario no hay tope
-         y se pueden vender sin límite. -->
-    <div id="sinCuenta"></div>
-    <div class="kpis" id="kpisBodega"></div>
-    <div id="avisoBodega"></div>
+    <label class="campo"><span>Buscar en bodega</span>
+      <input id="buscarBodega" type="search" autocomplete="off"
+        placeholder="Nombre o código de barras"></label>
     <div class="tabla-wrap"><table class="tabla" id="tablaInsumos"></table></div>
+    <details id="bodegaAvanzada" style="margin-top:24px">
+      <summary>Avanzado: insumos y recetas anteriores</summary>
+      <p class="ayuda">Aquí se conservan los insumos, sus medidas y sus movimientos.
+        Los productos anteriores sin conteo siguen aquí hasta que marques su cuenta en la Carta.</p>
+      <button class="btn" id="btnNuevoInsumo">+ Insumo</button>
+      <div class="tabla-wrap"><table class="tabla" id="tablaInsumosAnteriores"></table></div>
+      <div id="recetasAnteriores"></div>
+    </details>
   </div>
 </main>
 
@@ -320,9 +318,9 @@
 <div class="aviso" id="aviso"></div>
 
 <script src="/static/dibujos.js?v=6"></script>
-<script src="/static/guias.js?v=12"></script>
+<script src="/static/guias.js?v=13"></script>
 <script src="/static/teclado.js?v=3"></script>
 <script src="/static/escaner.js?v=3"></script>
-<script src="/static/app.js?v=55"></script>
+<script src="/static/app.js?v=56"></script>
 </body>
 </html>

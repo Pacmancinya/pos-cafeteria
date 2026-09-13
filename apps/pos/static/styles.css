@@ -1331,3 +1331,8 @@ html,body{overscroll-behavior:none}
 .tarjetas__sumar .chip{background:#fff;border:1px dashed var(--linea);color:var(--suave);
   border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
 .tarjetas__sumar .chip:hover{border-style:solid;color:var(--tinta);background:#F3E9DB}
+
+.cantidad-bodega{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cantidad-bodega input{width:110px;text-align:center}
+#bodegaAvanzada summary{cursor:pointer;color:var(--suave);padding:10px 0}
+#recetasAnteriores{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}

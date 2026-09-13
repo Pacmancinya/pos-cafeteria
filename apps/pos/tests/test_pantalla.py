@@ -752,25 +752,26 @@ let api = async (ruta, opciones) => { pedidos.push([ruta, JSON.parse(opciones.bo
     AJUSTES.usar_inventario = usar;
     await dialogoProductoNuevoPorCodigo('', 1);
     const html = $('#dialogoCodigo').innerHTML;
-    assert.equal(html.includes('id="cdCosto"'), !!usar);
-    assert.equal(html.includes('id="cdStock"'), !!usar);
+    assert.equal(html.includes('id="cdCosto"'), false);
+    assert.equal(html.includes('id="cdStock"'), false);
+    assert.equal(html.includes('id="cdCuenta"'), !!usar);
     datos.set('#cdNombre', { value: 'Queso' });
     datos.set('#cdPrecio', { value: '1500' });
     datos.set('#cdCat', { value: '1' });
     if (usar) {
-      datos.set('#cdCosto', { value: '800' });
-      datos.set('#cdStock', { value: '10' });
+      datos.set('#cdCuenta', { checked: true });
     } else {
-      datos.delete('#cdCosto'); datos.delete('#cdStock');
+      datos.delete('#cdCuenta');
     }
     await guardarProductoDelCodigo('');
     const cuerpo = pedidos.at(-1)[1];
     assert.equal(cuerpo.nombre, 'Queso');
     if (usar) {
-      assert.equal(cuerpo.tal_cual, true);
-      assert.equal(cuerpo.costo, 800);
-      assert.equal(cuerpo.stock_inicial, 10);
+      assert.equal(cuerpo.llevar_cuenta, true);
+      assert.equal('costo' in cuerpo, false);
+      assert.equal('stock_inicial' in cuerpo, false);
     } else {
+      assert.equal(cuerpo.llevar_cuenta, false);
       for (const clave of ['tal_cual', 'costo', 'stock_inicial', 'minimo']) {
         assert.equal(clave in cuerpo, false);
       }
