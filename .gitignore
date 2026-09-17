@@ -45,3 +45,4 @@ despliegue/Kofe/
 despliegue/_construccion/
 *.zip
 .tmp-pytest-*/
+auditoria-pantallas/

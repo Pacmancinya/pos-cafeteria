@@ -362,7 +362,12 @@ button{font-family:inherit;cursor:pointer}
   text-transform:uppercase;color:var(--suave);margin-bottom:6px}
 .kpi b{font-size:25px;font-variant-numeric:tabular-nums}
 .kpi small{display:block;color:var(--suave);font-size:12.5px;margin-top:3px}
-.dos-col{display:grid;grid-template-columns:1.3fr 1fr;gap:22px;align-items:start}
+/* minmax(0,…) y no 1fr a secas: una columna 1fr no baja del ancho mínimo de lo
+   que tiene adentro, y la tabla «Cierres de caja» (757 px, con Dif. y Ver/Imprimir)
+   empujaba la columna de la derecha 110 px fuera de la pantalla. Pero apretarla
+   dentro de una columna de 500 px escondía justo el descuadre. Por eso, más abajo
+   (PANTALLAS CHICAS), las dos tablas van una bajo la otra hasta 1500 px. */
+.dos-col{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:start}
 .dos-col h3{font-size:16px;margin-bottom:10px}
 .tabla-wrap{background:var(--tarjeta);border:1px solid var(--linea);border-radius:13px;overflow:auto;box-shadow:var(--sombra)}
 .tabla{width:100%;border-collapse:collapse;font-size:14px}
@@ -457,7 +462,12 @@ button{font-family:inherit;cursor:pointer}
 .aviso.is-on{opacity:1;transform:translate(-50%,0)}
 .aviso.malo{background:var(--rojo)}
 
-@media (max-width:1100px){
+/* 760 y no 1100: con 1100 un monitor de 1024x768, o un notebook de 1366x768 con
+   Windows al 125% (1093 px útiles), se trataban como celular. La barra se doblaba,
+   los productos salían gigantes y el pedido con el botón Cobrar quedaba ABAJO de
+   todos los productos, fuera de la pantalla. Así lo vio el dueño en un local.
+   Esas pantallas usan las tres columnas apretadas del final de esta hoja. */
+@media (max-width:760px){
   .rail{
     width:100%;flex-direction:row;overflow-x:auto;padding:9px 10px;
     border-right:0;border-bottom:1px solid var(--linea);
@@ -668,7 +678,7 @@ html,body{overscroll-behavior:none}
 @media (prefers-reduced-motion:reduce){.prod.recien,.prod.recien::after,.linea.recien{animation:none}}
 
 /* --- 8. media queries: ajustar las existentes (L373 y L385) --- */
-@media (max-width:1100px){
+@media (max-width:760px){
   .rail{width:100%;touch-action:pan-x;scroll-snap-type:x proximity}
   .rail__cat{min-height:var(--toque-alto);padding:0 18px;scroll-snap-align:start}
 }
@@ -1358,3 +1368,175 @@ html,body{overscroll-behavior:none}
 .cantidad-bodega input{width:110px;text-align:center}
 #bodegaAvanzada summary{cursor:pointer;color:var(--suave);padding:10px 0}
 #recetasAnteriores{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+
+
+/* ==========================================================
+   PANTALLAS CHICAS DE ESCRITORIO
+   Va al final a propósito: tiene que ganarle a la capa táctil de arriba.
+
+   Las cajas de los locales no son monitores grandes. Son un monitor táctil de
+   1024x768, un notebook de 1366x768, o uno de 1920x1080 con Windows al 125% o
+   150%, que para la página son 1536 o 1280 px. Con la ventana maximizada quedan
+   entre 543 y 700 px de alto útil.
+
+   El criterio: las tres columnas (categorías, productos, pedido) se mantienen
+   hasta 761 px de ancho, porque el pedido con el botón Cobrar tiene que estar
+   SIEMPRE a la vista. Lo que se achica primero es lo que no se toca —márgenes,
+   letra, la cuenta de productos de cada categoría— y los azulejos. Lo que se
+   toca en cada venta no baja de 48 px.
+
+   Hay una prueba que recorre estas pantallas en esas resoluciones y mide que
+   Cobrar y los botones de abajo de cada diálogo se vean sin hacer scroll.
+   ========================================================== */
+
+/* --- la barra de arriba: en una sola fila hasta 761 px --- */
+@media (min-width:761px) and (max-width:1180px){
+  .barra{gap:10px;padding:6px 12px;flex-wrap:nowrap}
+  .tabs{gap:4px}
+  .tab{padding:0 14px;font-size:15px;min-height:var(--toque)}
+  .barra__der{gap:6px;flex-wrap:nowrap;min-width:0}
+  .turno{padding:0 11px;font-size:14px}
+  /* «Resumen de caja · Javiera» se corta con puntos antes que doblar la barra.
+     line-height 2 px menos que el alto: los bordes suman 2 y si no, mide 50. */
+  #turnoEstado{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:calc(var(--toque) - 2px)}
+  .version{padding:0 8px;font-size:12.5px}
+  /* Sin esto, cuando falta ancho el navegador parte lo que tiene espacios:
+     «El / día» en dos líneas, y el nombre del local o de quien atiende en tres. */
+  .tab,.version{white-space:nowrap}
+  .tabs{flex:none}
+  .barra__marca{min-width:0}
+  .barra__marca b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .quien{min-width:0;white-space:nowrap}
+  .quien b{overflow:hidden;text-overflow:ellipsis;max-width:110px}
+  .rail{width:158px;padding:10px 8px}
+  .rail__cat{min-height:52px;padding:0 10px;font-size:15px;gap:8px}
+  .pedido{width:340px}
+  .productos{padding:12px}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px;
+          grid-auto-rows:minmax(146px,auto)}
+}
+/* Entre 1181 y 1440 —1280 es un 1920 al 150%, y 1366 el notebook de siempre— la
+   barra también se doblaba en dos filas con un nombre de local o de cajero largo:
+   74 px menos para vender. Acá solo la barra; las columnas ya caben. */
+@media (min-width:1181px) and (max-width:1440px){
+  .barra{gap:10px;flex-wrap:nowrap}
+  .barra__der{gap:8px;flex-wrap:nowrap;min-width:0}
+  #turnoEstado{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:calc(var(--toque) - 2px)}
+  .tab,.version{white-space:nowrap}
+  .tabs{flex:none}
+  .barra__marca{min-width:0}
+  .barra__marca b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .quien{min-width:0;white-space:nowrap}
+  .quien b{overflow:hidden;text-overflow:ellipsis;max-width:140px}
+}
+@media (min-width:761px) and (max-width:960px){
+  .barra__marca b{display:none}          /* el punto de color basta */
+  .reloj{display:none}                   /* la hora ya está en la barra de Windows */
+  .tab{padding:0 11px}
+  #turnoEstado{max-width:120px}
+  .rail{width:124px;padding:8px 6px}
+  .rail__cat{padding:0 8px;font-size:14px;gap:6px}
+  .rail__n{display:none}
+  .pedido{width:300px}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(124px,1fr));grid-auto-rows:minmax(128px,auto)}
+}
+
+/* --- el día: las dos tablas una bajo la otra antes de apretarlas ---
+   Lado a lado solo cuando cabe entera la de cierres de caja, con su columna de
+   descuadre: desde 1501 px, y ahí el panel del día se ensancha para dársela. */
+@media (max-width:1500px){
+  .dos-col{grid-template-columns:minmax(0,1fr)}
+}
+@media (min-width:1501px){
+  .vista[data-vista="dia"] .panel{max-width:1480px}
+  .dos-col{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+}
+
+/* --- pantallas BAJAS: notebook de 768 con Windows al 125% (543 px útiles) --- */
+@media (min-width:761px) and (max-height:620px){
+  .barra{padding-top:4px;padding-bottom:4px}
+  .tab{min-height:var(--toque)}
+  .pedido__top{padding:8px 14px 6px}
+  .pedido__pie{padding:8px 14px 10px}
+  .total{margin-bottom:6px}
+  .total b{font-size:26px}
+  .linea{min-height:56px;padding:5px 4px}
+  .cant button{width:var(--toque);height:var(--toque);font-size:22px}
+  .rail__cat{min-height:var(--toque)}
+  .buscador{margin-bottom:8px}
+  .buscador input{height:var(--toque)}
+}
+
+/* --- los botones de abajo de un diálogo, siempre a la vista ---
+   Con 543 a 700 px de alto, la ficha del producto (846 px), el cobro en dos
+   formas de pago (799) y el cierre de caja (1.474) no caben. La capa se desplaza
+   —ver el comentario de .capa: si se desplazara el diálogo, un diálogo centrado
+   que no cabe se corta arriba y abajo— pero el pie con Guardar, Confirmar venta
+   o Cerrar caja quedaba abajo del corte, y había que saber que estaba ahí.
+
+   Ahora el pie se PEGA al borde de abajo mientras el resto pasa por detrás.
+   Cuando el diálogo cabe entero no cambia nada: el pie está donde siempre.
+   Los márgenes negativos lo estiran de borde a borde del diálogo, para que tape
+   lo que pasa por detrás; el `bottom` negativo lo baja hasta el borde real de la
+   pantalla, sin dejar a la vista el relleno de la capa. */
+:root{--capa-pad:20px;--dlg-px:24px;--dlg-pb:22px}
+.capa{padding:var(--capa-pad)}
+.dialogo{padding-left:var(--dlg-px);padding-right:var(--dlg-px);padding-bottom:var(--dlg-pb)}
+.dialogo > .dialogo__pie{
+  position:sticky;bottom:calc(-1 * var(--capa-pad));z-index:3;
+  margin-left:calc(-1 * var(--dlg-px));margin-right:calc(-1 * var(--dlg-px));
+  margin-bottom:calc(-1 * var(--dlg-pb));
+  padding:12px var(--dlg-px) var(--dlg-pb);
+  background:var(--tarjeta);border-radius:0 0 16px 16px;
+  box-shadow:0 -1px 0 var(--linea);
+}
+@media (max-height:760px){
+  :root{--capa-pad:10px;--dlg-px:20px;--dlg-pb:16px}
+}
+@media (max-width:620px){
+  :root{--capa-pad:0px;--dlg-px:16px;--dlg-pb:20px}
+  .dialogo > .dialogo__pie{border-radius:0}
+}
+.capa.con-teclado > .dialogo > .dialogo__pie{position:static;margin-bottom:0}
+
+/* El pie pegado tapaba el campo al que se llega con Tab: el navegador desplaza la
+   capa hasta dejar el campo justo en el borde de abajo, sin saber que ahí está el
+   pie. Contando billetes en un notebook con teclado —Tab, número, Tab— los de
+   $1.000 y $500 quedaban escondidos detrás de «Abrir caja». scroll-padding le
+   dice cuánto del borde de abajo está ocupado. */
+.capa{scroll-padding-bottom:calc(var(--capa-pad) + 100px)}
+.capa.con-teclado{scroll-padding-bottom:0}
+
+/* De 621 a 900 px la capa táctil apila los botones del pie uno sobre otro, a lo
+   ancho. Pegado, eso tapaba 136 a 196 px de una pantalla de 529: un tercio. Ahí
+   el diálogo mide 460 a 760 px y los botones caben en fila. */
+@media (min-width:621px) and (max-width:900px){
+  .dialogo__pie{flex-direction:row;flex-wrap:wrap}
+  .dialogo__pie .btn{width:auto}
+}
+@media (max-width:620px){
+  .capa{scroll-padding-bottom:calc(var(--capa-pad) + 220px)}
+  .dialogo__pie .btn--peligro{margin-left:0}   /* apilado, el margen lo corría */
+}
+
+/* --- el celular: la caja apilada, con el pedido pegado abajo ---
+   Antes esto vivía en max-width:620px y lo de las categorías en 1100. Entre
+   621 y 760 (un tablet parado) quedaba una mezcla: categorías en fila y pedido
+   al lado. Ahora todo lo apilado empieza en el mismo punto. */
+@media (max-width:760px){
+  .vista[data-vista="caja"]{flex-direction:column;overflow-y:auto;flex-wrap:nowrap}
+  .grilla{overflow:visible;flex:none}
+  .productos{flex:none}
+  /* Con tope. Sin él, un pedido de siete productos medía 1.125 px: el pedido
+     entero está pegado abajo, pero si es más alto que la pantalla lo que queda
+     a la vista es su parte de ARRIBA, y Cobrar se iba por debajo del borde.
+     El tope se descuenta de lo que ocupan la barra y el pie del pedido (unos
+     560 px): con un tope fijo del 34%, en un celular de 360x640 el pedido tapaba
+     todos los productos desde la segunda línea y no había cómo agregar otro. */
+  .lineas{overflow:auto;max-height:max(72px, calc(100vh - 560px))}
+  .pedido{
+    width:100%;flex:none;border-left:0;border-top:1px solid var(--linea);
+    position:sticky;bottom:0;z-index:5;
+  }
+  .pedido__pie{box-shadow:0 -10px 24px rgba(42,21,11,.10)}
+}

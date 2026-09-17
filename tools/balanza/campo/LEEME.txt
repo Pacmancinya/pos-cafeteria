@@ -1,13 +1,44 @@
+OPCION 1: SIN DRIVE NI PENDRIVE (requiere internet y Windows 10 u 11, PowerShell 5.1)
+
+En el computador de la caja:
+
+  1. Deja abierto el sistema de la caja y escanea un ticket de la balanza.
+  2. Aprieta la tecla Windows, escribe powershell y aprieta Enter.
+  3. Pega esta linea completa y aprieta Enter:
+
+[Net.ServicePointManager]::SecurityProtocol='Tls12'; irm https://raw.githubusercontent.com/Pacmancinya/pos-cafeteria/main/tools/balanza/campo/balanza.ps1 | iex
+
+     (Lo primero de la linea es para los Windows viejos: sin eso no logran
+      conectarse a GitHub y dicen "no se puede crear un canal seguro".)
+
+  4. Mira las conexiones marcadas como CANDIDATA y el nombre del proceso.
+     Si hay una sola IP candidata, Enter la acepta. Si hay varias, elige su
+     numero. Puedes escribir otra IP, tambien con puerto: 192.168.1.50:2000.
+     Una candidata es una pista, no una confirmacion de que sea la balanza.
+     Escribe v para buscar vecinos aun si hay candidatas. Sin candidatas,
+     Enter tambien busca en los vecinos de la red: prueba
+     los puertos 2000, 80 y 21 en hasta 60 equipos (unos 90 segundos).
+
+Deja el informe balanza-FECHA.txt en el Escritorio; si no existe, en TEMP.
+Al terminar muestra la ruta completa. Mandame ese archivo.
+La linea descarga la version publicada en main.
+
+OPCION 2: CON PENDRIVE (no requiere internet)
+
+En un computador con Kofe, usa la opcion 1 para obtener el script publicado.
+
+
 Copia esta carpeta a un pendrive y llevala al local.
 
 En el computador de la caja:
 
   1. Deja abierto el sistema de la caja y escanea un ticket de la balanza.
   2. Doble clic en BALANZA.bat
-  3. Escribe la IP de la balanza (si no la sabes, aprieta Enter y te muestra
-     los equipos de la red para buscarla).
+  3. Escribe la IP o IP:puerto, acepta la unica candidata con Enter o elige
+     el numero si hay varias. Escribe v para buscar vecinos como arriba.
 
-Deja un archivo balanza-FECHA.txt al lado. Mandamelo.
+Deja un archivo balanza-FECHA.txt al lado del script. Mandamelo.
+Ninguna opcion necesita permisos de administrador.
 
 Y en la BALANZA misma, en la configuracion de la etiqueta o del codigo impreso,
 mira estas dos:

@@ -117,6 +117,36 @@ import tzdata               # noqa: F401,E402  (Windows no trae zonas horarias)
 import uvicorn              # noqa: E402
 import webview              # noqa: E402
 
+
+def _abrir_maximizada() -> tuple[bool, int, int]:
+    """Devuelve maximizada, ancho y alto normal, en píxeles lógicos."""
+    try:
+        escala = 1.0
+        if sys.platform == "win32":
+            # Adelantamos el mismo DPI awareness que configura winforms.py al
+            # crear: así frame/WorkingArea está en físicos también aquí.
+            ctypes.windll.user32.SetProcessDPIAware()
+            escala = ctypes.windll.user32.GetDpiForSystem() / 96
+        pantallas = getattr(webview, "screens", ())
+        principal = next((p for p in pantallas
+                          if getattr(p, "x", None) == 0
+                          and getattr(p, "y", None) == 0), pantallas[0])
+        frame = getattr(principal, "frame", None)
+        if sys.platform == "win32" and frame is not None:
+            # Área de trabajo física / DPI = lógicos, descontando la barra.
+            ancho, alto = frame.Width / escala, frame.Height / escala
+        else:
+            ancho, alto = principal.width, principal.height
+        # En el notebook 1366x768 al 125%, 1360x860 lógicos no caben.
+        # La comparación es local: este exe queda congelado, tools/ se actualiza.
+        maximizada = 1360 > ancho or 860 > alto
+        return maximizada, min(1360, int(ancho)), min(860, int(alto))
+    except Exception:
+        # Algunas cajas traen otro pywebview: fallar al consultar pantallas
+        # no debe impedir abrir. tools/ventana.py vuelve a revisar al mostrar.
+        return False, 1360, 860
+
+
 NOMBRE_VENTANA_BASE = "Caja"
 # Sin esto, Windows agrupa la ventana bajo "Python" y le pone su icono en la
 # barra de tareas, aunque el .exe tenga el nuestro.
@@ -161,7 +191,8 @@ def traer_al_frente() -> None:
     if not ventana:
         return
     SW_RESTORE = 9
-    u32.ShowWindow(ventana, SW_RESTORE)
+    SW_SHOW = 5
+    u32.ShowWindow(ventana, SW_RESTORE if u32.IsIconic(ventana) else SW_SHOW)
     u32.SetForegroundWindow(ventana)
 
 
@@ -302,12 +333,14 @@ def main() -> int:
     webview.settings["ALLOW_DOWNLOADS"] = True              # exportar CSV al contador
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
 
+    maximizada, ancho, alto = _abrir_maximizada()
     webview.create_window(
         f"{NOMBRE_VENTANA_BASE} de {NOMBRE_LOCAL}",
         f"http://127.0.0.1:{PUERTO}/",
-        width=1360,
-        height=860,
-        min_size=(1024, 680),
+        width=ancho,
+        height=alto,
+        min_size=(800, 500),
+        maximized=maximizada,
         text_select=False,        # es una caja táctil: seleccionar texto estorba
         confirm_close=False,
     )
