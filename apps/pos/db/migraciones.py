@@ -79,10 +79,14 @@ def poner_al_dia() -> list[str]:
         # importa: con el escáner, "dame el producto de este código" pasa a ser
         # la consulta más caliente de la caja — una por venta, con la fila de
         # clientes esperando. Sin índice, cada escaneo recorre la tabla entera.
+        # El inspector cacheó las columnas anteriores al ALTER TABLE. Hay que
+        # refrescarlo para crear también el índice de una columna recién nacida.
+        inspector.clear_cache()
         for indice, tabla, columna in (
             ("ix_codigobarra_producto_id", "codigobarra", "producto_id"),
             ("ix_insumo_producto_id", "insumo", "producto_id"),
             ("ix_producto_nombre", "producto", "nombre"),
+            ("ix_ventalinea_codigo_balanza", "ventalinea", "codigo_balanza"),
         ):
             if tabla not in existentes:
                 continue

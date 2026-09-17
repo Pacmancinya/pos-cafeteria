@@ -43,3 +43,17 @@ def crear_tablas() -> None:
 def get_session():
     with Session(engine) as session:
         yield session
+
+
+def reservar_escritura(session: Session) -> None:
+    """Serializa comprobar y guardar, incluso entre procesos de la misma caja.
+
+    Consultar primero y escribir después permite que dos solicitudes aprueben
+    el mismo ticket (o PLU libre). El bloqueo pertenece a la transacción: un
+    error lo libera al cerrar la sesión sin dejar una reserva huérfana.
+    """
+    conexion = session.connection()
+    if conexion.dialect.name == "sqlite":
+        conexion.exec_driver_sql("BEGIN IMMEDIATE")
+    elif conexion.dialect.name == "postgresql":
+        conexion.exec_driver_sql("SELECT pg_advisory_xact_lock(750013)")

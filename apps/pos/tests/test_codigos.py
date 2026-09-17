@@ -240,14 +240,21 @@ FORMATOS_ROTOS = [
         {"valor": [5, 12]}, {"valor": [6, 13]}, {"valor": "6,12"},
         {"divisor_peso": 0}, {"divisor_peso": -1}, {"divisor_peso": True},
         {"divisor_peso": "1000"}, {"divisor_peso": 1000.0},
+        {"prefijo": "780"}, {"prefijo": "02"},
     ]],
 ]
 
 
 @pytest.mark.parametrize("formato", FORMATOS_ROTOS)
-def test_formato_roto_no_tumba_lector(formato):
-    assert k.leer_balanza("2539760001975", formato) == {
-        "modo": "ticket", "ticket": "3976", "total": 197}
+def test_formato_roto_no_tumba_lector_ni_inventa_un_monto(formato):
+    """No revienta, y tampoco lee con el de fábrica: desde la 2.26 las etiquetas se
+    cobran, y leer con un reparto de dígitos que no es el de la balanza cobra otro
+    monto. Sin formato (None) sí se usa el de fábrica."""
+    leido = k.leer_balanza("2539760001975", formato)
+    if formato is None:
+        assert leido == {"modo": "ticket", "ticket": "3976", "total": 197}
+    else:
+        assert leido is None
 
 
 def test_peso_en_gramos_y_cero_en_ticket():

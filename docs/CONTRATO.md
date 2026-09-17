@@ -189,10 +189,10 @@ adelante, y guardarlos distinto deja el mismo producto duplicado según qué lec
 Se valida el dígito verificador **antes** de buscar: una etiqueta arrugada devuelve dígitos
 cambiados, y sin esa validación se crea un producto fantasma.
 
-> **Los códigos que empiezan con 2 NO se guardan nunca.** Son los que imprime la balanza
+> **Los códigos que empiezan con 2 NO se guardan como códigos de producto.** Son los que imprime la balanza
 > del local para el pan, el fiambre y el queso: llevan el peso o el precio adentro, así que
 > **cambian con cada trozo**. Si se aceptaran, habría un producto nuevo por cada pan
-> vendido. La caja los reconoce y se niega, explicando por qué.
+> vendido. Sí se pueden cobrar como etiquetas: el código se conserva en la venta.
 
 `core.codigos.leer_balanza` interpreta etiquetas EAN-13 según el ajuste
 `formato_balanza`, guardado como texto JSON. El resultado incluye `modo`:
@@ -204,14 +204,73 @@ lecturas malformadas o de otro prefijo devolviendo `None`.
 
 El formato predeterminado es `{"modo":"ticket","prefijo":"25","codigo":[2,6],
 "valor":[6,12],"divisor_peso":1000}`: la etiqueta real `2539760001975` sigue
-siendo el ticket `3976` por $197. Una configuración guardada rota cae a este
-valor; una nueva configuración inválida se rechaza al guardar. Los rangos no
-pueden pisar el prefijo, el verificador ni otro campo.
+siendo el ticket `3976` por $197. Una configuración nueva inválida se rechaza al
+guardar. Los rangos no pueden pisar el prefijo, el verificador ni otro campo, y **el
+prefijo tiene que empezar con 2**: con otro —780, el de Chile— los productos de
+verdad se leerían como tickets con el monto sacado de sus propios dígitos.
 
-Esto prepara lectura y catálogo; el cobro por peso queda pendiente y deberá
-calcularlo el servidor con `Producto.precio_kilo`. Las columnas `plu` y
-`precio_kilo` se agregan a bases instaladas mediante `poner_al_dia`, con defaults
-vacío y 0, conservando los productos existentes.
+Una configuración **guardada y rota** (una vuelta atrás de versión, un respaldo
+restaurado, la base tocada a mano) NO se lee con el de fábrica: `GET /ajustes` la
+muestra como la de fábrica con `formato_balanza_roto: true`, y ninguna etiqueta se
+cobra hasta guardarla de nuevo. Leer con el reparto equivocado cobraba 250 g de
+jamón ($2.248) como el «ticket 123» por $250. Por lo mismo, `leer_balanza` con un
+formato explícito inválido devuelve `None` en vez de caer al de fábrica.
+
+**La balanza viene apagada** (`usar_balanza: 0`). Apagada, `resolver` devuelve
+`None` y un código que empieza con 2 se rechaza como siempre. Es a propósito: con la
+balanza prendida, un código de ticket cobra el monto que trae adentro y el dígito
+verificador se calcula con lápiz, así que en un local sin balanza sería un cobro a
+mano sin el permiso de cobro a mano. Se prende en Ayuda → Ajustes.
+
+`apps.pos.balanza.resolver` es la cuenta compartida por escanear y cobrar. El GET
+busca primero los `CodigoBarra` conocidos. Una etiqueta reconocida devuelve
+`de_balanza: true`, `se_puede_guardar: false` y, si se puede cobrar, `balanza` con
+`codigo`, `modo`, `nombre`, `detalle`, `precio`, `producto_id` y `repetible`.
+Si no, devuelve `problema` sin `balanza`. Cuando SÍ se puede cobrar, `problema`
+dice «Recarga la pantalla (F5)…»: solo lo leen las pantallas anteriores a la 2.26,
+que con `problema` vacío ofrecían guardar la etiqueta como producto nuevo; la
+pantalla nueva mira `balanza` primero. Un código que ya es de un `CodigoBarra`
+nunca se lee como etiqueta, tampoco en el POST.
+
+El POST recibe `codigo_balanza`, `cantidad` y opcionalmente `precio_visto`: rechaza
+precio o producto enviados junto a la etiqueta con 422, vuelve a leer el formato
+actual y responde 409 si ya no se puede cobrar. `precio_visto` es lo que la
+pantalla MOSTRÓ y no se cobra con él: si el servidor calcula otro (cambió el precio
+por kilo o el formato desde que se escaneó), responde 409 en vez de registrar un
+monto distinto del que el cajero ya cobró en la máquina o dio de vuelto.
+
+Por peso se multiplica `Producto.precio_kilo` por kilos con `Decimal` y se
+redondea al peso entero con `ROUND_HALF_UP`. Por precio y por ticket se usa el
+total impreso. No se cobran peso o total cero ni precios mayores a $99.000.000.
+El PLU se compara sin ceros iniciales y debe pertenecer a un producto activo;
+al guardar una ficha se exige que sea numérico y único, incluso entre inactivos.
+
+Un ticket exige cantidad 1. Su código completo no puede repetirse en la venta
+ni en otra pagada de las últimas 24 horas; anularla libera el papel. La reserva
+de escritura abarca la consulta y el guardado para impedir cobros simultáneos.
+Los paquetes por PLU sí se repiten. Ninguna etiqueta topea ni mueve inventario
+por unidades, ni cuenta como cobro a mano. `/resumen.balanza` cuenta líneas,
+suma subtotales, separa cuántas fueron tickets y dice quién las cobró
+(`por_persona`), solo en ventas pagadas; El día lo muestra junto a los cobros a mano.
+Un ticket no pide el permiso de cobro a mano: en un local con balanza cobrarlos es
+lo de todos los días. Lo que lo compensa es que se ve sumado y con nombre. En «Lo
+más vendido», las etiquetas por peso salen como «Jamón (balanza)», aparte de las
+unidades del mismo producto.
+
+Un producto con `precio` 0 y `precio_kilo` mayor que 0 no se vende tocando su
+azulejo (409 en el servidor, aviso en la pantalla): se cobraba a $0. En el
+televisor sale con su precio por kilo y la etiqueta «Por kilo».
+
+> Si se vuelve a la 2.25 desde el aviso de versión después de cobrar etiquetas, la
+> caja sigue vendiendo, pero la 2.25 cuenta los tickets como cobros a mano (tienen
+> `producto_id` nulo) y saca del pedido abierto las líneas de balanza.
+
+Las columnas nuevas reciben sus defaults mediante `poner_al_dia`, conservando
+las ventas anteriores. La línea congela nombre, detalle, código, gramos y modo;
+el modo permite clasificar el pasado aunque cambie el formato o se borre el
+producto. Los gramos y el detalle se redondean a 1 g si el formato trae más
+precisión; el importe se calcula con el peso original. El detalle sale en la
+venta y el comprobante, y como última columna del CSV para el contador.
 
 **16. El escáner intercepta en fase de CAPTURA sobre `window`, y eso no es un detalle.**
 Un lector de pistola es un teclado: manda los dígitos y un Enter. La caja ya tenía dos
@@ -467,9 +526,13 @@ Venta(id, numero, turno_id→Turno, creada_at, estado,
     #             venta mixta no lleva propina.
 
 VentaLinea(id, venta_id→Venta, producto_id→Producto,
-           nombre, precio_unitario, cantidad, subtotal)
+           nombre, precio_unitario, cantidad, subtotal,
+           detalle="", codigo_balanza="", peso_g=0, modo_balanza="")
     # nombre y precio_unitario son COPIAS congeladas (ver decisión 2)
     # subtotal = precio_unitario * cantidad
+    # producto_id puede ser nulo: ticket de balanza o cobro a mano.
+    # codigo_balanza distingue las etiquetas; modo_balanza congela su modo.
+    # peso_g es el peso de UN paquete, solo para plu_peso.
 
 Pago(id, venta_id→Venta, medio, monto)
     # Una parte de un pago MIXTO: cuánto se pagó con cada medio. Solo existe para

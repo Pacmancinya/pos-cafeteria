@@ -9,6 +9,7 @@ el comprobante lo dice en grande: si pareciera una boleta sin serlo, el local
 quedaría expuesto. Ver docs/CONTRATO.md sección 5.
 """
 from __future__ import annotations
+from html import escape
 from apps.pos import local as datos_local
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -106,7 +107,8 @@ def comprobante(venta_id: int, s: Session = Depends(get_session)):
     neto, iva = neto_iva(cobrado)
 
     filas = "".join(
-        f"<tr><td>{l.cantidad} x {l.nombre}</td><td class='num'>{_plata(l.subtotal)}</td></tr>"
+        f"<tr><td>{l.cantidad} x {escape(l.nombre)}{escape(' ' + l.detalle) if l.detalle else ''}</td>"
+        f"<td class='num'>{_plata(l.subtotal)}</td></tr>"
         f"<tr><td class='chico' colspan='2'>&nbsp;&nbsp;&nbsp;{_plata(l.precio_unitario)} c/u</td></tr>"
         for l in v.lineas
     )

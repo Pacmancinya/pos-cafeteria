@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from apps.pos.db.models import (Categoria, CodigoBarra, Insumo, Movimiento,
                                 Producto, Receta)
 from apps.pos import sesion
+from apps.pos.balanza import plu_normalizado
 from apps.pos.db.session import get_session
 from core.codigos import normalizar, por_que_no_sirve
 from core.planilla import sin_tildes
@@ -53,12 +54,14 @@ def carta(respuesta: Response, s: Session = Depends(get_session)):
         normales = [p for p in prods if not p.destacado] or prods
 
         def _p(p: Producto) -> dict:
+            # Un producto que solo tiene precio por kilo salía en el televisor a $0.
+            por_kilo = not p.precio and p.precio_kilo > 0
             return {
                 "nombre": p.nombre,
                 "descripcion": p.descripcion,
-                "precio": p.precio,
+                "precio": p.precio_kilo if por_kilo else p.precio,
                 "antes": p.antes,
-                "etiqueta": p.etiqueta or None,
+                "etiqueta": p.etiqueta or ("Por kilo" if por_kilo else None),
                 "dibujo": p.dibujo,
                 "color": p.color or None,
             }
@@ -106,6 +109,7 @@ def listar_categorias(s: Session = Depends(get_session)):
                 {
                     "id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
                     "precio": p.precio, "activo": p.activo, "orden": p.orden,
+                    "plu": p.plu, "precio_kilo": p.precio_kilo,
                     "destacado": p.destacado, "badge": p.badge, "antes": p.antes,
                     "etiqueta": p.etiqueta, "dibujo": p.dibujo, "color": p.color,
                     # None = no se lleva stock de esto. Distinto de 0, que es
@@ -202,6 +206,22 @@ def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Product
 EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo", "llevar_cuenta"}
 
 
+def _validar_plu(s: Session, plu: str, salvo_id: int | None = None) -> None:
+    if not plu:
+        return
+    if any(c not in "0123456789" for c in plu):
+        raise HTTPException(422, "El PLU debe tener solo números del 0 al 9.")
+    from apps.pos.db.session import reservar_escritura
+    reservar_escritura(s)
+    numero = plu_normalizado(plu)
+    # También se reserva en los inactivos: reactivar una ficha no debe dejar
+    # dos precios distintos para el mismo PLU. No se convierte a int: un PLU
+    # es un identificador, no una cantidad que haya que sumar.
+    for otro in s.exec(select(Producto).where(Producto.plu != "")).all():
+        if otro.id != salvo_id and plu_normalizado(otro.plu) == numero:
+            raise HTTPException(409, f"El PLU {numero} ya es de «{otro.nombre}».")
+
+
 def _a_la_bodega(s: Session, p: Producto, datos: ProductoIn, quien: dict) -> None:
     """Le pasa al insumo del producto lo que se escribió en su ficha.
 
@@ -248,6 +268,7 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
     —ficha sí, insumo no— es peor que no haberlo creado, porque se vende y no
     descuenta y nadie se entera hasta el conteo.
     """
+    _validar_plu(s, datos.plu)
     if not s.get(Categoria, datos.categoria_id):
         raise HTTPException(404, "No existe esa categoría")
     repetido = _producto_repetido(s, datos.nombre, None)
@@ -319,6 +340,8 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
 @router.put("/productos/{prod_id}")
 def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("editar_carta"))):
+    if "plu" in datos.model_fields_set:
+        _validar_plu(s, datos.plu, prod_id)
     p = s.get(Producto, prod_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")

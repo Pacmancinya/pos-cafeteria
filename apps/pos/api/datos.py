@@ -108,10 +108,10 @@ def exportar_detalle(
         for l in v.lineas:
             filas.append([
                 local.strftime("%d-%m-%Y"), local.strftime("%H:%M"), v.numero,
-                l.nombre, l.cantidad, l.precio_unitario, l.subtotal, v.medio_pago,
+                l.nombre, l.cantidad, l.precio_unitario, l.subtotal, v.medio_pago, l.detalle,
             ])
     return _csv(
         filas,
-        ["Fecha", "Hora", "N° venta", "Producto", "Cantidad", "Precio", "Subtotal", "Medio de pago"],
+        ["Fecha", "Hora", "N° venta", "Producto", "Cantidad", "Precio", "Subtotal", "Medio de pago", "Detalle"],
         f"detalle_{d.isoformat()}_a_{h.isoformat()}.csv",
     )

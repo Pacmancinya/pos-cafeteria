@@ -76,7 +76,7 @@ def descontar_venta(s: Session, venta, quien: dict | None = None) -> list[dict]:
     """
     avisos: list[dict] = []
     for linea in venta.lineas:
-        if not linea.producto_id:
+        if not linea.producto_id or linea.codigo_balanza:
             continue
         producto = s.get(Producto, linea.producto_id)
         if producto and producto.llevar_cuenta is False:

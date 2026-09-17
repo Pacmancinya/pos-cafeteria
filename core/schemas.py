@@ -11,20 +11,33 @@ from core.config import (BLOQUEO_MINUTOS, MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
 
 
 class LineaIn(BaseModel):
-    """Una línea del pedido: un producto de la carta, o un cobro a mano.
+    """Una línea del pedido: producto de la carta, cobro a mano o etiqueta.
 
     El cobro a mano existe porque en el mostrador siempre aparece algo que no está en la
     carta. Es la única línea cuyo precio llega desde la pantalla en vez de salir del
     catálogo, así que pide su propio permiso y queda firmada con quién la cobró.
+    En balanza solo llega el código: el servidor vuelve a leerlo y calcularlo.
     """
     producto_id: Optional[int] = None
     cantidad: int = Field(default=1, ge=1, le=999)
     # Solo para el cobro a mano. Con `precio` puesto, la línea es "varios".
     nombre: str = Field(default="", max_length=60)
     precio: Optional[int] = Field(default=None, ge=0, le=99_000_000)
+    codigo_balanza: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    # El precio que la pantalla MOSTRÓ para esa etiqueta. No se cobra con él: se
+    # compara. Si entre escanear y cobrar cambió el precio por kilo o el formato,
+    # el cajero ya cobró en la máquina o dio vuelto con el monto viejo, y registrar
+    # otro en silencio le cargaría el descuadre a él.
+    precio_visto: Optional[int] = Field(default=None, ge=0, le=99_000_000)
 
     @model_validator(mode="after")
     def producto_o_monto(self):
+        if self.precio_visto is not None and self.codigo_balanza is None:
+            raise ValueError("precio_visto solo va con una etiqueta de balanza.")
+        if self.codigo_balanza is not None:
+            if {"producto_id", "precio"} & self.model_fields_set:
+                raise ValueError("Una etiqueta de balanza no lleva producto ni precio desde la pantalla.")
+            return self
         if self.producto_id is None and self.precio is None:
             raise ValueError("Una línea lleva un producto de la carta o un monto a mano.")
         return self
@@ -360,6 +373,8 @@ class AjustesIn(BaseModel):
     canal_actualizaciones: Literal["estable", "piloto"] = "estable"
     # La carpeta de la copia de afuera. Vacía = no hay copia de afuera.
     respaldo_afuera: str = Field(default="", max_length=300)
+    # 0 o 1. Apagada, las etiquetas de balanza se rechazan como antes de la 2.26.
+    usar_balanza: int = Field(default=0, ge=0, le=1)
     formato_balanza: dict = Field(
         default_factory=lambda: validar_formato_balanza(FORMATO_BALANZA_POR_DEFECTO))
 

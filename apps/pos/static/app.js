@@ -98,6 +98,12 @@ async function api(ruta, opciones = {}) {
     // vuelve al candado. El PIN malo también es 401, pero ése lo maneja el
     // mismo candado.
     if (r.status === 401 && ruta !== "/sesion/entrar") sesionPerdida();
+    // Los 422 de validación llegan como una lista de objetos. Mostrar el JSON crudo
+    // («[{"type":"value_error","loc":...}]») no le dice nada a quien está configurando.
+    if (Array.isArray(detalle)) {
+      detalle = detalle.map((d) => String((d && d.msg) || "")
+        .replace(/^Value error, /, "")).filter(Boolean).join(" ") || "Hay un dato que no sirve";
+    }
     throw new Error(typeof detalle === "string" ? detalle : JSON.stringify(detalle));
   }
   return r.status === 204 ? null : r.json();
@@ -192,9 +198,9 @@ function limpiarCarritoDeBorrados() {
   const vivos = new Set();
   CATEGORIAS.forEach((c) => c.productos.forEach((p) => vivos.add(p.id)));
   const antes = carrito.length;
-  const sacados = carrito.filter((l) => !l.manual && !vivos.has(l.id)).map((l) => l.nombre);
+  const sacados = carrito.filter((l) => !l.manual && !l.balanza && !vivos.has(l.id)).map((l) => l.nombre);
   if (!sacados.length) return;
-  carrito = carrito.filter((l) => l.manual || vivos.has(l.id));
+  carrito = carrito.filter((l) => l.manual || l.balanza || vivos.has(l.id));
   pintarCarrito();
   if (antes !== carrito.length) {
     avisar(`Saqué del pedido ${sacados.length === 1 ? "un producto que ya no existe"
@@ -213,7 +219,7 @@ function azulejo(p, catId, conCategoria = false) {
       <span class="prod__pie">
         ${conCategoria && cat ? `<span class="prod__cat">${esc(cat.nombre)}</span>` : ""}
         <span class="prod__nombre">${esc(p.nombre)}</span>
-        <span class="prod__precio">${clp(p.precio)}</span>
+        <span class="prod__precio">${!p.precio && p.precio_kilo > 0 ? `${clp(p.precio_kilo)}/kg` : clp(p.precio)}</span>
       </span>
     </button>`;
 }
@@ -291,7 +297,12 @@ function agregarVarios() {
 }
 
 function lineasParaVenta() {
-  return carrito.map((l) => l.manual
+  // El monto de la etiqueta se muestra acá, pero lo calcula de nuevo el servidor.
+  return carrito.map((l) => l.balanza
+    // precio_visto no fija el precio: si el servidor calcula otro, rechaza la venta
+    // en vez de registrar un monto distinto del que se cobró en la máquina.
+    ? { codigo_balanza: l.codigo, cantidad: l.cantidad, precio_visto: l.precio }
+    : l.manual
     ? { nombre: l.nombre, precio: l.precio, cantidad: l.cantidad }
     : { producto_id: l.id, cantidad: l.cantidad });
 }
@@ -319,6 +330,11 @@ function agregar(id) {
 }
 
 function sumarAlPedido(p) {
+  if (p.balanza) return agregarBalanza(p);
+  const deLaCarta = productoDeLaCarta(p.id) || p;
+  if (!deLaCarta.precio && deLaCarta.precio_kilo > 0) {
+    return avisar(`${deLaCarta.nombre} se vende por peso: escanea la etiqueta de la balanza.`, true);
+  }
   const ya = carrito.find((l) => l.id === p.id);
   const pide = (ya ? ya.cantidad : 0) + 1;
 
@@ -349,12 +365,15 @@ function cambiarCantidad(id, delta) {
   // hacía: sumaba directo. Así se llegaba a 30 de algo que tenía 0, tocando +
   // treinta veces sin que nada dijera nada — el aviso solo salía al tocar el
   // producto en la grilla.
-  if (delta > 0 && !l.manual) {
+  if (delta > 0 && l.balanza && !l.repetible) {
+    return avisar("Un ticket de la balanza se cobra una sola vez", true);
+  }
+  if (delta > 0 && !l.manual && !l.balanza) {
     const p = productoDeLaCarta(id) || l;
     return sumarAlPedido(p);
   }
 
-  if (l.manual && l.cantidad + delta > 999) return avisar("El máximo es 999 unidades por línea.", true);
+  if ((l.manual || l.balanza) && l.cantidad + delta > 999) return avisar("El máximo es 999 unidades por línea.", true);
   l.cantidad += delta;
   if (l.cantidad <= 0) carrito = carrito.filter((x) => x.id !== id);
   pintarCarrito();
@@ -386,6 +405,19 @@ const totalCarrito = () => carrito.reduce((s, l) => s + l.precio * l.cantidad, 0
    se conoce, se ofrece guardarlo, pero el pedido que estaba armado se queda
    donde está. */
 async function alEscanear(codigo) {
+  // El lector restaura el campo antes de avisarnos: se repone para probarlo,
+  // sin que una etiqueta de prueba termine sumada al pedido.
+  const prueba = $("#ajBalanzaPrueba");
+  const cuerpo = $("#ajBalanzaCuerpo");
+  const probando = prueba && puedo("config") && (document.activeElement === prueba
+    // Con el bloque de la balanza a la vista en Ayuda, el lector es para probar
+    // aunque el foco haya quedado en un botón: si no, la etiqueta de prueba entraba
+    // al pedido y se cobraba con el cliente siguiente.
+    || ($(".vista.is-on")?.dataset.vista === "guias" && cuerpo && !cuerpo.hidden));
+  if (probando) {
+    prueba.value = codigo;
+    return probarEtiquetaBalanza();
+  }
   if ($(".vista.is-on")?.dataset.vista === "inventario" && usarInventario()) {
     $("#buscarBodega").value = codigo;
     pintarBodega();
@@ -402,6 +434,9 @@ async function alEscanear(codigo) {
   try { r = await api("/codigos/" + encodeURIComponent(codigo)); }
   catch (e) { return avisar(e.message, true); }
 
+  if (r.balanza) return agregarBalanza(r.balanza);
+  if (r.de_balanza) return avisar(r.problema || "No se puede cobrar esa etiqueta", true);
+
   if (r.encontrado) {
     // El `cuantos` es lo que hace que el pack de 6 descuente seis: el código
     // del pack entrega seis unidades del mismo producto.
@@ -415,6 +450,33 @@ async function alEscanear(codigo) {
     return avisar("Ese código no está en la carta. Lo tiene que agregar el dueño.", true);
   }
   dialogoProductoNuevoPorCodigo(r.codigo);
+}
+
+function agregarBalanza(b) {
+  const ya = carrito.find((l) => l.balanza && l.codigo === b.codigo);
+  if (ya) {
+    if (!ya.repetible) return avisar("Ese ticket ya está en el pedido", true);
+    if (ya.precio !== b.precio) {
+      // Cambió el precio por kilo o el formato desde que se escaneó: la línea toma
+      // lo que vale ahora, que es lo que el servidor va a cobrar.
+      Object.assign(ya, { nombre: b.nombre, detalle: b.detalle, precio: b.precio, modo: b.modo });
+      pintarCarrito();
+      return avisar(`${b.nombre} cambió de precio: ahora ${clp(b.precio)}`, true);
+    }
+    // Dos trozos pesados al gramo casi nunca dan el mismo código: si se repite, lo
+    // normal es que el lector leyó dos veces la misma etiqueta. Sumarlo solo cobraba
+    // dos veces el mismo jamón. Para dos paquetes iguales está el +.
+    return avisar("Esa etiqueta ya está en el pedido. Si son dos iguales, usa el +.", true);
+  } else {
+    // Incluso con producto_id, la etiqueta tiene identidad propia y no usa
+    // el stock por unidad de la carta. El id negativo sobrevive a la recarga.
+    const id = carrito.reduce((menor, l) => Math.min(menor, l.id), 0) - 1;
+    carrito.push({ id, balanza: true, codigo: b.codigo, modo: b.modo,
+      nombre: b.nombre, detalle: b.detalle, precio: b.precio,
+      repetible: b.repetible, cantidad: 1 });
+  }
+  pintarCarrito();
+  avisar(`${b.nombre} · ${b.detalle.split(" a $")[0]}`);
 }
 
 /* El código no está en la carta: se guarda AHORA, sin salir de la venta.
@@ -584,7 +646,7 @@ function pintarCarrito() {
       <div class="linea">
         <div class="linea__txt">
           <b>${esc(l.nombre)}</b>
-          <small>${l.manual ? "Productos varios · Monto a mano · " : ""}${clp(l.precio)} c/u</small>
+          <small>${l.balanza ? esc(l.detalle) : `${l.manual ? "Productos varios · Monto a mano · " : ""}${clp(l.precio)} c/u`}</small>
         </div>
         <div class="cant">
           <button data-menos="${l.id}">−</button>
@@ -862,6 +924,18 @@ function nadaQueMirar(hayTurnos) {
   $("#tablaTop").innerHTML = "";
 }
 
+/* Las dos líneas cuyo monto no sale de la carta: lo escrito a mano y lo impreso en
+   un ticket de balanza. No es sospecha: es que son las únicas que no se pueden
+   revisar después contra un precio, así que se ven sumadas y con quién las cobró.
+   El nombre lo escribe una persona: va escapado. */
+function kpiQuienCobro(titulo, d) {
+  if (!d || !d.cantidad) return "";
+  const quienes = (d.por_persona || []).slice(0, 3)
+    .map((x) => `${esc(x.nombre)} ${clp(x.total)}`).join(" · ");
+  return `<div class="kpi"><span>${titulo}</span><b>${clp(d.total)}</b>
+    <small>${d.cantidad} línea${d.cantidad === 1 ? "" : "s"}${quienes ? " · " + quienes : ""}</small></div>`;
+}
+
 async function cargarDia() {
   const campo = $("#fechaDia");
   if (!campo.value) campo.value = hoyISO();
@@ -914,7 +988,9 @@ async function cargarDia() {
       <small>IVA ${clp(r.iva)}</small></div>
     ${r.propinas ? `<div class="kpi"><span>Propinas</span><b>${clp(r.propinas)}</b></div>` : ""}
     ${r.anuladas.cantidad ? `<div class="kpi"><span>Anuladas</span><b>${r.anuladas.cantidad}</b>
-      <small>${clp(r.anuladas.total)}</small></div>` : ""}`;
+      <small>${clp(r.anuladas.total)}</small></div>` : ""}
+    ${kpiQuienCobro("Cobros a mano", r.varios)}
+    ${kpiQuienCobro("Balanza", r.balanza)}`;
 
   $("#tituloVentas").textContent = porTurno ? "Ventas del turno"
     : f === hoyISO() ? "Ventas de hoy" : "Ventas del día";
@@ -940,7 +1016,7 @@ async function cargarDia() {
   $("#tablaTop").innerHTML = `
     <tr><th>Producto</th><th class="num">Cant.</th><th class="num">Total</th></tr>
     ${r.mas_vendidos.length ? r.mas_vendidos.map((p) => `
-      <tr><td>${p.nombre}</td><td class="num">${p.cantidad}</td><td class="num">${clp(p.total)}</td></tr>
+      <tr><td>${esc(p.nombre)}</td><td class="num">${p.cantidad}</td><td class="num">${clp(p.total)}</td></tr>
     `).join("") : `<tr><td colspan="3" style="color:var(--suave)">Sin datos todavía.</td></tr>`}`;
 }
 
@@ -1368,6 +1444,20 @@ function abrirFichaProducto(id, categoriaId) {
             <div id="fSugerido"></div>
           </div>
         </details>
+        <details class="avanzado" id="fBalanza"${p.plu ? " open" : ""}>
+          <summary>Se vende por peso (balanza)</summary>
+          <div class="avanzado__cuerpo">
+            <label class="campo"><span>Número en la balanza (PLU)</span>
+              <input id="fPlu" type="text" inputmode="numeric" pattern="[0-9]*"
+                     value="${esc(p.plu || "")}"></label>
+            <label class="campo"><span>Precio por kilo</span>
+              <input id="fPrecioKilo" type="text" inputmode="numeric"
+                     value="${p.precio_kilo || ""}" placeholder="0"></label>
+            <p class="ayuda">Si la balanza imprime una etiqueta con el número del producto,
+              la caja lo reconoce y cobra el peso por el precio por kilo.
+              Déjalo vacío si este producto no se pesa.</p>
+          </div>
+        </details>
       </div>
 
       <div class="ficha__col">
@@ -1399,6 +1489,9 @@ function abrirFichaProducto(id, categoriaId) {
   $("#capaProducto").classList.add("is-on");
   pintarTalCual(p);
   pintarCodigos(p.id);
+  $("#fPlu").addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+  });
   if (nuevo) setTimeout(() => $("#fNombre") && $("#fNombre").focus(), 60);
 
   const costoReal = () => costoConIva(
@@ -1453,6 +1546,8 @@ function abrirFichaProducto(id, categoriaId) {
         nombre: $("#fNombre").value.trim() || p.nombre,
         descripcion: $("#fDesc").value.trim(),
         precio: soloNumeros($("#fPrecio").value),
+        plu: $("#fPlu").value.replace(/[^0-9]/g, ""),
+        precio_kilo: soloNumeros($("#fPrecioKilo").value),
         activo: $("#fActivo").checked,
         orden: p.orden,
         destacado: $("#fDestacado").checked,
@@ -2789,8 +2884,12 @@ const unidadCorta = { g: "g", ml: "ml", un: "un" };
 async function cargarBodega() {
   if (!usarInventario()) return;
   try {
-    BODEGA = await api("/inventario");
-    BODEGA.productos = (await api("/bodega")).insumos;
+    // Se arma entero y RECIÉN ahí se reemplaza. Asignando BODEGA antes de pedir
+    // /bodega, dos cargas seguidas (entrar a Bodega mientras otra carga seguía en
+    // curso) dejaban a una leyendo BODEGA.productos sin definir: error y tabla vacía.
+    const nueva = await api("/inventario");
+    nueva.productos = (await api("/bodega")).insumos;
+    BODEGA = nueva;
   } catch (e) { return avisar(e.message, true); }
   pintarBodega();
   $("#buscarBodega").oninput = pintarBodega;
@@ -3607,6 +3706,147 @@ function pintarGuias(id) {
    el PIN de red, cuánto tarda en bloquearse, la copia de afuera, el canal de
    actualizaciones y el diagnóstico: lo que antes se configuraba con variables
    de Windows, o no se configuraba. */
+// Las posiciones se muestran tal como las guarda el servidor: desde cero y
+// hasta sin incluir. Así el dibujo permite revisar cada dígito sin traducirlo.
+function dibujoFormatoBalanza(f) {
+  const bien = (r) => Array.isArray(r) && r.every((n) => Number.isInteger(n) && n >= 0)
+    && r[0] < r[1] && r[1] <= 12;
+  const faltan = [!/^2[0-9]*$/.test(f.prefijo || "") && "el prefijo (solo números, empieza con 2)",
+    !bien(f.codigo) && "dónde está el número", !bien(f.valor) && "dónde está el valor"]
+    .filter(Boolean);
+  if (faltan.length) return "Falta o está mal: " + faltan.join(", ") + ".";
+  const marcas = Array.from({ length: 13 }, (_, i) => {
+    if (i === 12) return "V";
+    const partes = [i < f.prefijo.length ? "P" : "",
+      i >= f.codigo[0] && i < f.codigo[1] ? "N" : "",
+      i >= f.valor[0] && i < f.valor[1] ? "$" : ""].filter(Boolean);
+    return partes.length > 1 ? "!" : partes[0] || "·";
+  });
+  return "0123456789012\n" + marcas.join("")
+    + "\nP: prefijo · N: número\n$: valor · V: verificador\n!: partes superpuestas";
+}
+
+function bloqueBalanza() {
+  const f = AJUSTES.formato_balanza || {
+    modo: "ticket", prefijo: "25", codigo: [2, 6], valor: [6, 12], divisor_peso: 1000 };
+  const usar = !!AJUSTES.usar_balanza;
+  return `<div class="ajuste" id="ajBalanza">
+    <h4>Balanza</h4>
+    <label class="marca">
+      <input type="checkbox" id="ajUsarBalanza" ${usar ? "checked" : ""}>
+      Este local cobra etiquetas de una balanza</label>
+    <p class="ayuda" style="margin:8px 0 0">Para el fiambre, el pan o el queso que se pesan
+      y salen con una etiqueta con código de barras. Si este local no tiene balanza, déjalo
+      apagado: así nadie puede cobrar un código de balanza inventado.</p>
+    ${AJUSTES.formato_balanza_roto ? `<div class="ajuste__alerta">El formato guardado de la
+      balanza no se entiende, así que la caja no está cobrando etiquetas. Revísalo abajo y
+      guárdalo de nuevo.</div>` : ""}
+    <div id="ajBalanzaCuerpo" ${usar ? "" : "hidden"}>
+    <label class="campo" style="margin-top:12px"><span>Qué imprime la etiqueta</span>
+      <select id="ajBalanzaModo">
+        ${[["ticket", "Un ticket con el total (el detalle queda en el papel)"],
+           ["plu_peso", "El número del producto y el peso"],
+           ["plu_precio", "El número del producto y el precio"]].map(([modo, texto]) =>
+          `<option value="${modo}"${f.modo === modo ? " selected" : ""}>${texto}</option>`).join("")}
+      </select></label>
+    <details class="avanzado">
+      <summary>Cómo está armado el código</summary>
+      <div class="avanzado__cuerpo">
+        <label class="campo"><span>Prefijo</span>
+          <input id="ajBalanzaPrefijo" inputmode="numeric" value="${esc(f.prefijo)}"></label>
+        <p class="ayuda">Cuenta desde 0. «Hasta» no se incluye. El último dígito (12)
+          es el verificador: no lo uses para el número ni el valor.</p>
+        ${[["Codigo", "número", f.codigo], ["Valor", "valor", f.valor]].map(([id, nombre, rango]) => `
+          <div class="fila2">
+            <label class="campo"><span>El ${nombre}, desde</span>
+              <input id="ajBalanza${id}Desde" type="number" min="0" max="11" value="${rango[0]}"></label>
+            <label class="campo"><span>Hasta (sin incluir)</span>
+              <input id="ajBalanza${id}Hasta" type="number" min="1" max="12" value="${rango[1]}"></label>
+          </div>`).join("")}
+        <label class="campo" id="ajBalanzaDivisorCampo"${f.modo === "plu_peso" ? "" : " hidden"}>
+          <span>Divisor del peso</span>
+          <input id="ajBalanzaDivisor" type="number" min="1" value="${f.divisor_peso}">
+          <small class="ayuda" style="display:block;margin:6px 0 0">1000 si la etiqueta trae gramos.</small></label>
+        <pre id="ajBalanzaDibujo" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(dibujoFormatoBalanza(f))}</pre>
+      </div>
+    </details>
+    <button type="button" class="btn" id="ajBalanzaGuardar">Guardar formato de balanza</button>
+    <label class="campo"><span>Probar con una etiqueta</span>
+      <input id="ajBalanzaPrueba" type="text" inputmode="numeric" autocomplete="off"
+             placeholder="Escanea o escribe el código"></label>
+    <p class="ayuda">La prueba usa lo guardado. Si cambiaste algo, guarda primero.</p>
+    <button type="button" class="btn" id="ajBalanzaProbar">Probar etiqueta</button>
+    <p class="ayuda" id="ajBalanzaResultado" role="status" aria-live="polite"></p>
+    </div>
+  </div>`;
+}
+
+function leerFormatoBalanza() {
+  // Un campo vacío debe fallar al guardar, no convertirse silenciosamente en 0.
+  const numero = (id) => $(id).value.trim() === "" ? null : Number($(id).value);
+  return { modo: $("#ajBalanzaModo").value, prefijo: $("#ajBalanzaPrefijo").value.trim(),
+    codigo: [numero("#ajBalanzaCodigoDesde"), numero("#ajBalanzaCodigoHasta")],
+    valor: [numero("#ajBalanzaValorDesde"), numero("#ajBalanzaValorHasta")],
+    // Solo el modo por peso usa el divisor. Oculto y mal escrito no puede impedir
+    // guardar un ticket con un error sobre un campo que no se ve.
+    divisor_peso: $("#ajBalanzaModo").value === "plu_peso"
+      ? numero("#ajBalanzaDivisor")
+      : ((AJUSTES.formato_balanza || {}).divisor_peso || 1000) };
+}
+
+function conectarBalanza() {
+  $("#ajUsarBalanza").addEventListener("change", (e) => {
+    e.stopPropagation();
+    const usar = e.target.checked;
+    $("#ajBalanzaCuerpo").hidden = !usar;
+    guardarAjuste({ usar_balanza: usar ? 1 : 0 },
+      usar ? "Balanza prendida: revisa qué imprime la etiqueta y prueba una"
+           : "Balanza apagada: la caja ya no cobra etiquetas");
+  });
+  $("#ajBalanza").addEventListener("input", () => {
+    const f = leerFormatoBalanza();
+    $("#ajBalanzaDibujo").textContent = dibujoFormatoBalanza(f);
+    $("#ajBalanzaDivisorCampo").hidden = f.modo !== "plu_peso";
+  });
+  $("#ajBalanzaGuardar").onclick = guardarFormatoBalanza;
+  $("#ajBalanzaProbar").onclick = probarEtiquetaBalanza;
+  $("#ajBalanzaPrueba").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    e.stopPropagation();
+    probarEtiquetaBalanza();
+  });
+}
+
+async function guardarFormatoBalanza() {
+  if (!puedo("config")) return;
+  try {
+    const r = await api("/ajustes", { method: "PUT",
+      body: JSON.stringify({ formato_balanza: leerFormatoBalanza() }) });
+    AJUSTES = { ...AJUSTES, ...r };
+    $("#ajBalanzaResultado").textContent = "Formato guardado. Ya puedes probar una etiqueta.";
+    avisar("Formato de balanza guardado");
+  } catch (e) {
+    // Conservamos lo escrito para corregir las posiciones que rechazó el servidor.
+    $("#ajBalanzaResultado").textContent = e.message;
+    avisar(e.message, true);
+  }
+}
+
+async function probarEtiquetaBalanza() {
+  if (!puedo("config")) return;
+  const resultado = $("#ajBalanzaResultado");
+  const codigo = $("#ajBalanzaPrueba").value.trim();
+  if (!codigo) { resultado.textContent = "Escanea o escribe una etiqueta"; return; }
+  resultado.textContent = "Leyendo etiqueta…";
+  try {
+    const r = await api("/codigos/" + encodeURIComponent(codigo));
+    resultado.textContent = r.balanza
+      ? `${r.balanza.nombre} · ${r.balanza.detalle} · ${clp(r.balanza.precio)}`
+      : r.problema || "Ese código no es una etiqueta de balanza";
+  } catch (e) { resultado.textContent = e.message; }
+}
+
 function pintarAjustes() {
   const caja = $("#panelAjustes");
   if (!caja) return;
@@ -3645,6 +3885,8 @@ function pintarAjustes() {
         ni existencias al agregar productos. Lo que ya tenías anotado se conserva:
         al prenderlo de nuevo, retomas desde esos saldos.</p>
     </div>
+
+    ${bloqueBalanza()}
 
     <div class="ajuste">
       <h4>Bloqueo</h4>
@@ -3702,6 +3944,7 @@ function pintarAjustes() {
         incluido el PIN.
       </p>
     </div>`;
+  conectarBalanza();
   cargarAjustesDelLocal();
 }
 

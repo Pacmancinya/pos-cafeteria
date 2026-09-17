@@ -36,6 +36,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from apps.pos import sesion
+from apps.pos.api import ajustes
+from apps.pos.balanza import resolver
 from apps.pos.db.models import CodigoBarra, Producto
 from apps.pos.db.session import get_session
 from core.codigos import es_de_balanza, es_una_caja, normalizar, por_que_no_sirve
@@ -47,7 +49,7 @@ router = APIRouter(prefix="/api/v1", tags=["códigos"])
 # consulta = un escaneo de verdad". Acá se cumple sola: solo se pregunta por un
 # código que la caja no conoce, y apenas se guarda el producto no se vuelve a
 # preguntar nunca.
-AGENTE = "Kofe-POS/1.0 (punto de venta de barrio; rupitohr@gmail.com)"
+AGENTE = "Kofe-POS/1.0 (+https://github.com/Pacmancinya/pos-cafeteria)"
 URL_OFF = "https://world.openfoodfacts.org/api/v2/product/{}.json"
 
 # Corto a propósito: esto pasa con el cliente esperando. Si no contesta rápido,
@@ -82,6 +84,20 @@ def leer(codigo: str, s: Session = Depends(get_session),
                         "problema": f"«{p.nombre}» está guardado pero sacado de la venta. "
                                     "Actívalo en la pestaña Carta."}
 
+    cobro = resolver(s, codigo)
+    if cobro:
+        salida = {"encontrado": False, "codigo": cobro.codigo, "de_balanza": True,
+                  "se_puede_guardar": False, "problema": cobro.problema}
+        if not cobro.problema:
+            salida["balanza"] = cobro.para_caja()
+            # Solo lo leen las pantallas de antes de la 2.26 (una pestaña o un tablet
+            # sin recargar): con `problema` vacío abrían «Producto nuevo» para una
+            # etiqueta. La pantalla nueva mira `balanza` antes que esto.
+            salida["problema"] = "Recarga la pantalla (F5) para cobrar etiquetas de balanza."
+        return salida
+
+    if problema and es_de_balanza(codigo) and not ajustes._leer(s)["usar_balanza"]:
+        problema += " Si este local cobra etiquetas de balanza, préndela en Ayuda → Ajustes."
     return {
         "encontrado": False,
         "codigo": limpio,

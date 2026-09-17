@@ -148,21 +148,28 @@ def validar_formato_balanza(formato: dict) -> dict:
         raise ValueError("Modo de balanza desconocido.")
     prefijo = f.get("prefijo")
     if not isinstance(prefijo, str) or not prefijo or any(c not in "0123456789" for c in prefijo):
-        raise ValueError("El prefijo debe contener solo digitos ASCII.")
+        raise ValueError("El prefijo tiene que ser solo números.")
+    if not prefijo.startswith("2"):
+        # GS1 reserva los códigos que empiezan con 2 para uso interno del local. Con
+        # otro prefijo —780, el de Chile— los productos de verdad se leerían como
+        # tickets, con el monto sacado de sus propios dígitos.
+        raise ValueError("El prefijo tiene que empezar con 2: los códigos de balanza "
+                         "empiezan así y los de los productos no.")
     rangos = []
     for campo in ("codigo", "valor"):
         rango = f.get(campo)
         if (not isinstance(rango, (list, tuple)) or len(rango) != 2
                 or any(type(i) is not int for i in rango)
                 or not len(prefijo) <= rango[0] < rango[1] <= 12):
-            raise ValueError("Las posiciones deben quedar despues del prefijo y antes del verificador.")
+            raise ValueError("Las posiciones del número y del valor tienen que quedar "
+                             "después del prefijo y antes del último dígito.")
         rangos.append(list(rango))
     codigo, valor = rangos
     if max(codigo[0], valor[0]) < min(codigo[1], valor[1]):
-        raise ValueError("Las posiciones de codigo y valor no pueden solaparse.")
+        raise ValueError("El número y el valor no pueden ocupar los mismos dígitos.")
     divisor = f.get("divisor_peso")
     if type(divisor) is not int or divisor <= 0:
-        raise ValueError("El divisor de peso debe ser un entero positivo.")
+        raise ValueError("El divisor del peso tiene que ser un número entero mayor que 0.")
     return {"modo": f["modo"], "prefijo": prefijo, "codigo": codigo,
             "valor": valor, "divisor_peso": divisor}
 
@@ -179,10 +186,16 @@ def leer_balanza(codigo: str, formato: dict | None = None) -> dict | None:
     leer mal una etiqueta es peor que no leerla. El peso se expresa en kilos
     usando Decimal; el total siempre son pesos enteros. No busca productos ni cobra.
     """
-    try:
-        f = validar_formato_balanza(formato)
-    except ValueError:
-        f = validar_formato_balanza(FORMATO_BALANZA_POR_DEFECTO)
+    if formato is None:
+        f = FORMATO_BALANZA_POR_DEFECTO
+    else:
+        try:
+            f = validar_formato_balanza(formato)
+        except ValueError:
+            # Antes caía al de fábrica. Desde que las etiquetas se COBRAN, leer con
+            # un reparto de dígitos que no es el de la balanza cobra otro monto: es
+            # justo lo que dice arriba que no hay que hacer.
+            return None
     # Se limpia: el lector manda un Enter al final y a veces espacios, y sin quitarlos
     # la etiqueta no se lee. `limpiar` es ASCII, así que no puede convertir un escaneo
     # corrupto en uno válido — que era el riesgo real.

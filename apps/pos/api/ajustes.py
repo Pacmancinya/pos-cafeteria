@@ -39,6 +39,11 @@ POR_DEFECTO = {
     "canal_actualizaciones": "estable",
     "respaldo_afuera": "",
     "formato_balanza": FORMATO_BALANZA_POR_DEFECTO,
+    # Apagada de fábrica. Con el formato de la balanza prendido, un código que
+    # empieza con 25 se COBRA por el monto que trae adentro, y el dígito
+    # verificador se calcula con lápiz: en un local sin balanza eso sería un
+    # cobro a mano sin permiso de cobro a mano. Solo la prende quien la tiene.
+    "usar_balanza": 0,
 }
 
 
@@ -50,8 +55,13 @@ def _leer(s: Session) -> dict:
         if clave == "formato_balanza":
             try:
                 salida[clave] = validar_formato_balanza(json.loads(crudo))
+                salida["formato_balanza_roto"] = False
             except (TypeError, ValueError, RecursionError):
                 salida[clave] = validar_formato_balanza(defecto)
+                # Nunca guardado es una cosa; guardado y roto es otra. Si se leyera
+                # con el de fábrica, 250 g de jamón ($2.248) se cobrarían como el
+                # «ticket 123» por $250. Se muestra el de fábrica, pero no se cobra.
+                salida["formato_balanza_roto"] = crudo is not None
             continue
         if crudo is None:
             salida[clave] = defecto
@@ -66,6 +76,8 @@ def _leer(s: Session) -> dict:
     salida["teclado_en_pantalla"] = 1 if salida.get("teclado_en_pantalla") else 0
     if salida["usar_inventario"] not in (0, 1):
         salida["usar_inventario"] = 1
+    if salida["usar_balanza"] not in (0, 1):
+        salida["usar_balanza"] = 0
     salida["margen_sugerido"] = min(max(salida.get("margen_sugerido", 0), 0), 95)
     salida["bloqueo_minutos"] = min(max(salida.get("bloqueo_minutos", BLOQUEO_MINUTOS), 1), 30)
     if salida["canal_actualizaciones"] not in local.CANALES:

@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 
 from apps.pos import sesion
 from apps.pos.api import ajustes, inventario
+from apps.pos.balanza import resolver
 from apps.pos.db.models import Producto, Turno, Usuario, Venta, VentaLinea
 from apps.pos.db.session import get_session
 from core.config import (MEDIOS_PAGO, a_local, ahora, hoy_local, neto_iva, puede,
@@ -30,7 +31,7 @@ def _lo_que_no_alcanza(s: Session, lineas: list) -> str:
 
     pedido: dict[int, int] = {}
     for l in lineas:
-        if l.producto_id:
+        if l.producto_id and not l.codigo_balanza:
             pedido[l.producto_id] = pedido.get(l.producto_id, 0) + l.cantidad
 
     for producto_id, cantidad in pedido.items():
@@ -57,6 +58,10 @@ def _lo_que_no_alcanza(s: Session, lineas: list) -> str:
             return (f"De «{nombre}» quedan {quedan}. Estás vendiendo {cantidad}. "
                     "Si llegó más, actualiza la cantidad en Bodega.")
     return ""
+
+
+def _plata(n: int) -> str:
+    return "$" + f"{n:,}".replace(",", ".")
 
 
 def _turno_abierto(s: Session) -> Turno | None:
@@ -103,7 +108,7 @@ def _venta_dict(v: Venta, con_lineas: bool = False, s: Session | None = None) ->
     if con_lineas:
         d["lineas"] = [
             {"nombre": l.nombre, "precio_unitario": l.precio_unitario,
-             "cantidad": l.cantidad, "subtotal": l.subtotal}
+             "cantidad": l.cantidad, "subtotal": l.subtotal, "detalle": l.detalle}
             for l in v.lineas
         ]
         if v.estado == "anulada":
@@ -116,9 +121,47 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("vender"))):
     """Registra una venta YA COBRADA. El carrito vive en el navegador del cajero;
     acá llega recién cuando se cobró (ver CONTRATO, sección 2)."""
+    if any(item.codigo_balanza is not None for item in datos.lineas):
+        # Dos cajas pueden cobrar el mismo papel al mismo tiempo. Reservar la
+        # escritura ANTES de consultar evita que ambas lo vean como libre.
+        # La reserva dura hasta commit (o rollback si se rechaza la venta).
+        from apps.pos.db.session import reservar_escritura
+        reservar_escritura(s)
     lineas: list[VentaLinea] = []
+    tickets: set[str] = set()
     total = 0
     for item in datos.lineas:
+        if item.codigo_balanza is not None:
+            cobro = resolver(s, item.codigo_balanza)
+            if cobro is None:
+                if not ajustes._leer(s)["usar_balanza"]:
+                    raise HTTPException(409, "La balanza de este local está apagada, así que "
+                                             "esa etiqueta no se puede cobrar. Quítala del pedido "
+                                             "(o prende la balanza en Ayuda → Ajustes).")
+                raise HTTPException(409, "Esa etiqueta ya no calza con el formato guardado de la "
+                                         "balanza. Quítala del pedido y vuelve a escanearla.")
+            if cobro.modo == "ticket" and item.cantidad != 1:
+                raise HTTPException(422, "Un ticket de balanza se cobra de a uno: la cantidad debe ser 1.")
+            if cobro.problema:
+                raise HTTPException(409, cobro.problema)
+            if item.precio_visto is not None and item.precio_visto != cobro.precio:
+                raise HTTPException(
+                    409, f"La etiqueta de {cobro.nombre} ({cobro.detalle}) ahora vale "
+                         f"{_plata(cobro.precio)} y en la pantalla decía "
+                         f"{_plata(item.precio_visto)}. Quítala del pedido y vuelve a escanearla.")
+            if cobro.modo == "ticket":
+                if cobro.codigo in tickets:
+                    raise HTTPException(409, f"El {cobro.detalle.lower()} de la balanza está "
+                                             "dos veces en esta venta. Deja una sola línea.")
+                tickets.add(cobro.codigo)
+            subtotal = cobro.precio * item.cantidad
+            total += subtotal
+            lineas.append(VentaLinea(
+                producto_id=cobro.producto_id, nombre=cobro.nombre, detalle=cobro.detalle,
+                precio_unitario=cobro.precio, cantidad=item.cantidad, subtotal=subtotal,
+                codigo_balanza=cobro.codigo, peso_g=cobro.peso_g, modo_balanza=cobro.modo,
+            ))
+            continue
         if item.producto_id is None:
             # Cobro a mano. Es la única línea cuyo precio no sale del catálogo, así que es
             # también la única por la que alguien podría cobrar de más sin que se note. No
@@ -139,6 +182,11 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
         p = s.get(Producto, item.producto_id)
         if not p:
             raise HTTPException(404, f"No existe el producto {item.producto_id}")
+        if p.precio == 0 and p.precio_kilo > 0:
+            # Tocar su azulejo lo cobraba a $0: su precio es por kilo y sale de la
+            # etiqueta. Si el dueño le pone también un precio por unidad, sí se vende así.
+            raise HTTPException(409, f"«{p.nombre}» se vende por peso: escanea la etiqueta "
+                                     "de la balanza.")
         subtotal = p.precio * item.cantidad
         total += subtotal
         # nombre y precio COPIADOS: la venta de ayer no cambia si mañana sube el café
@@ -320,9 +368,9 @@ def anular_venta(venta_id: int, datos: AnularIn, s: Session = Depends(get_sessio
 def _cobros_a_mano(s: Session, ventas) -> dict:
     """Cuántas líneas se cobraron a mano y por cuánto, con quién las hizo.
 
-    Una línea sin `producto_id` es un cobro a mano: su precio lo escribió alguien en el
-    mostrador. Se cuentan aparte porque son las únicas que no se pueden contrastar con la
-    carta; el resto de las líneas siempre se puede revisar contra su producto.
+    Una línea sin `producto_id` ni etiqueta es un cobro a mano: su precio lo
+    escribió alguien en el mostrador. Los tickets también carecen de producto,
+    pero su monto viene impreso por la balanza y se informa por separado.
     """
     from apps.pos.db.models import VentaLinea
 
@@ -330,7 +378,8 @@ def _cobros_a_mano(s: Session, ventas) -> dict:
     if not ids:
         return {"cantidad": 0, "total": 0, "por_persona": []}
     lineas = s.exec(select(VentaLinea).where(
-        VentaLinea.venta_id.in_(ids), VentaLinea.producto_id == None)).all()  # noqa: E711
+        VentaLinea.venta_id.in_(ids), VentaLinea.producto_id == None,  # noqa: E711
+        VentaLinea.codigo_balanza == "")).all()
     if not lineas:
         return {"cantidad": 0, "total": 0, "por_persona": []}
     de_venta = {v.id: v for v in ventas}
@@ -444,9 +493,26 @@ def resumen(
 
     neto, iva = neto_iva(total)
     vendidos: dict[str, dict] = {}
+    balanza = {"cantidad": 0, "total": 0, "tickets": 0, "por_persona": []}
+    balanza_por_persona: dict[str, dict] = {}
     for v in validas:
         for l in v.lineas:
-            d = vendidos.setdefault(l.nombre, {"cantidad": 0, "total": 0})
+            nombre = l.nombre
+            if l.codigo_balanza:
+                balanza["cantidad"] += 1
+                balanza["total"] += l.subtotal
+                balanza["tickets"] += int(l.modo_balanza == "ticket")
+                # Un ticket trae su monto impreso en el papel: es la otra línea que
+                # nadie puede contrastar contra la carta. Por eso, como los cobros a
+                # mano, se ve quién la cobró.
+                quien = _nombre(s, v.usuario_id) or "—"
+                pp = balanza_por_persona.setdefault(quien, {"nombre": quien, "cantidad": 0, "total": 0})
+                pp["cantidad"] += 1
+                pp["total"] += l.subtotal
+                # «9 Croissant» mezclaba unidades con etiquetas de 0,456 kg.
+                if l.modo_balanza != "ticket":
+                    nombre = f"{l.nombre} (balanza)"
+            d = vendidos.setdefault(nombre, {"cantidad": 0, "total": 0})
             d["cantidad"] += l.cantidad
             d["total"] += l.subtotal
 
@@ -494,11 +560,12 @@ def resumen(
             "hora": a_local(r.creado_at).strftime("%H:%M"),
             "hecho_por": r.hecho_por,
         } for r in movs],
-        # Los cobros a mano, aparte. No es sospecha: es que son las únicas líneas
-        # cuyo precio no salió del catálogo, así que son las únicas que nadie puede
-        # revisar después comparando contra la carta. Verlas sumadas —cuántas y por
-        # cuánto— es lo que le permite al dueño mirarlas si algún día no le cuadran.
+        # Los cobros a mano y la balanza, aparte: un monto escrito por la caja
+        # y un total impreso en un ticket no se contrastan contra la carta.
+        # Separarlos permite al dueño revisar de dónde salió cada cobro.
         "varios": _cobros_a_mano(s, ventas),
+        "balanza": {**balanza, "por_persona": sorted(
+            balanza_por_persona.values(), key=lambda d: -d["total"])},
         # Solo cuando se pidió un turno. `None` es la señal de que lo de arriba
         # es de un rango de días y no de una caja abierta ahora.
         "turno": None,

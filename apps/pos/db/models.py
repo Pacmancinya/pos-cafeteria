@@ -162,6 +162,12 @@ class VentaLinea(SQLModel, table=True):
     precio_unitario: int
     cantidad: int = 1
     subtotal: int = 0
+    detalle: str = ""
+    codigo_balanza: str = Field(default="", index=True)
+    peso_g: int = 0
+    # Se congela: cambiar el formato o borrar el producto no convierte un
+    # paquete en ticket en los informes de ventas anteriores.
+    modo_balanza: str = ""
 
     venta: Optional[Venta] = Relationship(back_populates="lineas")
 
