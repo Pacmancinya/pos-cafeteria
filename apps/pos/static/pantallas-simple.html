@@ -73,12 +73,24 @@ html, body {
 #aviso { color: #E4794A; }
 
 #diag { color: #F4E2CC; padding: 4%; line-height: 1.7; }
+
+/* Fiestas Patrias. Triangulos hechos con bordes: lo entiende cualquier
+   navegador, sin SVG ni transformaciones. */
+#fiestas { display: none; text-align: center; margin-bottom: 8px; white-space: nowrap; overflow: hidden; }
+.bd { display: inline-block; width: 0; height: 0; margin: 0 4px;
+      border-left: 20px solid transparent; border-right: 20px solid transparent; }
+.bd1 { border-top: 34px solid #D52B1E; }
+.bd2 { border-top: 34px solid #FBF8F2; }
+.bd3 { border-top: 34px solid #0039A6; }
+#saludo18 { display: inline-block; background: #D52B1E; color: #FFFFFF; font-weight: bold;
+            padding: 6px 18px; margin-top: 6px; border-left: 16px solid #0039A6; }
 #diag b { color: #F0A94A; }
 </style>
 </head>
 <body>
 
 <div id="marco">
+  <div id="fiestas"><div id="banderines"></div><div id="saludo18">&iexcl;Felices Fiestas Patrias!</div></div>
   <div id="cabeza"><span id="local">&nbsp;</span> <span id="cat"></span></div>
   <table id="lista"><tbody id="cuerpo"></tbody></table>
   <div id="destacado" style="display:none">
@@ -105,6 +117,36 @@ html, body {
   var pagina = 0;     // pagina dentro de esa categoria
 
   function $(id) { return document.getElementById(id); }
+
+  /* Fiestas Patrias: del 12 al 20 de septiembre, con la hora del televisor. Lo
+     que se eligio en Configurar en la pantalla bonita de ESTE televisor
+     (automatica, prendida o apagada) tambien vale aca: es la misma memoria.
+     ?fiestas=1 o ?fiestas=0 lo fuerzan para probar. */
+  function fiestasActivas() {
+    var q = param("fiestas");
+    if (q === "1") { return true; }
+    if (q === "0") { return false; }
+    var modo = "auto";
+    try {
+      var guardado = JSON.parse(window.localStorage.getItem("kofe.config.v1") || "{}");
+      if (guardado && guardado.fiestas) { modo = guardado.fiestas; }
+    } catch (e) { modo = "auto"; }
+    if (modo === "siempre") { return true; }
+    if (modo === "nunca") { return false; }
+    var d = new Date();
+    return d.getMonth() === 8 && d.getDate() >= 12 && d.getDate() <= 20;
+  }
+
+  function pintarFiestas() {
+    var caja = $("fiestas");
+    if (!caja) { return; }
+    if (!fiestasActivas()) { caja.style.display = "none"; return; }
+    var ancho = document.documentElement.clientWidth || document.body.clientWidth || 1280;
+    var n = Math.max(9, Math.floor(ancho * 0.9 / 48)), html = "", i;
+    for (i = 0; i < n; i++) { html += '<span class="bd bd' + (i % 3 + 1) + '"></span>'; }
+    $("banderines").innerHTML = html;
+    caja.style.display = "block";
+  }
 
   function esc(t) {
     if (t === null || typeof t === "undefined") { return ""; }
@@ -336,7 +378,9 @@ html, body {
   }
 
   if (window.addEventListener) {
-    window.addEventListener("resize", function () { pintar(); }, false);
+    window.addEventListener("resize", function () { pintar(); pintarFiestas(); }, false);
+    pintarFiestas();
+    setInterval(pintarFiestas, 600000);
   }
   empezar();
 }());

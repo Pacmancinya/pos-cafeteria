@@ -632,13 +632,78 @@ body.kiosko .viewport{border-radius:0;box-shadow:none}
   .respaldo-txt{height:100px}
 }
 
+/* --- 12b. Fiestas Patrias -------------------------------------
+   Banderines, volantines y un saludo del 18. Se prenden solos del 12 al 20 de
+   septiembre (ver fiestasActivas) o a mano desde Configurar → Pantallas.
+   Todo va ENCIMA del diseño de siempre y nada tapa un precio: los banderines
+   cuelgan del borde de arriba, y para no pisar el logo la cabecera de la carta
+   baja lo justo. Colores de la bandera, no los del local: es otra fiesta. */
+.fiestas-deco{display:none}
+body.fiestas .fiestas-deco{display:block}
+.guirnalda{position:absolute;left:0;right:0;top:0;height:130px;pointer-events:none;z-index:6}
+/* En la carta los banderines son más chicos a propósito: ahí la lista va justa, y
+   bajar la cabecera para hacerles lugar tapaba el último producto con el destacado.
+   Acostada baja 40 px; parada, nada: caben en el margen de arriba (40 px). */
+.tablero .guirnalda{height:74px}
+body.vertical .tablero .guirnalda{height:40px}
+.guirnalda svg{display:block;width:100%;height:100%;overflow:visible;
+  filter:drop-shadow(0 8px 10px rgba(20,4,0,.28))}
+.banderin{transform-box:fill-box;transform-origin:50% 0;
+  animation:banderin 3.6s ease-in-out infinite alternate;animation-delay:var(--d,0s)}
+@keyframes banderin{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}
+
+.saludo18{
+  position:absolute;left:50%;top:128px;z-index:6;transform:translateX(-50%);
+  align-items:stretch;border-radius:16px;overflow:hidden;white-space:nowrap;
+  box-shadow:0 18px 40px rgba(30,6,0,.32);
+}
+body.fiestas .saludo18{display:flex}
+.saludo18__azul{background:#0039A6;display:flex;align-items:center;padding:0 20px}
+.saludo18__azul svg{width:40px;height:40px;display:block}
+.saludo18__txt{
+  background:#D52B1E;color:#FFFFFF;font:600 42px/1 var(--f-display);
+  padding:16px 30px 19px;letter-spacing:.005em;
+}
+body.fiestas .vitrina__hero{padding-top:150px}
+/* Acostada no sobra alto: el letrero quedaba encima de «Café de especialidad» y la
+   bajada pegada al combo. Se achica un poco el nombre (mismo dibujo, 89%). */
+body.fiestas:not(.vertical) .vitrina__hero{padding-top:124px}
+body.fiestas:not(.vertical) .palabra{width:1100px;height:497px;margin:-78px 0 -44px}
+
+.volantin{position:absolute;z-index:1;pointer-events:none;transform-origin:50% 20%;
+  animation:volantin 12s ease-in-out infinite alternate;animation-delay:var(--d,0s)}
+.volantin svg{display:block;overflow:visible;filter:drop-shadow(0 16px 18px rgba(30,6,0,.25))}
+@keyframes volantin{
+  0%{transform:translate(0,0) rotate(-7deg)}
+  50%{transform:translate(22px,-26px) rotate(5deg)}
+  100%{transform:translate(-12px,10px) rotate(-2deg)}
+}
+.volantin--a{left:70px;top:250px}
+.volantin--b{right:80px;top:180px}
+body.vertical .volantin--a{left:40px;top:300px}
+body.vertical .volantin--b{right:34px;top:560px}
+body.vertical .saludo18__txt{font-size:40px;padding:15px 26px 18px}
+
+/* la carta: escarapela y saludo entre el logo y la hora */
+.saludo18-mini{align-self:center;align-items:center;gap:16px}
+body.fiestas .saludo18-mini{display:flex}
+.saludo18-mini svg{width:74px;height:92px;display:block;flex:none}
+.saludo18-mini b{font:600 34px/1.05 var(--f-display);color:var(--leche);white-space:nowrap}
+.saludo18-mini b i{font-style:normal;color:#FF6B5E}
+body.vertical .saludo18-mini b{display:none}
+body.vertical .saludo18-mini svg{width:60px;height:75px}
+body.fiestas .tablero__top{padding-top:70px}
+body.fiestas.vertical .tablero__top{padding-top:40px}
+
 /* --- 13. Modo suave (menos movimiento) ------------------------ */
 body.calma .vapor,body.calma .burbuja,body.calma .gota-cae{animation:none;opacity:.34}
 body.calma .blob{animation:none}   /* las gotas quedan quietas, no transparentes */
 body.calma .cinta__pista{animation-duration:130s}
 body.calma .item,body.calma .destacado,body.calma .combo{animation-duration:.01s}
 body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
+body.calma .banderin,body.calma .volantin{animation:none}
 @media (prefers-reduced-motion:reduce){
+  .banderin,.volantin{animation:none}
   .vapor,.burbuja,.gota-cae{animation:none;opacity:.34}
   .item,.destacado,.combo{animation-duration:.01s}
   .cinta__pista{animation-duration:130s}
@@ -705,6 +770,14 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
 
       <!-- ============ PANTALLA 1 · vitrina ============ -->
       <section class="screen vitrina is-on" id="pantalla1" aria-label="Pantalla de vitrina">
+        <!-- Fiestas Patrias: se ven solo con body.fiestas (ver fiestasActivas). -->
+        <div class="guirnalda fiestas-deco" data-guirnalda></div>
+        <div class="volantin volantin--a fiestas-deco" style="--d:-3s" data-volantin="a"></div>
+        <div class="volantin volantin--b fiestas-deco" style="--d:-8s" data-volantin="b"></div>
+        <div class="saludo18 fiestas-deco" aria-label="Felices Fiestas Patrias">
+          <span class="saludo18__azul" data-estrella></span>
+          <span class="saludo18__txt">¡Felices Fiestas Patrias!</span>
+        </div>
         <div class="vitrina__hero" id="hero">
           <p class="kicker" id="kicker">Café de especialidad</p>
           <svg class="palabra" id="palabra" viewBox="0 0 1240 560" aria-label="Kofe"></svg>
@@ -734,10 +807,14 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
 
       <!-- ============ PANTALLA 2 · tablero de menú ============ -->
       <section class="screen tablero" id="pantalla2" aria-label="Pantalla de menú">
+        <div class="guirnalda fiestas-deco" data-guirnalda></div>
         <header class="tablero__top">
           <div class="marca">
             <svg class="marca__logo" id="logoMini" viewBox="0 0 420 150" aria-label="Kofe"></svg>
             <p class="marca__txt" id="marcaTxt"></p>
+          </div>
+          <div class="saludo18-mini fiestas-deco" data-escarapela>
+            <b>¡Felices <i>Fiestas Patrias</i>!</b>
           </div>
           <div class="reloj">
             <div class="reloj__hora" id="hora">00:00</div>
@@ -796,6 +873,10 @@ body.calma .tab__prog{animation:none;transform:scaleX(1);opacity:.3}
         También sirve abrir la dirección con <code>?p=1</code> o <code>?p=2</code>: la dirección manda.</dd>
       <dt>Modo TV</dt>
       <dd>Pantalla completa con <kbd>F</kbd>. En el equipo del local conviene abrir Chrome en modo kiosko para que no se vea nada del navegador.</dd>
+      <dt>Fiestas Patrias</dt>
+      <dd>Del <b>12 al 20 de septiembre</b> las pantallas se decoran solas: banderines,
+        volantines y un saludo del 18. No se prenden el 11 a propósito. En Configurar →
+        Pantallas se puede dejar <b>siempre prendida</b> o <b>apagada</b>.</dd>
       <dt>Si el equipo es lento</dt>
       <dd>Activa <b>Modo suave</b>: congela vapor, burbujas y el brillo del logo, y deja solo las transiciones. También se respeta la preferencia de menos movimiento del sistema.</dd>
     </dl>
@@ -892,6 +973,10 @@ const CONFIG = {
   // "vitrina" o "menu". Queda guardado en el TV, así que en un local con dos
   // televisores cada uno sabe cuál es sin escribir nada en la dirección.
   modoTv: "turnar",
+
+  // Decoración de Fiestas Patrias: "auto" (del 12 al 20 de septiembre), "siempre"
+  // o "nunca". Queda guardada en cada televisor, como el modo.
+  fiestas: "auto",
 
   categorias: [
     {
@@ -1418,6 +1503,129 @@ function pasoCombo() {
   tCombo = setTimeout(() => { pintarCombo(); pasoCombo(); }, Math.max(4000, CFG.tiempos.reco));
 }
 
+/* ==========================================================
+   Fiestas Patrias
+   ========================================================== */
+const CHILE = { rojo: "#D52B1E", azul: "#0039A6", blanco: "#FBF8F2" };
+
+/* ¿Toca decorar hoy? Con la hora del televisor. Del 12 y no del 1 de septiembre:
+   el 11 es una fecha delicada en Chile, y un letrero de fiesta ese día se lee
+   mal. Hasta el 20, que es el domingo largo de las fiestas.
+   ?fiestas=1 / ?fiestas=0 en la dirección lo fuerzan, para probar. */
+function fiestasActivas(hoy) {
+  const q = new URLSearchParams(location.search).get("fiestas");
+  if (q === "1") return true;
+  if (q === "0") return false;
+  const modo = (CFG && CFG.fiestas) || "auto";
+  if (modo === "siempre") return true;
+  if (modo === "nunca") return false;
+  const d = hoy || new Date();
+  return d.getMonth() === 8 && d.getDate() >= 12 && d.getDate() <= 20;
+}
+
+function estrellaSVG(cx, cy, r, color) {
+  let d = "";
+  for (let i = 0; i < 10; i++) {
+    const rr = i % 2 ? r * .42 : r;
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    d += (i ? "L" : "M") + (cx + rr * Math.cos(a)).toFixed(1) + " " + (cy + rr * Math.sin(a)).toFixed(1);
+  }
+  return `<path d="${d}Z" fill="${color}"/>`;
+}
+
+/* Una guirnalda de banderines: un hilo que cae en curva y banderines rojo,
+   blanco y azul (el azul con su estrella). Se arma para el ancho real del lienzo
+   —1920 acostado, 1080 parado— para que los triángulos no salgan estirados. */
+function guirnaldaSVG(ancho, medida) {
+  const m = medida || {};
+  const paso = m.paso || 92, caida = m.caida == null ? 34 : m.caida, alto = m.alto || 130;
+  const n = Math.max(9, Math.round(ancho / paso));
+  const arriba = m.arriba == null ? 12 : m.arriba;
+  const y = (f) => arriba + 4 * caida * f * (1 - f);
+  const colores = [CHILE.rojo, CHILE.blanco, CHILE.azul];
+  let banderas = "";
+  for (let k = 0; k < n; k++) {
+    const f = (k + .5) / n, x = ancho * f, yy = y(f) - 2;
+    const w = ancho / n * (m.relleno || .74), h = w * 1.12;
+    const c = colores[k % 3];
+    banderas += `<g class="banderin" style="--d:-${((k * .61) % 3.6).toFixed(2)}s">
+      <path d="M${(x - w / 2).toFixed(1)} ${yy.toFixed(1)}L${(x + w / 2).toFixed(1)} ${yy.toFixed(1)}L${x.toFixed(1)} ${(yy + h).toFixed(1)}Z"
+            fill="${c}" stroke="rgba(40,10,0,.16)" stroke-width="1.5"/>
+      ${c === CHILE.azul ? estrellaSVG(x, yy + h * .34, w * .19, CHILE.blanco) : ""}
+    </g>`;
+  }
+  return `<svg viewBox="0 0 ${ancho} ${alto}" preserveAspectRatio="xMidYMin meet" aria-hidden="true">
+    <path d="M-10 ${arriba}Q${ancho / 2} ${arriba + 2 * caida} ${ancho + 10} ${arriba}"
+          fill="none" stroke="rgba(255,248,239,.7)" stroke-width="3"/>
+    ${banderas}</svg>`;
+}
+
+/* El volantín: el rombo de papel con sus dos colores, las varillas, la cola de
+   lacitos y el hilo que se pierde hacia abajo. */
+function volantinSVG(tam, izquierda) {
+  const s = tam / 200;
+  const hilo = izquierda ? "M100 190 C 140 300, 60 380, 170 520" : "M100 190 C 60 300, 150 380, 30 520";
+  const cola = izquierda ? "M100 190 Q 80 240 104 280 T 96 360" : "M100 190 Q 120 240 96 280 T 104 360";
+  const lazos = [236, 282, 330].map((yy, i) =>
+    `<path d="M${88 + (i % 2) * 8} ${yy}l12 -8 0 16Zm24 0l-12 -8 0 16Z" fill="${i % 2 ? CHILE.blanco : CHILE.rojo}"/>`).join("");
+  return `<svg width="${Math.round(200 * s)}" height="${Math.round(540 * s)}" viewBox="0 0 200 540" aria-hidden="true">
+    <path d="${hilo}" fill="none" stroke="rgba(255,248,239,.55)" stroke-width="2"/>
+    <path d="${cola}" fill="none" stroke="rgba(255,248,239,.8)" stroke-width="2.5"/>
+    ${lazos}
+    <path d="M100 0L190 95L100 190Z" fill="${CHILE.blanco}"/>
+    <path d="M100 0L10 95L100 190Z" fill="${CHILE.azul}"/>
+    <path d="M100 0V190M10 95H190" stroke="rgba(40,10,0,.35)" stroke-width="3"/>
+    <circle cx="100" cy="95" r="22" fill="${CHILE.rojo}"/>
+    ${estrellaSVG(100, 96, 14, CHILE.blanco)}
+  </svg>`;
+}
+
+/* La escarapela: el adorno redondo con cintas que se pone en la solapa. */
+function escarapelaSVG() {
+  const pliegues = Array.from({ length: 16 }, (_, i) => {
+    const a = i * Math.PI / 8;
+    return `<circle cx="${(37 + 25 * Math.cos(a)).toFixed(1)}" cy="${(35 + 25 * Math.sin(a)).toFixed(1)}" r="11" fill="${i % 2 ? CHILE.azul : "#1149B8"}"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 74 92" aria-hidden="true">
+    <path d="M24 48L14 90L28 80L34 92L38 52Z" fill="${CHILE.rojo}"/>
+    <path d="M50 48L60 90L46 80L40 92L36 52Z" fill="${CHILE.azul}"/>
+    ${pliegues}
+    <circle cx="37" cy="35" r="21" fill="${CHILE.blanco}"/>
+    <circle cx="37" cy="35" r="14" fill="${CHILE.rojo}"/>
+    ${estrellaSVG(37, 36, 9, CHILE.blanco)}
+  </svg>`;
+}
+
+function pintarFiestas() {
+  const vertical = CFG.orientacion === "vertical";
+  // Vitrina: grandes. Carta acostada: medianas. Carta parada: chicas, en el margen.
+  const carta = vertical ? { paso: 54, caida: 2, relleno: .52, alto: 40, arriba: 4 }
+                         : { paso: 80, caida: 5, relleno: .56, alto: 74 };
+  document.querySelectorAll("[data-guirnalda]").forEach((g) => {
+    g.innerHTML = guirnaldaSVG(ANCHO, g.closest(".tablero") ? carta : null);
+  });
+  const a = $('[data-volantin="a"]'), b = $('[data-volantin="b"]');
+  if (a) a.innerHTML = volantinSVG(vertical ? 150 : 170, true);
+  if (b) b.innerHTML = volantinSVG(vertical ? 120 : 130, false);
+  const est = $("[data-estrella]");
+  if (est) est.innerHTML = `<svg viewBox="0 0 40 40">${estrellaSVG(20, 21, 17, CHILE.blanco)}</svg>`;
+  const esc18 = $("[data-escarapela]");
+  if (esc18 && !esc18.querySelector("svg")) esc18.insertAdjacentHTML("afterbegin", escarapelaSVG());
+}
+
+/* Prende o apaga la decoración según la fecha. Se revisa cada 10 minutos: el
+   televisor queda prendido días, y el 12 tiene que aparecer sola a medianoche
+   (y el 21 irse) sin que nadie recargue nada. */
+let fiestasPrendidas = null;
+function aplicarFiestas() {
+  const on = fiestasActivas();
+  if (on === fiestasPrendidas) return;
+  fiestasPrendidas = on;
+  document.body.classList.toggle("fiestas", on);
+  if (on) pintarFiestas();
+  pintarCabecera();          // el saludo en la cinta
+}
+
 function pintarCabecera() {
   $("#marcaTxt").textContent = CFG.marcaTxt;
   // en el tablero oscuro el logo va en tono leche, no en café
@@ -1425,7 +1633,8 @@ function pintarCabecera() {
     { fs: 108, x: 12, y: 112, anchor: "start", gotas: false, burbujas: false, ls: 0, fill: "url(#gLeche)" });
   $("#tabs").innerHTML = cats
     .map((c, i) => `<button class="tab" data-i="${i}">${esc(c.nombre)}<span class="tab__prog"></span></button>`).join("");
-  const grupo = `<div class="cinta__grupo">${CFG.cinta.map(t => `<span class="cinta__item">${esc(t)}</span>`).join("")}</div>`;
+  const avisos = (fiestasPrendidas ? ["¡Felices Fiestas Patrias!"] : []).concat(CFG.cinta);
+  const grupo = `<div class="cinta__grupo">${avisos.map(t => `<span class="cinta__item">${esc(t)}</span>`).join("")}</div>`;
   $("#cinta").innerHTML = grupo + grupo;
 }
 
@@ -1591,6 +1800,7 @@ function setOrientacion(o) {
   // ya se dibujó; al arrancar lo dibuja pintarVitrina.
   const palabra = $("#palabra");
   if (palabra && palabra.childElementCount) pintarPalabra(palabra, CFG.marca, "liquido", { humo: 1 });
+  if (fiestasPrendidas) pintarFiestas();
 }
 
 let ultW = -1, ultH = -1;
@@ -1693,6 +1903,8 @@ function guardarEditor() {
   cats = CFG.categorias;
   catIdx = Math.min(catIdx, cats.length - 1);
   const ok = guardarCFG();
+  fiestasPrendidas = null;   // lo que se eligió en Configurar se aplica al tiro
+  aplicarFiestas();
   setOrientacion(CFG.orientacion);
   pintarMargen();
   pintarVitrina(); pintarCabecera(); pintarCategoria(catIdx);
@@ -1740,6 +1952,14 @@ function pintarEdPantallas() {
     ${fijo ? `<div class="aviso">Ojo: este televisor se abrió con <b>?p=${fijo}</b> en la
       dirección, y eso manda: muestra siempre ${fijo === 1 ? "la vitrina" : "la carta"}.
       Para que valga lo de arriba, ábrelo sin <b>?p=</b>.</div>` : ""}
+    <h3 style="margin-top:26px">Decoración de Fiestas Patrias</h3>
+    <p class="pista">Banderines, volantines y un saludo del 18. En <b>Automática</b> se prende
+      sola del 12 al 20 de septiembre y se apaga sola después.</p>
+    <div class="orient">
+      <button class="orient-b${(BORRADOR.fiestas || "auto") === "auto" ? " is-on" : ""}" data-fiestas="auto">Automática</button>
+      <button class="orient-b${BORRADOR.fiestas === "siempre" ? " is-on" : ""}" data-fiestas="siempre">Prendida</button>
+      <button class="orient-b${BORRADOR.fiestas === "nunca" ? " is-on" : ""}" data-fiestas="nunca">Apagada</button>
+    </div>
     <h3 style="margin-top:26px">Cómo está puesto el televisor</h3>
     <p class="pista">Si el TV está colgado parado, marca Vertical. El diseño se reordena solo: los productos quedan uno bajo otro y el destacado pasa abajo.</p>
     <div class="orient">
@@ -1970,6 +2190,8 @@ function conectarEditor() {
   });
 
   $("#edPantallas").addEventListener("click", e => {
+    const fz = e.target.closest("[data-fiestas]");
+    if (fz) { BORRADOR.fiestas = fz.dataset.fiestas; return pintarEdPantallas(); }
     const m = e.target.closest("[data-modo]");
     if (m) { BORRADOR.modoTv = m.dataset.modo; return pintarEdPantallas(); }
     const b = e.target.closest("[data-or]");
@@ -2325,6 +2547,7 @@ addEventListener("error", (e) => {
   pintarCabecera();
   pintarCategoria(0);
   reloj(); setInterval(reloj, 15000);
+  aplicarFiestas(); setInterval(aplicarFiestas, 10 * 60000);
   conectarEditor();
   conectarSola();
   setOrientacion(CFG.orientacion);

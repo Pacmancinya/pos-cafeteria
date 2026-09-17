@@ -951,3 +951,69 @@ def test_los_codigos_de_un_producto_que_no_existe_se_guardan_para_despues():
     cuerpo = _cuerpo(js, "async function pegarCodigo")
     assert "CODIGOS_NUEVOS.push" in cuerpo, (
         "con el producto sin crear, el codigo se anota en memoria")
+
+
+# ---------------------------------------------------------------------------
+# 2.27: Fiestas Patrias en los televisores
+# ---------------------------------------------------------------------------
+def _fiestas_en_node(cuerpo: str, casos: list[tuple[str, str, str]]) -> list[bool]:
+    """Corre fiestasActivas() de verdad, con la fecha, el modo guardado y la dirección
+    de cada caso. Sin Node no hay cómo, y la prueba se salta."""
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no hay Node en este computador")
+    programa = (
+        "let SEARCH = ''; let CFG = {};\n"
+        "const location = { get search() { return SEARCH; } };\n"
+        + cuerpo + "\n}\n"
+        "const casos = " + json.dumps(casos) + ";\n"
+        "console.log(JSON.stringify(casos.map(([fecha, modo, q]) => {\n"
+        "  SEARCH = q; CFG = { fiestas: modo };\n"
+        "  const [a, m, d] = fecha.split('-').map(Number);\n"
+        "  return fiestasActivas(new Date(a, m - 1, d, 12));\n"
+        "})));\n")
+    r = subprocess.run([node, "-e", programa], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[:400]
+    return json.loads(r.stdout)
+
+
+def test_las_fiestas_se_prenden_solas_del_12_al_20_de_septiembre():
+    """El 11 de septiembre no se decora: por eso parte el 12 y no el 1."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    cuerpo = _cuerpo_de(html, "function fiestasActivas(")
+    casos = [
+        ("2026-09-11", "auto", ""), ("2026-09-12", "auto", ""), ("2026-09-18", "auto", ""),
+        ("2026-09-20", "auto", ""), ("2026-09-21", "auto", ""), ("2026-10-18", "auto", ""),
+        # el dueño manda sobre el calendario, y la dirección manda sobre el dueño
+        ("2026-09-18", "nunca", ""), ("2026-03-01", "siempre", ""),
+        ("2026-09-18", "auto", "?fiestas=0"), ("2026-03-01", "nunca", "?fiestas=1"),
+    ]
+    assert _fiestas_en_node(cuerpo, casos) == [
+        False, True, True, True, False, False,
+        False, True,
+        False, True,
+    ]
+
+
+def test_la_pantalla_simple_usa_las_mismas_fechas_y_el_mismo_ajuste():
+    """Los televisores viejos no comparten código con la pantalla nueva: si una
+    cambia las fechas y la otra no, un local queda con medio 18."""
+    simple = io.open(ESTATICOS / "pantallas-simple.html", encoding="utf-8").read()
+    cuerpo = simple[simple.find("function fiestasActivas()"):]
+    cuerpo = cuerpo[:cuerpo.find("\n  }\n")]
+    assert "d.getMonth() === 8 && d.getDate() >= 12 && d.getDate() <= 20" in cuerpo
+    assert '"kofe.config.v1"' in cuerpo, "tiene que leer el ajuste que guarda Configurar"
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    assert "d.getMonth() === 8 && d.getDate() >= 12 && d.getDate() <= 20" in html
+    assert 'const LLAVE = "kofe.config.v1"' in html
+
+
+def test_las_fiestas_se_revisan_solas_sin_recargar_el_televisor():
+    """El televisor queda prendido días enteros: el 21 la decoración se tiene que ir
+    sin que nadie lo toque."""
+    html = io.open(PANTALLAS, encoding="utf-8").read()
+    assert "setInterval(aplicarFiestas" in html
+    simple = io.open(ESTATICOS / "pantallas-simple.html", encoding="utf-8").read()
+    assert "setInterval(pintarFiestas" in simple
