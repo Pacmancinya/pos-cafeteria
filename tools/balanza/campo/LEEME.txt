@@ -2,7 +2,7 @@ OPCION 1: SIN DRIVE NI PENDRIVE (requiere internet y Windows 10 u 11, PowerShell
 
 En el computador de la caja:
 
-  1. Deja abierto el sistema de la caja y escanea un ticket de la balanza.
+  1. Deja abierto el sistema de la caja y ten a mano un ticket de la balanza.
   2. Aprieta la tecla Windows, escribe powershell y aprieta Enter.
   3. Pega esta linea completa y aprieta Enter:
 
@@ -11,13 +11,18 @@ En el computador de la caja:
      (Lo primero de la linea es para los Windows viejos: sin eso no logran
       conectarse a GitHub y dicen "no se puede crear un canal seguro".)
 
-  4. Mira las conexiones marcadas como CANDIDATA y el nombre del proceso.
+  4. Si pide empezar a mirar, aprieta Enter y vuelve al sistema de la caja:
+     escanea el ticket dentro de los 40 segundos siguientes (s salta la espera).
+     Mira las conexiones marcadas como CANDIDATA y el nombre del proceso.
      Si hay una sola IP candidata, Enter la acepta. Si hay varias, elige su
      numero. Puedes escribir otra IP, tambien con puerto: 192.168.1.50:2000.
      Una candidata es una pista, no una confirmacion de que sea la balanza.
      Escribe v para buscar vecinos aun si hay candidatas. Sin candidatas,
      Enter tambien busca en los vecinos de la red: prueba
      los puertos 2000, 80 y 21 en hasta 60 equipos (unos 90 segundos).
+  5. Si encuentra un solo vecino mas probable por su marca o sus puertos,
+     te dice por que: Enter lo revisa a fondo; n termina. Solo escucha los
+     saludos de los servicios: no intenta entrar ni manda claves.
 
 Deja el informe balanza-FECHA.txt en el Escritorio; si no existe, en TEMP.
 Al terminar muestra la ruta completa. Mandame ese archivo.
@@ -32,10 +37,13 @@ Copia esta carpeta a un pendrive y llevala al local.
 
 En el computador de la caja:
 
-  1. Deja abierto el sistema de la caja y escanea un ticket de la balanza.
+  1. Deja abierto el sistema de la caja y ten a mano un ticket de la balanza.
   2. Doble clic en BALANZA.bat
-  3. Escribe la IP o IP:puerto, acepta la unica candidata con Enter o elige
+  3. Si pide empezar a mirar, aprieta Enter y escanea el ticket en el sistema
+     de la caja dentro de 40 segundos (s salta la espera).
+  4. Escribe la IP o IP:puerto, acepta la unica candidata con Enter o elige
      el numero si hay varias. Escribe v para buscar vecinos como arriba.
+  5. Si propone un vecino para revisar a fondo, Enter lo revisa; n termina.
 
 Deja un archivo balanza-FECHA.txt al lado del script. Mandamelo.
 Ninguna opcion necesita permisos de administrador.

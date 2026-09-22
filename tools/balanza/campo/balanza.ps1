@@ -10,6 +10,9 @@
 #   2. Que puertos tiene abiertos, de una lista corta de los habituales.
 #   3. Si tiene pagina web propia, que suele traer la configuracion.
 
+$segundosMirando = 40
+$fabricantes = @{ '00-60-03' = 'Teraoka / DIGI (balanzas)' }
+
 # iex no tiene carpeta de script; el Escritorio permite encontrar el informe en el local.
 $carpeta = $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($carpeta)) {
@@ -53,12 +56,17 @@ function Es-Privada($direccion) {
     return $direccion -match '^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)'
 }
 
+# La observacion repite la consulta muchas veces; cada falla se explica solo una vez.
+$erroresConexiones = @{}
 function Leer-Conexiones {
     try {
         return @(Get-NetTCPConnection -ErrorAction Stop | Where-Object { $_.State -notin @('Listen', 'Bound') })
     } catch {
-        Anotar ("   Get-NetTCPConnection no disponible: " + $_.Exception.Message)
-        Anotar "   Se intenta con netstat -ano."
+        if (-not $erroresConexiones.ContainsKey('tcp')) {
+            Anotar ("   Get-NetTCPConnection no disponible: " + $_.Exception.Message)
+            Anotar "   Se intenta con netstat -ano."
+            $erroresConexiones['tcp'] = $true
+        }
     }
     try {
         $datos = netstat -ano 2>&1
@@ -71,7 +79,42 @@ function Leer-Conexiones {
             }
         }
     } catch {
-        Anotar ("   No se pudieron leer las conexiones: " + $_.Exception.Message)
+        if (-not $erroresConexiones.ContainsKey('netstat')) {
+            Anotar ("   No se pudieron leer las conexiones: " + $_.Exception.Message)
+            $erroresConexiones['netstat'] = $true
+        }
+    }
+}
+
+function Leer-Saludo($direccion, [int]$puerto) {
+    $cliente = $null
+    try {
+        $cliente = New-Object System.Net.Sockets.TcpClient
+        if (-not $cliente.ConnectAsync($direccion, $puerto).Wait(1500)) {
+            throw 'Se agoto la espera al conectar para leer el saludo.'
+        }
+        $flujo = $cliente.GetStream()
+        $limite = if ($puerto -eq 2000) { 32 } else { 200 }
+        $flujo.ReadTimeout = if ($puerto -eq 2000) { 1500 } else { 2000 }
+        $bytes = New-Object byte[] $limite
+        # Solo escuchar: estos equipos pueden interpretar cualquier byte como una orden.
+        try {
+            $leidos = $flujo.Read($bytes, 0, $bytes.Length)
+        } catch {
+            $causa = $_.Exception.GetBaseException()
+            if ($causa -is [System.Net.Sockets.SocketException] -and $causa.SocketErrorCode -eq 'TimedOut') {
+                return 'no manda nada por su cuenta'
+            }
+            throw
+        }
+        if ($leidos -eq 0) { return 'no manda nada por su cuenta' }
+        if ($puerto -eq 2000) { return [BitConverter]::ToString($bytes, 0, $leidos).Replace('-', ' ') }
+        return ([System.Text.Encoding]::GetEncoding(28591).GetString($bytes, 0, $leidos) -replace '[^\x20-\x7E]', ' ').Trim()
+    } catch {
+        Anotar ("      No se pudo leer el saludo: " + $_.Exception.GetBaseException().Message)
+        return ''
+    } finally {
+        if ($null -ne $cliente) { $cliente.Close() }
     }
 }
 
@@ -98,7 +141,7 @@ $programasComunes = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'iexplore
     'SearchHost', 'PhoneExperienceHost', 'CrossDeviceService')
 
 $vistas = @{}
-$candidatas = @()
+$candidatas = New-Object System.Collections.ArrayList
 # La caja puede hablar consigo misma por su IP de red, por ejemplo con su base de datos.
 $ipsPropias = @('127.0.0.1')
 try {
@@ -110,15 +153,15 @@ try {
         })
     } catch { Anotar ("   No se pudieron identificar todas las IPs propias: " + $_.Exception.Message) }
 }
-$conexionesLocales = @(Leer-Conexiones | Where-Object { Es-Privada $_.RemoteAddress })
-foreach ($conexion in $conexionesLocales) {
+function Anotar-Conexion($conexion) {
+    if (-not (Es-Privada $conexion.RemoteAddress)) { return }
     $nombre = "desconocido"
     try {
         $nombre = (Get-Process -Id $conexion.OwningProcess -ErrorAction Stop).ProcessName
     } catch { }
     # La misma conexion aparece varias veces (una por socket); se muestra una sola.
     $clave = "{0}:{1}:{2}:{3}:{4}" -f $conexion.RemoteAddress, $conexion.RemotePort, $nombre, $conexion.LocalPort, $conexion.State
-    if ($vistas.ContainsKey($clave)) { continue }
+    if ($vistas.ContainsKey($clave)) { return }
     $vistas[$clave] = $true
 
     $comunPuerto = ($conexion.RemotePort -in $puertosComunes) -or ($conexion.RemotePort -ge 49152)
@@ -128,7 +171,7 @@ foreach ($conexion in $conexionesLocales) {
     $marca = ""
     if (-not $propia -and -not $comunPrograma -and (-not $comunPuerto -or $entrante)) {
         $marca = " CANDIDATA"
-        $candidatas += $conexion
+        [void]$candidatas.Add($conexion)
     }
     # El puerto LOCAL tambien va: si es la balanza la que se conecta al computador, el
     # puerto que importa es el de este lado y el de alla es uno cualquiera.
@@ -138,11 +181,37 @@ foreach ($conexion in $conexionesLocales) {
     Anotar ("   {0}:{1}  (local {5}:{6})  proceso: {2} (PID {3}){4}  estado: {7}" -f $conexion.RemoteAddress, $conexion.RemotePort, $nombre, $conexion.OwningProcess, $marca, $conexion.LocalAddress, $conexion.LocalPort, $estado)
     if ($marca -and $entrante) { Anotar ("      la balanza se conectaria a este PC en el puerto " + $conexion.LocalPort) }
 }
+$conexionesLocales = @(Leer-Conexiones | Where-Object { Es-Privada $_.RemoteAddress })
+foreach ($conexion in $conexionesLocales) { Anotar-Conexion $conexion }
 if ($conexionesLocales.Count -eq 0) { Anotar "   (ninguna conexion privada visible ahora mismo)" }
 elseif ($candidatas.Count -eq 0) {
     Anotar "   Ninguna cumple el filtro: pueden ser conexiones propias o de servicios comunes."
     Anotar "   Con el sistema de la caja abierto y un ticket recien escaneado deberia"
     Anotar "   aparecer una marcada CANDIDATA. Si no, puede que hable solo en el momento."
+}
+if ($candidatas.Count -eq 0) {
+    Anotar "El punto de venta puede hablar con la balanza solo al escanear el ticket."
+    $mirar = Read-Host "Enter para empezar a mirar y escanea un ticket de la balanza en el sistema de la caja (s salta)"
+    if ($mirar.Trim() -ne 's') {
+        $antes = $vistas.Count
+        $reloj = [System.Diagnostics.Stopwatch]::StartNew()
+        $proximoAviso = 0
+        while ($reloj.Elapsed.TotalSeconds -lt $segundosMirando) {
+            if ($reloj.Elapsed.TotalSeconds -ge $proximoAviso) {
+                Write-Host ("   Mirando: quedan {0} segundos. Escanea ahora en el sistema de la caja." -f [Math]::Ceiling($segundosMirando - $reloj.Elapsed.TotalSeconds))
+                $proximoAviso += 10
+            }
+            Leer-Conexiones | ForEach-Object { Anotar-Conexion $_ }
+            Start-Sleep -Milliseconds 250
+        }
+        $reloj.Stop()
+        $nuevas = $vistas.Count - $antes
+        if ($nuevas -gt 0) {
+            Anotar "   Se vieron $nuevas conexiones nuevas mientras mirabamos."
+        } else {
+            Anotar "   el sistema de la caja no abrio ninguna conexion a la red del local mientras mirabamos: puede leer el ticket sin red, hablar por otro medio, o no se escaneo nada"
+        }
+    }
 }
 Anotar ""
 
@@ -178,14 +247,26 @@ if ([string]::IsNullOrWhiteSpace($ip)) {
     Anotar "No se dio una IP. Estos son los equipos que este computador ha visto en la red:"
     Anotar ""
     $direcciones = @()
+    $fabricantesVecinos = @{}
     try {
         $tabla = arp -a 2>&1
         if ($LASTEXITCODE -ne 0) { throw ($tabla -join ' ') }
-        # El punto admite la vocal acentuada incluso con otra pagina de codigos.
-        $vecinos = @($tabla | Select-String 'din.mic|dynamic')
+        # El punto admite la vocal acentuada incluso con otra pagina de codigos. Las lineas
+        # "Interfaz:" van tambien: dicen por que adaptador (Wi-Fi o cable) se vio cada equipo.
+        $vecinos = @($tabla | Select-String 'Interfa|din.mic|dynamic')
         foreach ($v in $vecinos) {
-            Anotar ("   " + $v.ToString().Trim())
-            if ($v.ToString() -match '^\s*(\d+\.\d+\.\d+\.\d+)\s+') { $direcciones += $matches[1] }
+            $fabricante = ''
+            if ($v.ToString() -match '^\s*(\d+\.\d+\.\d+\.\d+)\s+([0-9a-fA-F]{2}(?:[:-][0-9a-fA-F]{2}){5})\s+') {
+                $direccion = $matches[1]
+                $prefijo = $matches[2].Replace(':', '-').Substring(0, 8).ToUpperInvariant()
+                $direcciones += $direccion
+                if ($fabricantes.ContainsKey($prefijo)) {
+                    $fabricante = $fabricantes[$prefijo]
+                    $fabricantesVecinos[$direccion] = $fabricante
+                }
+            }
+            $detalle = if ($fabricante) { "  $fabricante" } else { '' }
+            Anotar ("   " + $v.ToString().Trim() + $detalle)
         }
     } catch {
         Anotar ("   No se pudo leer ARP: " + $_.Exception.Message)
@@ -194,20 +275,49 @@ if ([string]::IsNullOrWhiteSpace($ip)) {
     Anotar ""
     Anotar "Probando 2000, 80 y 21 en hasta 60 vecinos dinamicos (puede tardar unos 90 segundos)."
     $respuestas = 0
+    $puertosVecinos = @{}
     foreach ($direccion in $direcciones) {
+        $puertosVecinos[$direccion] = @()
         foreach ($puerto in @(2000, 80, 21)) {
             if (Probar-Puerto $direccion $puerto 500) {
                 Anotar "   ${direccion}:${puerto}  ABIERTO"
                 $respuestas++
+                $puertosVecinos[$direccion] += $puerto
             }
         }
     }
     if ($respuestas -eq 0) { Anotar "   Ningun vecino contesto en esos puertos." }
-    Anotar ""
-    Anotar "La balanza suele aparecer con una MAC que empieza distinto al resto."
-    Anotar "Buscala tambien en el menu de red de la balanza, o en la lista de equipos"
-    Anotar "conectados del router (a veces sale como DIGI o con su numero de serie)."
-} else {
+    # La marca conocida pesa mas que un puerto abierto, que tambien puede ser de un router.
+    $probables = @($direcciones | Where-Object { $fabricantesVecinos.ContainsKey($_) })
+    if ($probables.Count -eq 0) {
+        $puertas = @()
+        try {
+            $puertas = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop | ForEach-Object { $_.NextHop })
+        } catch {
+            Anotar "   No se pudo consultar la puerta de enlace; no se excluye ningun vecino."
+        }
+        $probables = @($direcciones | Where-Object {
+            $_ -notin $puertas -and (2000 -in $puertosVecinos[$_] -or 21 -in $puertosVecinos[$_])
+        })
+    }
+    if ($probables.Count -eq 1) {
+        $elegida = $probables[0]
+        $motivos = @()
+        if ($fabricantesVecinos.ContainsKey($elegida)) { $motivos += "MAC de $($fabricantesVecinos[$elegida])" }
+        foreach ($p in $puertosVecinos[$elegida]) { $motivos += "puerto $p abierto" }
+        Anotar ("   La mas probable es ${elegida}: " + ($motivos -join ', ') + ".")
+        $revisar = Read-Host "Enter la reviso a fondo; n termina"
+        if ([string]::IsNullOrWhiteSpace($revisar)) { $ip = $elegida }
+    }
+    if (-not $ip) {
+        Anotar ""
+        Anotar "La balanza suele aparecer con una MAC que empieza distinto al resto."
+        Anotar "Buscala tambien en el menu de red de la balanza, o en la lista de equipos"
+        Anotar "conectados del router (a veces sale como DIGI o con su numero de serie)."
+    }
+}
+
+if ($ip) {
 
 Anotar "Balanza: $ip"
 Anotar ""
@@ -261,17 +371,23 @@ $puertos = [ordered]@{
     9100 = "impresion directa"
 }
 if ($puertoEscrito -gt 0 -and -not $puertos.Contains($puertoEscrito)) { $puertos.Add($puertoEscrito, 'puerto indicado junto a la IP') }
-# 13 intentos de 1500 ms dan margen a la retransmision de Wi-Fi sin superar unos 25 s.
-Anotar "Probando puertos (hasta unos 20 segundos)."
+# Los saludos suman una espera corta a los intentos de conexion.
+Anotar "Probando puertos y escuchando saludos (hasta unos 35 segundos)."
 
 # GetEnumerator y no $puertos[$p]: en un diccionario ordenado, indexar con un numero
 # lo toma como POSICION y no como clave, asi que la descripcion salia vacia.
 $abiertos = @()
+$saludoFTP = ''
 foreach ($par in $puertos.GetEnumerator()) {
     $r = Probar-Puerto $ip $par.Key
     if ($r) {
         $abiertos += $par.Key
         Anotar ("   {0,5}  ABIERTO   {1}" -f $par.Key, $par.Value)
+        if ($par.Key -in @(21, 22, 23, 2000)) {
+            $saludo = Leer-Saludo $ip $par.Key
+            if ($saludo) { Anotar ("      saludo: " + $saludo) }
+            if ($par.Key -eq 21) { $saludoFTP = $saludo }
+        }
     }
 }
 if ($abiertos.Count -eq 0) {
@@ -316,8 +432,18 @@ foreach ($entrada in @($candidatas | Where-Object { $_.RemoteAddress -eq $ip -an
     Anotar "   Ese puerto se escucha en la caja; la balanza puede no tener puertos abiertos."
 }
 if ($abiertos -contains 21) {
-    Anotar "   Hay FTP: es el mejor caso. Probablemente deja bajar las ventas como"
-    Anotar "   archivo, y conectar la caja seria leer ese archivo. Dias de trabajo."
+    # -match no distingue mayusculas: un 'SM' suelto aceptaria cualquier palabra con "sm".
+    if ($saludoFTP -match '\bDIGI\b|Teraoka|\bSM-?\d{2,4}\b') {
+        Anotar "   El saludo identifica el FTP de la balanza (DIGI / Teraoka / SM)."
+        Anotar "   El siguiente paso es preguntarle al proveedor de la balanza o del sistema"
+        Anotar "   actual el usuario y la carpeta donde deja los tickets. La herramienta no intenta entrar."
+    } else {
+        # Las DIGI viejas (SM-300) no traen FTP en su manual: un 21 abierto sin saludo de la
+        # marca puede ser otra cosa, como la tarjeta de red inalambrica.
+        Anotar "   Hay algo en el 21 (FTP). Puede ser el mejor caso: algunas balanzas dejan bajar"
+        Anotar "   las ventas como archivo. Pero el saludo no dice de quien es: hay que"
+        Anotar "   preguntarle al proveedor de la balanza que deja ahi."
+    }
 } elseif ($abiertos | Where-Object { @(80, 443, 8000, 8080) -contains $_ }) {
     Anotar "   Tiene pagina web propia. Hay donde mirar: entra y busca si se pueden"
     Anotar "   exportar las ventas o cambiar el codigo que imprime."
@@ -351,9 +477,21 @@ Anotar ""
 # Estos datos permiten distinguir informes de varias cajas despues de la visita.
 Anotar "DATOS DE ESTE COMPUTADOR"
 Anotar "   Nombre: $env:COMPUTERNAME"
+$hayDireccionSinRouter = $false
+# Windows pone una 169.254 tambien en un adaptador SIN cable: el estado del enlace es lo que
+# distingue "no hay cable" de "hay cable, pero va a un equipo sin router".
+$enlacesSinRouter = New-Object System.Collections.ArrayList
 try {
     $ipsLocales = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Where-Object { $_.IPAddress -notmatch '^127\.' })
-    foreach ($local in $ipsLocales) { Anotar ("   IPv4: " + $local.IPAddress + " (" + $local.InterfaceAlias + ")") }
+    foreach ($local in $ipsLocales) {
+        Anotar ("   IPv4: " + $local.IPAddress + " (" + $local.InterfaceAlias + ")")
+        if ($local.IPAddress -like '169.254.*') {
+            $hayDireccionSinRouter = $true
+            $estadoEnlace = ''
+            try { $estadoEnlace = [string](Get-NetAdapter -InterfaceAlias $local.InterfaceAlias -ErrorAction Stop).Status } catch { }
+            [void]$enlacesSinRouter.Add(@($local.InterfaceAlias, $estadoEnlace))
+        }
+    }
 } catch {
     Anotar ("   No se pudieron leer las IPs locales: " + $_.Exception.Message)
     # Algunos computadores bloquean CIM incluso sin elevacion; .NET consulta las interfaces directamente.
@@ -362,12 +500,36 @@ try {
             foreach ($direccionLocal in $interfaz.GetIPProperties().UnicastAddresses) {
                 if ($direccionLocal.Address.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork -and -not [System.Net.IPAddress]::IsLoopback($direccionLocal.Address)) {
                     Anotar ("   IPv4: " + $direccionLocal.Address + " (" + $interfaz.Name + ")")
+                    if ($direccionLocal.Address.ToString() -like '169.254.*') {
+                        $hayDireccionSinRouter = $true
+                        $estadoEnlace = 'Disconnected'
+                        if ($interfaz.OperationalStatus -eq [System.Net.NetworkInformation.OperationalStatus]::Up) { $estadoEnlace = 'Up' }
+                        [void]$enlacesSinRouter.Add(@($interfaz.Name, $estadoEnlace))
+                    }
                 }
             }
         }
     } catch {
         Anotar ("   Tampoco se pudieron consultar las interfaces: " + $_.Exception.Message)
     }
+}
+foreach ($enlace in $enlacesSinRouter) {
+    if ($enlace[1] -eq 'Up') {
+        Anotar ("   (" + $enlace[0] + ": el cable esta conectado a algo, pero ningun router le dio direccion (169.254...). Va directo a un equipo o a un switch sin router. Si la balanza estuviera en ese cable, no apareceria en la lista de vecinos.)")
+    } elseif ($enlace[1]) {
+        Anotar ("   (" + $enlace[0] + ": desconectado (sin cable o apagado). La direccion 169.254 la pone Windows solo; no cuenta.)")
+    } else {
+        Anotar ("   (" + $enlace[0] + ": 169.254... no recibe direccion de ningun router. O no tiene cable, o va directo a un equipo. Si la balanza estuviera en ese cable, no apareceria en la lista de vecinos.)")
+    }
+}
+if ($hayDireccionSinRouter -and $enlacesSinRouter.Count -eq 0) {
+    Anotar "   (169.254...: ese adaptador no recibe direccion de ningun router. O no tiene cable, o va directo a un equipo.)"
+}
+try {
+    $puertasEnlace = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop | ForEach-Object { $_.NextHop } | Where-Object { $_ -ne '0.0.0.0' } | Select-Object -Unique)
+    foreach ($puerta in $puertasEnlace) { Anotar ("   Puerta de enlace (router): " + $puerta) }
+} catch {
+    Anotar ("   No se pudo leer la puerta de enlace: " + $_.Exception.Message)
 }
 try {
     $windows = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
