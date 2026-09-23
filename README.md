@@ -62,7 +62,7 @@ pos-cafeteria/
 │   │   ├── inventario.py  ← insumos, recetas y el libro de movimientos
 │   │   ├── importar.py    ← traer la carta desde un Excel, CSV o pegada
 │   │   ├── datos.py       ← respaldo y CSV para el contador
-│   │   └── impresion.py   ← comprobante y cierre imprimibles (80 mm)
+│   │   └── impresion.py   ← comprobante y cierre (58/80 mm), impresión por Windows
 │   ├── static/            ← la pantalla del cajero (HTML+JS plano, sin build)
 │   │   ├── dibujos.js     ← los mismos dibujos de las pantallas del local
 │   │   ├── teclado.js     ← teclado numérico en pantalla (táctil)

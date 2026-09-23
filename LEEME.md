@@ -245,10 +245,21 @@ para conectarlas. Tiene un botón para copiarla.
 
 ## Imprimir
 
+- El dueño puede abrir **Configurar → Impresión de comprobantes**. Primero instala
+  la impresora en Windows, en el computador donde corre la caja; después pulsa
+  **Actualizar impresoras**, elige la impresora y el papel de **58 u 80 mm**.
+- **Imprimir prueba** manda un papel de prueba sin crear una venta. Si sale bien,
+  marca **Imprimir comprobante después de cada venta**. Se guarda al cambiar la opción,
+  en este navegador; otros equipos o navegadores tienen sus propias preferencias.
+- Con una impresora de papel seleccionada se imprime sin preguntar. **Preguntar al
+  navegador** conserva el diálogo de impresión; PDF y OneNote usan ese diálogo.
 - Después de cobrar, en **El día** cada venta tiene un botón **Imprimir**: sale un
   comprobante angosto, del ancho de una boleta.
 - Al **cerrar la caja** se imprime solo el papelito del cierre, con lo vendido, lo contado
-  y la diferencia. Ese es el que conviene pegar en el cuaderno.
+  y la diferencia, mediante el diálogo del navegador. Ese es el que conviene pegar en el cuaderno.
+- Si Windows no confirma la impresión, la venta sigue registrada y no se vuelve a
+  cobrar ni a imprimir automáticamente. Revisa primero la cola de Windows y el papel
+  antes de pulsar **Imprimir** otra vez.
 
 > Ojo: ese comprobante **no es una boleta**, y lo dice impreso. La boleta del SII se sigue
 > emitiendo como se hace hoy.

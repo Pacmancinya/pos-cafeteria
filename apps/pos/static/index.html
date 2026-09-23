@@ -18,7 +18,7 @@
     <button class="tab" data-vista="dia">El día</button>
     <button class="tab" data-vista="carta">Carta</button>
     <button class="tab" data-vista="inventario">Bodega</button>
-    <button class="tab" data-vista="guias">Ayuda</button>
+    <button class="tab" data-vista="guias" id="btnConfigurar">Configurar</button>
   </nav>
   <div class="barra__der">
     <button class="quien" id="quienEsta" hidden>
@@ -168,6 +168,8 @@
 
 <!-- ══════════ AYUDA ══════════ -->
 <main class="vista" data-vista="guias">
+  <div class="panel" id="panelAjustes"></div>
+
   <div class="panel panel--ayuda">
     <div class="ayuda-cabecera">
       <div>
@@ -183,10 +185,6 @@
     </div>
   </div>
 
-  <!-- Los ajustes de la caja viven acá, en Ayuda, y no en su propia pestaña:
-       se tocan una vez en la vida y una pestaña permanente para eso le quita
-       espacio a lo que se usa todos los días. -->
-  <div class="panel" id="panelAjustes"></div>
 </main>
 
 <!-- ══════════ COBRAR ══════════ -->

@@ -32,8 +32,22 @@ const guardarCarrito = () => {
 let medioPago = "efectivo";
 let ultimaVenta = null;
 let NOMBRE_DEL_LOCAL = "la caja";
-// Preferencia del local: si imprime comprobante en cada venta. Queda en este equipo.
-let imprimirSiempre = localStorage.getItem("pos.imprimir") === "1";
+// Cada navegador recuerda su impresora de la caja. Se conserva la preferencia
+// antigua al abrir por primera vez esta configuración.
+function leerImpresion() {
+  try {
+    const d = JSON.parse(localStorage.getItem("pos.impresion") || "null");
+    return {
+      automatica: d ? d.automatica === true : localStorage.getItem("pos.imprimir") === "1",
+      impresora: d && typeof d.impresora === "string" && d.impresora.length <= 256 ? d.impresora : "",
+      papel: d && d.papel === 58 ? 58 : 80,
+    };
+  } catch (e) { return { automatica: false, impresora: "", papel: 80 }; }
+}
+let IMPRESION = leerImpresion();
+let imprimirSiempre = IMPRESION.automatica;
+const impresionesPendientes = new Set();
+let probandoImpresion = false;
 
 /* El comprobante se imprime desde un marco escondido, no desde una ventana
    aparte. Es obligatorio: dentro de la ventana de la aplicación (WebView2)
@@ -42,16 +56,40 @@ let imprimirSiempre = localStorage.getItem("pos.imprimir") === "1";
 
    La página del comprobante se manda a imprimir sola al cargar, así que acá
    solo hay que ponerla y sacarla después. */
-function imprimir(ruta) {
+function imprimirEnNavegador(ruta) {
   const anterior = document.getElementById("marcoImpresion");
   if (anterior) anterior.remove();
   const marco = document.createElement("iframe");
   marco.id = "marcoImpresion";
   marco.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
-  marco.src = ruta;
+  marco.src = `${ruta}?papel=${IMPRESION.papel}`;
   document.body.appendChild(marco);
   // 60 s: lo que puede demorar alguien en decidir en el diálogo de impresión.
   setTimeout(() => marco.remove(), 60000);
+}
+
+// confirmarVenta sigue su curso sin esperar al papel. Ningún error de aquí
+// puede convertirse en un error del cobro ni volver a mandar /ventas.
+async function imprimir(ruta) {
+  if (impresionesPendientes.has(ruta)) return;
+  impresionesPendientes.add(ruta);
+  try {
+    const comprobante = /^\/comprobante\/(\d+)$/.exec(ruta);
+    if (IMPRESION.impresora && comprobante) {
+      await api(`/impresion/comprobante/${comprobante[1]}`, { method: "POST",
+        body: JSON.stringify({ impresora: IMPRESION.impresora, papel: IMPRESION.papel }),
+        espera: 25000 });
+    } else {
+      imprimirEnNavegador(ruta);
+    }
+  } catch (e) {
+    // Nunca probar otro camino: Windows puede haber aceptado el trabajo antes
+    // de perderse la respuesta. El aviso distingue el papel de la venta.
+    avisar("Impresión: " + e.message + " La venta sigue registrada. "
+      + "Revisa la cola antes de volver a imprimir.", true);
+  } finally {
+    impresionesPendientes.delete(ruta);
+  }
 }
 
 /* ---------------- utilidades ---------------- */
@@ -2393,6 +2431,8 @@ async function cargarSesion() {
 }
 
 function pintarQuien() {
+  const configurar = $("#btnConfigurar");
+  if (configurar) configurar.textContent = puedo("config") ? "Configurar" : "Ayuda";
   $("#btnVarios").hidden = !puedo("cobrar_varios");
   const chip = $("#quienEsta");
   const equipo = $("#verEquipo");
@@ -3847,6 +3887,108 @@ async function probarEtiquetaBalanza() {
   } catch (e) { resultado.textContent = e.message; }
 }
 
+function bloqueImpresion() {
+  return `<div class="ajuste" id="ajImpresion">
+    <h4>Impresión de comprobantes</h4>
+    <label class="marca"><input type="checkbox" id="ajImprimirSiempre"
+      ${imprimirSiempre ? "checked" : ""}> Imprimir comprobante después de cada venta</label>
+    <p class="ayuda">Estas preferencias quedan en este navegador. Las impresoras son las
+      instaladas en el computador Windows donde funciona la caja.</p>
+    <div class="ajuste__campos">
+      <label class="campo"><span>Impresora</span><select id="ajImpresora">
+        <option value="">Preguntar al navegador</option>
+        ${IMPRESION.impresora ? `<option selected value="${esc(IMPRESION.impresora)}">${esc(IMPRESION.impresora)} (guardada)</option>` : ""}
+      </select></label>
+      <label class="campo"><span>Ancho del papel</span><select id="ajPapel">
+        <option value="58"${IMPRESION.papel === 58 ? " selected" : ""}>58 mm</option>
+        <option value="80"${IMPRESION.papel === 80 ? " selected" : ""}>80 mm</option>
+      </select></label>
+    </div>
+    <div class="ajuste__fila">
+      <button class="btn" id="ajActualizarImpresoras">Actualizar impresoras</button>
+      <button class="btn" id="ajProbarImpresion"${probandoImpresion ? " disabled" : ""}>Imprimir prueba</button>
+    </div>
+    <p class="ayuda" id="ajImpresionEstado" role="status">Elige una impresora para imprimir directamente.
+      Con «Preguntar al navegador» aparece el diálogo de impresión. Los cierres usan ese diálogo.</p>
+  </div>`;
+}
+
+function guardarImpresion() {
+  if (!puedo("config")) return;
+  const siguiente = { automatica: $("#ajImprimirSiempre").checked,
+    impresora: $("#ajImpresora").value, papel: +$("#ajPapel").value };
+  try {
+    localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
+    IMPRESION = siguiente;
+    imprimirSiempre = siguiente.automatica;
+    $("#ajImpresionEstado").textContent = "Preferencias de impresión guardadas en este navegador.";
+  } catch (e) {
+    $("#ajImprimirSiempre").checked = imprimirSiempre;
+    $("#ajImpresora").value = IMPRESION.impresora;
+    $("#ajPapel").value = String(IMPRESION.papel);
+    $("#ajImpresionEstado").textContent = "No se pudieron guardar las preferencias. Revisa el almacenamiento del navegador.";
+  }
+}
+
+async function cargarImpresoras() {
+  if (!puedo("config")) return;
+  const selector = $("#ajImpresora"), boton = $("#ajActualizarImpresoras");
+  const estado = $("#ajImpresionEstado");
+  if (!selector || boton.disabled) return;
+  boton.disabled = true;
+  estado.textContent = "Consultando las impresoras de Windows…";
+  try {
+    const r = await api("/impresion/impresoras");
+    if (selector !== $("#ajImpresora")) return;
+    const lista = r.impresoras || [];
+    const elegida = IMPRESION.impresora;
+    selector.innerHTML = '<option value="">Preguntar al navegador</option>'
+      + (elegida && !lista.some((p) => p.nombre === elegida)
+        ? `<option value="${esc(elegida)}">${esc(elegida)} (no disponible)</option>` : "")
+      + lista.map((p) => `<option value="${esc(p.nombre)}"${p.disponible ? "" : " disabled"}>${esc(p.nombre)}${p.disponible ? "" : " (requiere diálogo)"}</option>`).join("");
+    selector.value = elegida;
+    estado.textContent = !r.disponible ? r.detalle
+      : !lista.length ? "No hay impresoras instaladas. Instálala en Windows y actualiza esta lista."
+      : elegida && !lista.some((p) => p.nombre === elegida && p.disponible)
+        ? "La impresora guardada no está disponible para impresión directa. Elige otra o usa el navegador."
+        : "Lista actualizada. Imprime una prueba para revisar el papel. Los cierres usan el diálogo del navegador.";
+  } catch (e) {
+    estado.textContent = e.message + ". Se conserva la impresora guardada.";
+  } finally { boton.disabled = false; }
+}
+
+async function probarImpresion() {
+  if (!puedo("config") || probandoImpresion) return;
+  const estado = $("#ajImpresionEstado");
+  if (!IMPRESION.impresora) {
+    estado.textContent = "Elige una impresora de Windows para imprimir la prueba.";
+    return;
+  }
+  probandoImpresion = true;
+  $("#ajProbarImpresion").disabled = true;
+  estado.textContent = "Enviando la prueba…";
+  try {
+    const r = await api("/impresion/prueba", { method: "POST", espera: 25000,
+      body: JSON.stringify({ impresora: IMPRESION.impresora, papel: IMPRESION.papel }) });
+    estado.textContent = r.detalle;
+  } catch (e) {
+    estado.textContent = e.message + ". Revisa la cola de Windows antes de repetir la prueba.";
+  } finally {
+    probandoImpresion = false;
+    const boton = $("#ajProbarImpresion");
+    if (boton) boton.disabled = false;
+  }
+}
+
+function conectarImpresion() {
+  ["#ajImprimirSiempre", "#ajImpresora", "#ajPapel"].forEach((id) => {
+    $(id).addEventListener("change", guardarImpresion);
+  });
+  $("#ajActualizarImpresoras").onclick = cargarImpresoras;
+  $("#ajProbarImpresion").onclick = probarImpresion;
+  cargarImpresoras();
+}
+
 function pintarAjustes() {
   const caja = $("#panelAjustes");
   if (!caja) return;
@@ -3856,7 +3998,9 @@ function pintarAjustes() {
   const minutos = AJUSTES.bloqueo_minutos || MINUTOS_QUIETO;
   const piloto = AJUSTES.canal_actualizaciones === "piloto";
   caja.innerHTML = `
-    <h3>Ajustes de esta caja</h3>
+    <h3>Configurar esta caja</h3>
+
+    ${bloqueImpresion()}
 
     <div class="ajuste">
       <h4>El local</h4>
@@ -3945,6 +4089,7 @@ function pintarAjustes() {
       </p>
     </div>`;
   conectarBalanza();
+  conectarImpresion();
   cargarAjustesDelLocal();
 }
 

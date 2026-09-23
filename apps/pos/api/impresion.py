@@ -1,19 +1,22 @@
 """Comprobante de venta y cierre de caja, para imprimir.
 
-Sale como una página angosta (80 mm) que se manda a imprimir con el navegador.
-Así funciona con la impresora térmica del local **y** con cualquier impresora
-normal, sin depender de drivers ni de ESC/POS.
+Sale como una página angosta (58/80 mm) para el navegador o como texto al
+driver de Windows. Ambas salidas leen el mismo comprobante ya guardado.
 
 ⚠️ Esto NO es una boleta. Mientras no esté conectada la facturación electrónica,
 el comprobante lo dice en grande: si pareciera una boleta sin serlo, el local
 quedaría expuesto. Ver docs/CONTRATO.md sección 5.
 """
 from __future__ import annotations
-from html import escape
+from html import escape, unescape
+import re
+from typing import Literal
 from apps.pos import local as datos_local
+from apps.pos import impresion_windows, sesion
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 
 from apps.pos.api.turnos import (_conteo, _cuadre_de_medios, _efectivo_esperado,
@@ -79,8 +82,12 @@ __CUERPO__
 </body></html>"""
 
 
-def _pagina(titulo: str, cuerpo: str) -> HTMLResponse:
-    return HTMLResponse(PLANTILLA.replace("__TITULO__", titulo).replace("__CUERPO__", cuerpo))
+def _pagina(titulo: str, cuerpo: str, papel: int = 80) -> HTMLResponse:
+    if papel not in (58, 80):
+        raise HTTPException(422, "El papel debe ser de 58 u 80 mm.")
+    plantilla = PLANTILLA.replace("size:80mm", f"size:{papel}mm").replace(
+        "width:72mm", f"width:{papel - 8}mm")
+    return HTMLResponse(plantilla.replace("__TITULO__", titulo).replace("__CUERPO__", cuerpo))
 
 
 def _plata(n: int) -> str:
@@ -98,7 +105,12 @@ def _cabecera_del_local() -> str:
 
 
 @router.get("/comprobante/{venta_id}")
-def comprobante(venta_id: int, s: Session = Depends(get_session)):
+def comprobante(venta_id: int, s: Session = Depends(get_session), papel: int = 80):
+    titulo, cuerpo = _comprobante(venta_id, s)
+    return _pagina(titulo, cuerpo, papel)
+
+
+def _comprobante(venta_id: int, s: Session) -> tuple[str, str]:
     v = s.get(Venta, venta_id)
     if not v:
         raise HTTPException(404, "No existe esa venta")
@@ -151,11 +163,70 @@ def comprobante(venta_id: int, s: Session = Depends(get_session)):
     {anulada}
     <div class="aviso">NO ES BOLETA<br>Comprobante interno del local</div>
     <div class="centro chico" style="margin-top:9px">¡Gracias!</div>"""
-    return _pagina(f"Comprobante {v.numero}", cuerpo)
+    return f"Comprobante {v.numero}", cuerpo
+
+
+class ImpresionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    impresora: str = Field(min_length=1, max_length=256)
+    papel: Literal[58, 80] = 80
+
+
+def _lineas(cuerpo: str) -> list[str]:
+    """Texto de nuestra plantilla fija, NO un conversor de HTML arbitrario.
+
+    html.parser no viene en los motores Kofe ya instalados. Usamos solamente
+    módulos presentes en ellos para que la actualización no exija reinstalar.
+    Los datos están escapados por _comprobante; se decodifican DESPUÉS de
+    separar las etiquetas, de modo que <script> escrito en un producto es texto.
+    """
+    partes = []
+    for token in re.findall(r"<[^>]*>|[^<]+", cuerpo):
+        if not token.startswith("<"):
+            partes.append(" ".join(unescape(token).split()))
+        elif re.match(r"</?(?:div|tr|br)\b", token):
+            partes.append("\n")
+        elif token == "</td>":
+            partes.append("  ")
+    return [linea.strip() for linea in "".join(partes).splitlines() if linea.strip()]
+
+
+def _enviar(datos: ImpresionIn, lineas: list[str]):
+    try:
+        return impresion_windows.imprimir(datos.impresora, datos.papel, lineas)
+    except impresion_windows.ErrorImpresion as e:
+        raise HTTPException(e.estado, str(e)) from e
+
+
+@router.get("/api/v1/impresion/impresoras")
+def impresoras(quien: dict = Depends(sesion.exige("config"))):
+    try:
+        return impresion_windows.listar()
+    except impresion_windows.ErrorImpresion as e:
+        raise HTTPException(e.estado, str(e)) from e
+
+
+@router.post("/api/v1/impresion/prueba")
+def prueba_impresion(datos: ImpresionIn, quien: dict = Depends(sesion.exige("config"))):
+    return _enviar(datos, [datos_local.nombre(), "PRUEBA DE IMPRESIÓN",
+                          f"Papel de {datos.papel} mm", "Café · azúcar · ñ · $1.234",
+                          "NO ES BOLETA", "Prueba sin venta ni cobro."])
+
+
+@router.post("/api/v1/impresion/comprobante/{venta_id}")
+def imprimir_comprobante(venta_id: int, datos: ImpresionIn,
+                         s: Session = Depends(get_session),
+                         quien: dict = Depends(sesion.exige("vender"))):
+    # Ruta síncrona: FastAPI la atiende fuera del event loop. Termina la lectura
+    # antes de esperar al driver, para no retener una transacción de SQLite.
+    _, cuerpo = _comprobante(venta_id, s)
+    lineas = _lineas(cuerpo)
+    s.rollback()
+    return _enviar(datos, lineas)
 
 
 @router.get("/cierre/{turno_id}")
-def cierre(turno_id: int, s: Session = Depends(get_session)):
+def cierre(turno_id: int, s: Session = Depends(get_session), papel: int = 80):
     """El papelito del cierre de caja: lo que se pega en el cuaderno."""
     t = s.get(Turno, turno_id)
     if not t:
@@ -326,4 +397,4 @@ def cierre(turno_id: int, s: Session = Depends(get_session)):
     <table class="chico">
       <tr><td>Firma cajero</td><td class="num">_______________</td></tr>
     </table>"""
-    return _pagina(f"Cierre de caja {abre.strftime('%d-%m-%Y')}", cuerpo)
+    return _pagina(f"Cierre de caja {abre.strftime('%d-%m-%Y')}", cuerpo, papel)
