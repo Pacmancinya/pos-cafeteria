@@ -27,6 +27,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from apps.pos import local
+from core.config import VERSION
 
 GALLETA = "pos_acceso"
 # `/api/v1/carta` va libre porque es de solo lectura y muestra precios que ya
@@ -93,7 +94,7 @@ PAGINA = """<!doctype html>
 <html lang="es-CL"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Entrar a la caja</title>
-<link rel="stylesheet" href="/static/styles.css?v=10">
+<link rel="stylesheet" href="/static/styles.css?v=__VERSION__">
 <style>
   body{display:grid;place-items:center;padding:24px}
   form{background:var(--tarjeta);border:1px solid var(--linea);border-radius:16px;
@@ -119,9 +120,14 @@ PAGINA = """<!doctype html>
 
 
 def pagina_entrar(nombre_local: str, aviso: str = "", estado: int = 200) -> HTMLResponse:
+    # __VERSION__ va igual que en las otras pantallas: sin esto, un cambio de
+    # estilos no llega a la pantalla de entrar hasta que el navegador se digne.
     html = PAGINA.replace("__LOCAL__", escape(nombre_local)).replace(
-        "__ERROR__", f'<p class="mal">{escape(aviso)}</p>' if aviso else "")
-    return HTMLResponse(html, status_code=estado)
+        "__ERROR__", f'<p class="mal">{escape(aviso)}</p>' if aviso else "").replace(
+        "__VERSION__", VERSION)
+    # Tampoco se guarda: lleva el ?v= de los estilos, igual que la pantalla de la caja.
+    return HTMLResponse(html, status_code=estado,
+                        headers={"Cache-Control": "no-store, must-revalidate"})
 
 
 def renovar_galleta(respuesta) -> None:

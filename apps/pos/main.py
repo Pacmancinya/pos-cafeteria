@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
@@ -174,6 +174,21 @@ def entrar_post(request: Request, pin: str = Form(default="")):
 app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
 
 
+def _html_con_version(nombre: str) -> HTMLResponse:
+    """Sirve un HTML poniéndole la versión de la caja a cada archivo que pide.
+
+    Los `?v=` se escribían a mano y en la 2.29 se olvidó subirlos: la caja se
+    actualizó, el número subió y la pantalla siguió siendo la anterior, porque
+    el navegador tenía guardado el `app.js?v=63` de la versión pasada. Ya había
+    pasado con el teclado en pantalla de la 2.5. Ahora el número sale de
+    APP_VERSION: cambia sola con cada versión y no hay nada que recordar.
+    """
+    ruta = os.path.join(ESTATICOS, nombre)
+    with open(ruta, encoding="utf-8") as f:
+        html = f.read().replace("__VERSION__", VERSION)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
+
+
 @app.get("/")
 def caja():
     """La pantalla del cajero. NUNCA se guarda en la caché del navegador.
@@ -192,8 +207,7 @@ def caja():
     Los demás archivos SÍ se guardan en caché, y está bien: cada uno lleva su
     `?v=` y cambia de dirección cuando cambia.
     """
-    return FileResponse(os.path.join(ESTATICOS, "index.html"),
-                        headers={"Cache-Control": "no-store, must-revalidate"})
+    return _html_con_version("index.html")
 
 
 @app.get("/pantallas")
@@ -214,8 +228,7 @@ def pantallas():
     ventana negra más abierta todo el día. Se cambió algo que costaba nada por
     algo que costaba todos los días.
     """
-    return FileResponse(os.path.join(ESTATICOS, "pantallas.html"),
-                        headers={"Cache-Control": "no-store"})
+    return _html_con_version("pantallas.html")
 
 
 @app.get("/pantallas/simple")
