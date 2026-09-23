@@ -191,9 +191,10 @@ def _lineas(cuerpo: str) -> list[str]:
     return [linea.strip() for linea in "".join(partes).splitlines() if linea.strip()]
 
 
-def _enviar(datos: ImpresionIn, lineas: list[str]):
+def _enviar(datos: ImpresionIn, lineas: list[str], crudo: bool = False):
     try:
-        return impresion_windows.imprimir(datos.impresora, datos.papel, lineas)
+        enviar = impresion_windows.imprimir_crudo if crudo else impresion_windows.imprimir
+        return enviar(datos.impresora, datos.papel, lineas)
     except impresion_windows.ErrorImpresion as e:
         raise HTTPException(e.estado, str(e)) from e
 
@@ -208,21 +209,63 @@ def impresoras(quien: dict = Depends(sesion.exige("config"))):
 
 @router.post("/api/v1/impresion/prueba")
 def prueba_impresion(datos: ImpresionIn, quien: dict = Depends(sesion.exige("config"))):
+    return _prueba(datos)
+
+
+@router.post("/api/v1/impresion/crudo/prueba")
+def prueba_cruda(datos: ImpresionIn, quien: dict = Depends(sesion.exige("config"))):
+    return _prueba(datos, crudo=True)
+
+
+def _prueba(datos: ImpresionIn, crudo: bool = False):
     return _enviar(datos, [datos_local.nombre(), "PRUEBA DE IMPRESIÓN",
                           f"Papel de {datos.papel} mm", "Café · azúcar · ñ · $1.234",
-                          "NO ES BOLETA", "Prueba sin venta ni cobro."])
+                          "NO ES BOLETA", "Prueba sin venta ni cobro."], crudo=crudo)
 
 
 @router.post("/api/v1/impresion/comprobante/{venta_id}")
 def imprimir_comprobante(venta_id: int, datos: ImpresionIn,
                          s: Session = Depends(get_session),
                          quien: dict = Depends(sesion.exige("vender"))):
+    return _imprimir_comprobante(venta_id, datos, s)
+
+
+@router.post("/api/v1/impresion/crudo/comprobante/{venta_id}")
+def imprimir_comprobante_crudo(venta_id: int, datos: ImpresionIn,
+                               s: Session = Depends(get_session),
+                               quien: dict = Depends(sesion.exige("vender"))):
+    return _imprimir_comprobante(venta_id, datos, s, crudo=True)
+
+
+def _imprimir_comprobante(venta_id: int, datos: ImpresionIn, s: Session, crudo: bool = False):
     # Ruta síncrona: FastAPI la atiende fuera del event loop. Termina la lectura
     # antes de esperar al driver, para no retener una transacción de SQLite.
     _, cuerpo = _comprobante(venta_id, s)
     lineas = _lineas(cuerpo)
     s.rollback()
-    return _enviar(datos, lineas)
+    return _enviar(datos, lineas, crudo=crudo)
+
+
+class InstalacionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    puerto: str = Field(min_length=1, max_length=256)
+    nombre: str = Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9 ._()-]+$")
+
+
+@router.get("/api/v1/impresion/puertos")
+def puertos_impresion(quien: dict = Depends(sesion.exige("config"))):
+    try:
+        return impresion_windows.puertos_sin_impresora()
+    except impresion_windows.ErrorImpresion as e:
+        raise HTTPException(e.estado, str(e)) from e
+
+
+@router.post("/api/v1/impresion/instalar")
+def instalar_impresora(datos: InstalacionIn, quien: dict = Depends(sesion.exige("config"))):
+    try:
+        return impresion_windows.instalar(datos.puerto, datos.nombre)
+    except impresion_windows.ErrorImpresion as e:
+        raise HTTPException(e.estado, str(e)) from e
 
 
 @router.get("/cierre/{turno_id}")

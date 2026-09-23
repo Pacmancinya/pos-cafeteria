@@ -41,13 +41,30 @@ function leerImpresion() {
       automatica: d ? d.automatica === true : localStorage.getItem("pos.imprimir") === "1",
       impresora: d && typeof d.impresora === "string" && d.impresora.length <= 256 ? d.impresora : "",
       papel: d && d.papel === 58 ? 58 : 80,
+      puerto: d && typeof d.puerto === "string" ? d.puerto : "",
+      // null significa que el dueño aún no eligió el tipo. Una elección
+      // explícita, incluso navegador, siempre gana sobre la detección.
+      tipo: d && ["termica", "windows", "navegador"].includes(d.tipo) ? d.tipo
+        : d && d.tipo === undefined && d.impresora === "" ? "navegador" : null,
     };
-  } catch (e) { return { automatica: false, impresora: "", papel: 80 }; }
+  } catch (e) { return { automatica: false, impresora: "", papel: 80, puerto: "", tipo: null }; }
 }
 let IMPRESION = leerImpresion();
 let imprimirSiempre = IMPRESION.automatica;
 const impresionesPendientes = new Set();
 let probandoImpresion = false;
+let instalandoImpresora = false;
+let impresorasWindows = [];
+let puertosImpresion = [];
+
+function tipoImpresion(nombre = IMPRESION.impresora) {
+  if (IMPRESION.tipo) return IMPRESION.tipo;
+  if (!nombre) return "navegador";
+  const p = impresorasWindows.find((p) => p.nombre === nombre);
+  return /sewoo|slk[- ]?ts|t[eé]rmica|thermal|receipt|tickets?|esc[ /-]?pos|\bpos\b|epson.*tm[- ]|usb\d+/i
+    .test(`${nombre} ${p?.puerto || (nombre === IMPRESION.impresora ? IMPRESION.puerto : "") || ""}`)
+    ? "termica" : "windows";
+}
 
 /* El comprobante se imprime desde un marco escondido, no desde una ventana
    aparte. Es obligatorio: dentro de la ventana de la aplicación (WebView2)
@@ -75,8 +92,11 @@ async function imprimir(ruta) {
   impresionesPendientes.add(ruta);
   try {
     const comprobante = /^\/comprobante\/(\d+)$/.exec(ruta);
-    if (IMPRESION.impresora && comprobante) {
-      await api(`/impresion/comprobante/${comprobante[1]}`, { method: "POST",
+    const tipo = tipoImpresion();
+    if (tipo !== "navegador" && comprobante) {
+      if (!IMPRESION.impresora) throw Error("Elige una impresora en Configurar.");
+      const prefijo = tipo === "termica" ? "crudo/" : "";
+      await api(`/impresion/${prefijo}comprobante/${comprobante[1]}`, { method: "POST",
         body: JSON.stringify({ impresora: IMPRESION.impresora, papel: IMPRESION.papel }),
         espera: 25000 });
     } else {
@@ -3895,8 +3915,13 @@ function bloqueImpresion() {
     <p class="ayuda">Estas preferencias quedan en este navegador. Las impresoras son las
       instaladas en el computador Windows donde funciona la caja.</p>
     <div class="ajuste__campos">
+      <label class="campo"><span>Tipo de impresora</span><select id="ajTipoImpresora">
+        <option value="termica"${tipoImpresion() === "termica" ? " selected" : ""}>Impresora de tickets (térmica)</option>
+        <option value="windows"${tipoImpresion() === "windows" ? " selected" : ""}>Impresora normal (Windows)</option>
+        <option value="navegador"${tipoImpresion() === "navegador" ? " selected" : ""}>Preguntar al navegador</option>
+      </select></label>
       <label class="campo"><span>Impresora</span><select id="ajImpresora">
-        <option value="">Preguntar al navegador</option>
+        <option value="">Elige una impresora</option>
         ${IMPRESION.impresora ? `<option selected value="${esc(IMPRESION.impresora)}">${esc(IMPRESION.impresora)} (guardada)</option>` : ""}
       </select></label>
       <label class="campo"><span>Ancho del papel</span><select id="ajPapel">
@@ -3908,24 +3933,34 @@ function bloqueImpresion() {
       <button class="btn" id="ajActualizarImpresoras">Actualizar impresoras</button>
       <button class="btn" id="ajProbarImpresion"${probandoImpresion ? " disabled" : ""}>Imprimir prueba</button>
     </div>
+    <div id="ajInstalacionImpresora" hidden>
+      <label class="campo"><span>Puerto disponible</span><select id="ajPuertoImpresora"></select></label>
+      <button class="btn" id="ajInstalarImpresora"${instalandoImpresora ? " disabled" : ""}>Instalar la impresora de tickets</button>
+      <p class="ayuda">Windows va a pedir permiso para instalar la impresora.</p>
+    </div>
     <p class="ayuda" id="ajImpresionEstado" role="status">Elige una impresora para imprimir directamente.
       Con «Preguntar al navegador» aparece el diálogo de impresión. Los cierres usan ese diálogo.</p>
   </div>`;
 }
 
-function guardarImpresion() {
+function guardarImpresion(tipoExplicito = false) {
   if (!puedo("config")) return;
   const siguiente = { automatica: $("#ajImprimirSiempre").checked,
-    impresora: $("#ajImpresora").value, papel: +$("#ajPapel").value };
+    impresora: $("#ajImpresora").value, papel: +$("#ajPapel").value,
+    puerto: impresorasWindows.find((p) => p.nombre === $("#ajImpresora").value)?.puerto
+      || ($("#ajImpresora").value === IMPRESION.impresora ? IMPRESION.puerto : ""),
+    tipo: tipoExplicito ? $("#ajTipoImpresora").value : IMPRESION.tipo };
   try {
     localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
     IMPRESION = siguiente;
     imprimirSiempre = siguiente.automatica;
+    $("#ajTipoImpresora").value = tipoImpresion();
     $("#ajImpresionEstado").textContent = "Preferencias de impresión guardadas en este navegador.";
   } catch (e) {
     $("#ajImprimirSiempre").checked = imprimirSiempre;
     $("#ajImpresora").value = IMPRESION.impresora;
     $("#ajPapel").value = String(IMPRESION.papel);
+    $("#ajTipoImpresora").value = tipoImpresion();
     $("#ajImpresionEstado").textContent = "No se pudieron guardar las preferencias. Revisa el almacenamiento del navegador.";
   }
 }
@@ -3936,22 +3971,49 @@ async function cargarImpresoras() {
   const estado = $("#ajImpresionEstado");
   if (!selector || boton.disabled) return;
   boton.disabled = true;
+  $("#ajInstalacionImpresora").hidden = true;
+  puertosImpresion = [];
   estado.textContent = "Consultando las impresoras de Windows…";
   try {
     const r = await api("/impresion/impresoras");
     if (selector !== $("#ajImpresora")) return;
     const lista = r.impresoras || [];
+    impresorasWindows = lista;
     const elegida = IMPRESION.impresora;
-    selector.innerHTML = '<option value="">Preguntar al navegador</option>'
+    const puerto = lista.find((p) => p.nombre === elegida)?.puerto;
+    if (puerto && puerto !== IMPRESION.puerto) {
+      // Recordar el puerto permite detectar el tipo al abrir de nuevo la caja,
+      // aunque ese día el dueño no entre a Configurar.
+      const siguiente = { ...IMPRESION, puerto };
+      try {
+        localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
+        IMPRESION = siguiente;
+      } catch (e) { /* La lista sigue siendo útil aunque el navegador no guarde. */ }
+    }
+    selector.innerHTML = '<option value="">Elige una impresora</option>'
       + (elegida && !lista.some((p) => p.nombre === elegida)
         ? `<option value="${esc(elegida)}">${esc(elegida)} (no disponible)</option>` : "")
       + lista.map((p) => `<option value="${esc(p.nombre)}"${p.disponible ? "" : " disabled"}>${esc(p.nombre)}${p.disponible ? "" : " (requiere diálogo)"}</option>`).join("");
     selector.value = elegida;
+    $("#ajTipoImpresora").value = tipoImpresion();
     estado.textContent = !r.disponible ? r.detalle
       : !lista.length ? "No hay impresoras instaladas. Instálala en Windows y actualiza esta lista."
       : elegida && !lista.some((p) => p.nombre === elegida && p.disponible)
         ? "La impresora guardada no está disponible para impresión directa. Elige otra o usa el navegador."
         : "Lista actualizada. Imprime una prueba para revisar el papel. Los cierres usan el diálogo del navegador.";
+    if (r.disponible && !lista.some((p) => p.disponible)) {
+      const libres = await api("/impresion/puertos");
+      if (selector !== $("#ajImpresora")) return;
+      // FILE/PDF no son conexiones de una impresora enchufada. USB va primero
+      // para que el puerto habitual de una ticketera sea el sugerido.
+      puertosImpresion = (libres.puertos || []).filter((p) =>
+        !/^(FILE:|PORTPROMPT:|NUL:|SHRFAX:|Microsoft\.Office\.OneNote)/i.test(p.nombre))
+        .sort((a, b) => Number(/^USB/i.test(b.nombre)) - Number(/^USB/i.test(a.nombre)));
+      $("#ajPuertoImpresora").innerHTML = puertosImpresion.map((p) =>
+        `<option value="${esc(p.nombre)}">${esc(p.nombre)}${p.descripcion ? " — " + esc(p.descripcion) : ""}</option>`).join("");
+      $("#ajInstalacionImpresora").hidden = !puertosImpresion.length;
+      if (puertosImpresion.length) estado.textContent = "Windows tiene puertos disponibles. Elige el de la impresora y pulsa Instalar.";
+    }
   } catch (e) {
     estado.textContent = e.message + ". Se conserva la impresora guardada.";
   } finally { boton.disabled = false; }
@@ -3960,7 +4022,7 @@ async function cargarImpresoras() {
 async function probarImpresion() {
   if (!puedo("config") || probandoImpresion) return;
   const estado = $("#ajImpresionEstado");
-  if (!IMPRESION.impresora) {
+  if (!IMPRESION.impresora || tipoImpresion() === "navegador") {
     estado.textContent = "Elige una impresora de Windows para imprimir la prueba.";
     return;
   }
@@ -3968,7 +4030,8 @@ async function probarImpresion() {
   $("#ajProbarImpresion").disabled = true;
   estado.textContent = "Enviando la prueba…";
   try {
-    const r = await api("/impresion/prueba", { method: "POST", espera: 25000,
+    const prefijo = tipoImpresion() === "termica" ? "crudo/" : "";
+    const r = await api(`/impresion/${prefijo}prueba`, { method: "POST", espera: 25000,
       body: JSON.stringify({ impresora: IMPRESION.impresora, papel: IMPRESION.papel }) });
     estado.textContent = r.detalle;
   } catch (e) {
@@ -3980,12 +4043,44 @@ async function probarImpresion() {
   }
 }
 
+async function instalarImpresora() {
+  if (!puedo("config") || instalandoImpresora) return;
+  const puerto = $("#ajPuertoImpresora").value;
+  if (!puertosImpresion.some((p) => p.nombre === puerto)) return;
+  const estado = $("#ajImpresionEstado");
+  instalandoImpresora = true;
+  $("#ajInstalarImpresora").disabled = true;
+  estado.textContent = "Acepta el permiso de Windows para instalar la impresora…";
+  try {
+    const r = await api("/impresion/instalar", { method: "POST", espera: 125000,
+      body: JSON.stringify({ puerto, nombre: "Kofe Tickets" }) });
+    // Guardar antes de consultar: la cola ya existe aunque falle la recarga o
+    // el dueño haya salido de Configurar mientras aceptaba el permiso.
+    const siguiente = { ...IMPRESION, impresora: r.nombre, puerto };
+    try {
+      localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
+      IMPRESION = siguiente;
+    } catch (e) {
+      throw Error("La impresora se instaló, pero no se pudo guardar la selección en este navegador. Actualiza la lista y selecciónala.");
+    }
+    await cargarImpresoras();
+  } catch (e) {
+    estado.textContent = e.message;
+  } finally {
+    instalandoImpresora = false;
+    const boton = $("#ajInstalarImpresora");
+    if (boton) boton.disabled = false;
+  }
+}
+
 function conectarImpresion() {
   ["#ajImprimirSiempre", "#ajImpresora", "#ajPapel"].forEach((id) => {
-    $(id).addEventListener("change", guardarImpresion);
+    $(id).addEventListener("change", () => guardarImpresion());
   });
+  $("#ajTipoImpresora").addEventListener("change", () => guardarImpresion(true));
   $("#ajActualizarImpresoras").onclick = cargarImpresoras;
   $("#ajProbarImpresion").onclick = probarImpresion;
+  $("#ajInstalarImpresora").onclick = instalarImpresora;
   cargarImpresoras();
 }
 

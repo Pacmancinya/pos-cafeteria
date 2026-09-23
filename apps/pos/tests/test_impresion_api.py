@@ -12,7 +12,8 @@ def estado_base():
         return tuple(c.connection.driver_connection.iterdump())
 
 
-def test_comprobante_y_prueba_sin_mutaciones(cliente, carta, caja, monkeypatch):
+@pytest.mark.parametrize("crudo", [False, True])
+def test_comprobante_y_prueba_sin_mutaciones(cliente, carta, caja, monkeypatch, crudo):
     v = cliente.post("/api/v1/ventas", json={
         "lineas": [{"producto_id": carta["latte"]["id"], "cantidad": 1}],
         "descuento": 500,
@@ -24,10 +25,12 @@ def test_comprobante_y_prueba_sin_mutaciones(cliente, carta, caja, monkeypatch):
         envios.append(args)
         return {"ok": True, "detalle": "Enviado a la cola"}
 
-    monkeypatch.setattr(windows, "imprimir", enviar)
+    funcion = "imprimir_crudo" if crudo else "imprimir"
+    prefijo = "crudo/" if crudo else ""
+    monkeypatch.setattr(windows, funcion, enviar)
     antes = estado_base()
     datos = {"impresora": "Caja ñ", "papel": 58}
-    ruta = f"/api/v1/impresion/comprobante/{v['id']}"
+    ruta = f"/api/v1/impresion/{prefijo}comprobante/{v['id']}"
     assert cliente.post(ruta, json=datos).status_code == 200
     assert envios[-1][:2] == ("Caja ñ", 58)
     papel = "\n".join(envios[-1][2])
@@ -36,14 +39,14 @@ def test_comprobante_y_prueba_sin_mutaciones(cliente, carta, caja, monkeypatch):
         assert texto in papel
     assert "window.print" not in papel and "<td" not in papel
     assert cliente.post(ruta, json=datos).status_code == 200  # reimpresión, no venta
-    assert cliente.post("/api/v1/impresion/prueba", json=datos).status_code == 200
+    assert cliente.post(f"/api/v1/impresion/{prefijo}prueba", json=datos).status_code == 200
     assert "Prueba sin venta ni cobro." in envios[-1][2]
     assert estado_base() == antes
 
     def fallar(*args):
         raise windows.ErrorImpresion("Windows no confirmó. No se reintentó.")
 
-    monkeypatch.setattr(windows, "imprimir", fallar)
+    monkeypatch.setattr(windows, funcion, fallar)
     r = cliente.post(ruta, json=datos)
     assert r.status_code == 503
     assert "No se reintentó" in r.json()["detail"]
@@ -86,6 +89,9 @@ def test_permisos_impresion(cliente, monkeypatch):
     monkeypatch.setattr(windows, "listar", lambda: llamadas.append("lista") or
                         {"disponible": True, "impresoras": []})
     monkeypatch.setattr(windows, "imprimir", lambda *a: llamadas.append("papel") or {"ok": True})
+    monkeypatch.setattr(windows, "imprimir_crudo", lambda *a: llamadas.append("crudo") or {"ok": True})
+    monkeypatch.setattr(windows, "puertos_sin_impresora", lambda: llamadas.append("puertos") or {"puertos": []})
+    monkeypatch.setattr(windows, "instalar", lambda *a: llamadas.append("instalar") or {"ok": True})
     datos = {"impresora": "Caja", "papel": 80}
     try:
         for rol, permisos, codigo in (("", "", 401), ("cajero", "", 403), ("dueno", "vender", 403)):
@@ -93,12 +99,21 @@ def test_permisos_impresion(cliente, monkeypatch):
                 "rol": rol, "permisos": permisos, "nombre": "Prueba"}
             assert cliente.get("/api/v1/impresion/impresoras").status_code == codigo
             assert cliente.post("/api/v1/impresion/prueba", json=datos).status_code == codigo
+            assert cliente.post("/api/v1/impresion/crudo/prueba", json=datos).status_code == codigo
+            assert cliente.get("/api/v1/impresion/puertos").status_code == codigo
+            assert cliente.post("/api/v1/impresion/instalar", json={
+                "puerto": "USB001", "nombre": "Kofe Tickets"}).status_code == codigo
         assert not llamadas
         app.dependency_overrides[sesion.quien_es] = lambda: {
             "rol": "dueno", "permisos": "config", "nombre": "Prueba"}
         assert cliente.get("/api/v1/impresion/impresoras").status_code == 200
         assert cliente.post("/api/v1/impresion/prueba", json=datos).status_code == 200
+        assert cliente.post("/api/v1/impresion/crudo/prueba", json=datos).status_code == 200
+        assert cliente.get("/api/v1/impresion/puertos").status_code == 200
+        assert cliente.post("/api/v1/impresion/instalar", json={
+            "puerto": "USB001", "nombre": "Kofe Tickets"}).status_code == 200
         assert cliente.post("/api/v1/impresion/comprobante/1", json=datos).status_code == 403
+        assert cliente.post("/api/v1/impresion/crudo/comprobante/1", json=datos).status_code == 403
     finally:
         app.dependency_overrides.pop(sesion.quien_es, None)
 
@@ -107,3 +122,21 @@ def test_texto_escapado_se_imprime_como_texto():
     assert _lineas('<div>Café &amp; té</div><table><tr><td>&lt;script&gt;</td>'
                    '<td>$1.000</td></tr></table><div>NO ES BOLETA<br>Interno</div>') == [
         "Café & té", "<script>  $1.000", "NO ES BOLETA", "Interno"]
+
+
+def test_instalacion_api_rechazo_y_validacion(cliente, monkeypatch):
+    llamadas = []
+
+    def instalar(*args):
+        llamadas.append(args)
+        raise windows.ErrorImpresion("Se canceló el permiso de Windows. No se instaló la impresora.", 409)
+
+    monkeypatch.setattr(windows, "instalar", instalar)
+    datos = {"puerto": "USB001", "nombre": "Kofe Tickets"}
+    r = cliente.post("/api/v1/impresion/instalar", json=datos)
+    assert r.status_code == 409
+    assert "No se instaló" in r.json()["detail"]
+    assert llamadas == [("USB001", "Kofe Tickets")]
+    for campo, valor in (("nombre", "$(comando)"), ("nombre", "x" * 61), ("puerto", ""), ("script", "comando")):
+        assert cliente.post("/api/v1/impresion/instalar", json={**datos, campo: valor}).status_code == 422
+    assert len(llamadas) == 1
