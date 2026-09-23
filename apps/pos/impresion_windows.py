@@ -397,9 +397,76 @@ def _texto_cp850(texto: str) -> str:
     return "".join(partes)
 
 
-def _bytes_escpos(papel: int, lineas: list[str], cortar: bool = True) -> bytes:
+def _en_columnas(izquierda: str, derecha: str, ancho: int) -> list[str]:
+    """El importe entero a la derecha; si no cabe todo, se abrevia el nombre."""
+    espacio = ancho - len(derecha) - 1
+    if espacio < 3:
+        texto = (izquierda + " " + derecha).strip()
+        return [texto[i:i + ancho] for i in range(0, len(texto), ancho)]
+    if len(izquierda) > espacio:
+        izquierda = izquierda[:espacio - 1] + "."
+    return [izquierda + " " * (ancho - len(izquierda) - len(derecha)) + derecha]
+
+
+def _bloque_a_bytes(bloque, ancho: int) -> bytes:
+    """Un bloque del comprobante como bytes ESC/POS, ya en su tamaño y alineación.
+
+    Cada bloque termina volviendo a lo normal (tamaño, negrita, fuente y
+    alineación): así un título grande no se le pega al siguiente comprobante si
+    algo se corta a la mitad.
+    """
+    if isinstance(bloque, str):
+        bloque = {"tipo": "texto", "texto": bloque}
+    tipo = bloque.get("tipo", "texto")
+    salida = bytearray()
+
+    if tipo == "blanco":
+        return b"\n"
+    if tipo == "separador":
+        return _texto_cp850("-" * ancho).encode("cp850") + b"\n"
+
+    if tipo == "titulo":            # nombre del local: doble alto y ancho, centrado
+        salida.extend(b"\x1ba\x01\x1d!\x11\x1bE\x01")
+        filas = [_texto_cp850(bloque["texto"])[: max(1, ancho // 2)]]
+    elif tipo == "centro":
+        salida.extend(b"\x1ba\x01")
+        filas = [_texto_cp850(bloque["texto"])[:ancho]]
+    elif tipo == "aviso":           # NO ES BOLETA: centrado, doble alto y negrita
+        salida.extend(b"\x1ba\x01\x1d!\x01\x1bE\x01")
+        filas = [_texto_cp850(bloque["texto"])[:ancho]]
+    elif tipo == "chico":           # la fuente B entra casi al doble por línea
+        salida.extend(b"\x1bM\x01")
+        chico = ancho * 4 // 3
+        texto = _texto_cp850(bloque["texto"])
+        filas = [texto[i:i + chico] for i in range(0, len(texto), chico)] or [""]
+        if bloque.get("centrado"):
+            salida.extend(b"\x1ba\x01")
+    elif tipo == "total":           # TOTAL: doble ALTO (el ancho no cambia)
+        salida.extend(b"\x1d!\x01\x1bE\x01")
+        filas = _en_columnas(_texto_cp850(bloque["izq"]), _texto_cp850(bloque["der"]), ancho)
+    elif tipo == "cols":
+        filas = _en_columnas(_texto_cp850(bloque["izq"]), _texto_cp850(bloque["der"]), ancho)
+    else:
+        texto = _texto_cp850(bloque.get("texto", ""))
+        filas = [texto[i:i + ancho] for i in range(0, len(texto), ancho)] or [""]
+
+    for fila in filas:
+        salida.extend(fila.encode("cp850") + b"\n")
+    salida.extend(b"\x1d!\x00\x1bE\x00\x1bM\x00\x1ba\x00")
+    return bytes(salida)
+
+
+def _bytes_escpos(papel: int, lineas: list, cortar: bool = True) -> bytes:
     ancho = 32 if papel == 58 else 48
     salida = bytearray(b"\x1b@\x1bt\x02")  # CP850, verificada en la Sewoo.
+    if any(isinstance(b, dict) for b in lineas):
+        # Comprobante armado por el servidor: cada bloque sabe cómo se ve.
+        for bloque in lineas:
+            salida.extend(_bloque_a_bytes(bloque, ancho))
+        salida.extend(b"\x1bd\x06")
+        if cortar:
+            salida.extend(b"\x1dVB\x00")
+        return bytes(salida)
     for indice, original in enumerate(lineas):
         texto = _texto_cp850(original)
         # Las dos columnas vienen de los </td> de NUESTRA plantilla. El precio

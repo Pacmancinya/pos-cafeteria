@@ -12,6 +12,20 @@ def estado_base():
         return tuple(c.connection.driver_connection.iterdump())
 
 
+def _como_texto(lineas) -> str:
+    """Lo que dice el papel, venga como renglones (impresora normal) o como
+    bloques con su forma (impresora de tickets)."""
+    salida = []
+    for bloque in lineas:
+        if isinstance(bloque, str):
+            salida.append(bloque)
+        elif "texto" in bloque:
+            salida.append(bloque["texto"])
+        elif "izq" in bloque:
+            salida.append(f"{bloque['izq']}  {bloque['der']}")
+    return "\n".join(salida)
+
+
 @pytest.mark.parametrize("crudo", [False, True])
 def test_comprobante_y_prueba_sin_mutaciones(cliente, carta, caja, monkeypatch, crudo):
     v = cliente.post("/api/v1/ventas", json={
@@ -33,14 +47,14 @@ def test_comprobante_y_prueba_sin_mutaciones(cliente, carta, caja, monkeypatch, 
     ruta = f"/api/v1/impresion/{prefijo}comprobante/{v['id']}"
     assert cliente.post(ruta, json=datos).status_code == 200
     assert envios[-1][:2] == ("Caja ñ", 58)
-    papel = "\n".join(envios[-1][2])
+    papel = _como_texto(envios[-1][2])
     for texto in ("NO ES BOLETA", "Latte", "TOTAL  $2.900", "Descuento  -$500",
                   "Pago Efectivo  $2.000", "Pago Débito  $900", "IVA 19%"):
         assert texto in papel
     assert "window.print" not in papel and "<td" not in papel
     assert cliente.post(ruta, json=datos).status_code == 200  # reimpresión, no venta
     assert cliente.post(f"/api/v1/impresion/{prefijo}prueba", json=datos).status_code == 200
-    assert "Prueba sin venta ni cobro." in envios[-1][2]
+    assert "Prueba sin venta ni cobro." in _como_texto(envios[-1][2])
     assert estado_base() == antes
 
     def fallar(*args):

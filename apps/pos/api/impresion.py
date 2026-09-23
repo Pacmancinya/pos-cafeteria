@@ -191,7 +191,66 @@ def _lineas(cuerpo: str) -> list[str]:
     return [linea.strip() for linea in "".join(partes).splitlines() if linea.strip()]
 
 
-def _enviar(datos: ImpresionIn, lineas: list[str], crudo: bool = False):
+def _bloques_comprobante(venta_id: int, s: Session) -> list:
+    """El comprobante para la impresora de tickets, en bloques con su forma.
+
+    Sale de los MISMOS datos que el comprobante del navegador (la venta guardada),
+    pero dibujado para papel angosto: el nombre del local grande y centrado, una
+    raya entre secciones, los importes pegados a la derecha y el TOTAL en doble
+    alto. Antes se convertía el HTML a texto plano y el papel salía como una lista
+    de renglones pegados a la izquierda.
+    """
+    v = s.get(Venta, venta_id)
+    if not v:
+        raise HTTPException(404, "No existe esa venta")
+    f = a_local(v.creada_at)
+    cobrado = v.total - v.descuento
+    neto, iva = neto_iva(cobrado)
+    d = datos_local.datos()
+
+    bloques: list = [{"tipo": "titulo", "texto": d["nombre"]}]
+    for extra in (f"RUT {d['rut']}" if d["rut"] else "", d["direccion"]):
+        if extra:
+            bloques.append({"tipo": "centro", "texto": extra})
+    bloques += [
+        {"tipo": "centro", "texto": f"Comprobante interno N {v.numero}"},
+        {"tipo": "centro", "texto": f.strftime("%d-%m-%Y  %H:%M")},
+        {"tipo": "separador"},
+    ]
+    for l in v.lineas:
+        nombre = f"{l.cantidad} x {l.nombre}" + (f" {l.detalle}" if l.detalle else "")
+        bloques.append({"tipo": "cols", "izq": nombre, "der": _plata(l.subtotal)})
+        if l.cantidad > 1:
+            bloques.append({"tipo": "chico", "texto": f"   {_plata(l.precio_unitario)} c/u"})
+    bloques.append({"tipo": "separador"})
+    if v.descuento:
+        bloques.append({"tipo": "cols", "izq": "Subtotal", "der": _plata(v.total)})
+        bloques.append({"tipo": "cols", "izq": "Descuento", "der": "-" + _plata(v.descuento)})
+    bloques.append({"tipo": "total", "izq": "TOTAL", "der": _plata(cobrado)})
+    if v.propina:
+        bloques.append({"tipo": "cols", "izq": "Propina", "der": _plata(v.propina)})
+    if v.medio_pago == "mixto":
+        from apps.pos.api.turnos import _pagos_de
+        for m, mt in _pagos_de(s, v):
+            bloques.append({"tipo": "cols", "izq": f"Pago {NOMBRE_MEDIO.get(m, m)}",
+                            "der": _plata(mt)})
+    else:
+        bloques.append({"tipo": "cols", "izq": "Pago",
+                        "der": NOMBRE_MEDIO.get(v.medio_pago, v.medio_pago)})
+    bloques.append({"tipo": "chico", "texto": f"Neto {_plata(neto)}   IVA 19% {_plata(iva)}"})
+    if v.estado == "anulada":
+        bloques += [{"tipo": "separador"}, {"tipo": "aviso", "texto": "VENTA ANULADA"}]
+    bloques += [
+        {"tipo": "separador"},
+        {"tipo": "aviso", "texto": "NO ES BOLETA"},
+        {"tipo": "chico", "texto": "Comprobante interno del local", "centrado": True},
+        {"tipo": "blanco"},
+        {"tipo": "centro", "texto": "¡Gracias!"},
+    ]
+    return bloques
+
+
+def _enviar(datos: ImpresionIn, lineas: list, crudo: bool = False):
     try:
         enviar = impresion_windows.imprimir_crudo if crudo else impresion_windows.imprimir
         return enviar(datos.impresora, datos.papel, lineas)
@@ -218,6 +277,24 @@ def prueba_cruda(datos: ImpresionIn, quien: dict = Depends(sesion.exige("config"
 
 
 def _prueba(datos: ImpresionIn, crudo: bool = False):
+    if crudo:
+        # Se ve igual que un comprobante de verdad: es la forma de revisar el
+        # papel, el corte y las tildes antes de cobrarle a alguien.
+        return _enviar(datos, [
+            {"tipo": "titulo", "texto": datos_local.nombre()},
+            {"tipo": "centro", "texto": "PRUEBA DE IMPRESIÓN"},
+            {"tipo": "centro", "texto": f"Papel de {datos.papel} mm"},
+            {"tipo": "separador"},
+            {"tipo": "cols", "izq": "2 x Café chico", "der": "$2.400"},
+            {"tipo": "chico", "texto": "   $1.200 c/u"},
+            {"tipo": "cols", "izq": "1 x Marraqueta ñ", "der": "$1.190"},
+            {"tipo": "separador"},
+            {"tipo": "total", "izq": "TOTAL", "der": "$3.590"},
+            {"tipo": "cols", "izq": "Pago", "der": "Efectivo"},
+            {"tipo": "separador"},
+            {"tipo": "aviso", "texto": "NO ES BOLETA"},
+            {"tipo": "chico", "texto": "Prueba sin venta ni cobro.", "centrado": True},
+        ], crudo=True)
     return _enviar(datos, [datos_local.nombre(), "PRUEBA DE IMPRESIÓN",
                           f"Papel de {datos.papel} mm", "Café · azúcar · ñ · $1.234",
                           "NO ES BOLETA", "Prueba sin venta ni cobro."], crudo=crudo)
@@ -240,8 +317,13 @@ def imprimir_comprobante_crudo(venta_id: int, datos: ImpresionIn,
 def _imprimir_comprobante(venta_id: int, datos: ImpresionIn, s: Session, crudo: bool = False):
     # Ruta síncrona: FastAPI la atiende fuera del event loop. Termina la lectura
     # antes de esperar al driver, para no retener una transacción de SQLite.
-    _, cuerpo = _comprobante(venta_id, s)
-    lineas = _lineas(cuerpo)
+    if crudo:
+        # La térmica recibe el comprobante dibujado para papel angosto; la
+        # impresora normal sigue recibiendo el mismo texto que el navegador.
+        lineas = _bloques_comprobante(venta_id, s)
+    else:
+        _, cuerpo = _comprobante(venta_id, s)
+        lineas = _lineas(cuerpo)
     s.rollback()
     return _enviar(datos, lineas, crudo=crudo)
 

@@ -3929,6 +3929,9 @@ function bloqueImpresion() {
         <option value="80"${IMPRESION.papel === 80 ? " selected" : ""}>80 mm</option>
       </select></label>
     </div>
+    <p class="ayuda">Es el ancho del <b>rollo</b>, no el de la impresora. Si en la prueba los
+      precios saltan a la línea de abajo, o las rayas salen cortadas en dos, el rollo es más
+      angosto de lo elegido: cambia a 58 mm y prueba otra vez.</p>
     <div class="ajuste__fila">
       <button class="btn" id="ajActualizarImpresoras">Actualizar impresoras</button>
       <button class="btn" id="ajProbarImpresion"${probandoImpresion ? " disabled" : ""}>Imprimir prueba</button>

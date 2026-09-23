@@ -369,3 +369,45 @@ def test_instalar_timeout_total_y_sin_reintentos(monkeypatch):
     with pytest.raises(windows.ErrorImpresion, match="120 segundos"):
         windows.instalar("USB001", "Kofe Tickets")
     assert len(llamadas) == 1 and not windows._instalando.locked()
+
+
+# --------------------------------------------------------------- forma del comprobante
+def _ordenes(bloque, ancho=48):
+    return windows._bloque_a_bytes(bloque, ancho)
+
+
+def test_el_titulo_va_centrado_y_grande():
+    salida = _ordenes({"tipo": "titulo", "texto": "Cafe Renni"})
+    assert salida.startswith(b"\x1ba\x01\x1d!\x11")          # centrado + doble alto y ancho
+    assert b"Cafe Renni\n" in salida
+    assert salida.endswith(b"\x1d!\x00\x1bE\x00\x1bM\x00\x1ba\x00")  # vuelve a lo normal
+
+
+def test_el_total_ocupa_el_ancho_entero_en_doble_alto():
+    salida = _ordenes({"tipo": "total", "izq": "TOTAL", "der": "$7.090"})
+    assert salida.startswith(b"\x1d!\x01")                   # doble alto, ancho normal
+    fila = salida.split(b"\n")[0][len(b"\x1d!\x01\x1bE\x01"):]
+    assert len(fila) == 48 and fila.startswith(b"TOTAL") and fila.endswith(b"$7.090")
+
+
+def test_el_importe_no_se_recorta_nunca():
+    fila = _ordenes({"tipo": "cols", "izq": "1 x Torta de mil hojas con manjar y nueces",
+                     "der": "$13.500"}).split(b"\n")[0]
+    assert len(fila) == 48 and fila.endswith(b"$13.500") and b"." in fila[:40]
+
+
+def test_el_separador_llena_la_linea_segun_el_papel():
+    assert _ordenes({"tipo": "separador"}, ancho=32) == b"-" * 32 + b"\n"
+    assert _ordenes({"tipo": "separador"}, ancho=48) == b"-" * 48 + b"\n"
+
+
+def test_la_letra_chica_usa_la_fuente_b_y_entra_mas_texto():
+    salida = _ordenes({"tipo": "chico", "texto": "N" * 60})
+    assert salida.startswith(b"\x1bM\x01")
+    assert salida.count(b"\n") == 1                          # 60 caracteres caben en una fila
+
+
+def test_los_bloques_conviven_con_los_renglones_de_siempre():
+    crudo = windows._bytes_escpos(80, ["una linea", {"tipo": "aviso", "texto": "NO ES BOLETA"}])
+    assert b"una linea\n" in crudo and b"NO ES BOLETA\n" in crudo
+    assert crudo.endswith(b"\x1bd\x06\x1dVB\x00")            # avance y corte
