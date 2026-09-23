@@ -1,6 +1,6 @@
 {
-  "version": "2.28",
-  "nombre": "La impresora de la caja",
-  "novedades": "En Configurar aparece Impresión de comprobantes: elige una impresora instalada en Windows, papel de 58 u 80 mm y si quieres imprimir el comprobante al cobrar. Incluye actualizar la lista y una impresión de prueba sin crear una venta. La selección se guarda en este navegador. Una falla de impresión avisa sin repetir el cobro ni reintentar el papel automáticamente. Sigue disponible la impresión con el diálogo del navegador. El comprobante sigue siendo interno, no una boleta electrónica.",
-  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.28.zip"
+  "version": "2.27",
+  "nombre": "Fiestas Patrias",
+  "novedades": "Los televisores del local se visten para el 18. Del 12 al 20 de septiembre, solos y sin tocar nada, aparecen banderines rojos, blancos y azules colgando arriba; en la vitrina, un letrero «¡Felices Fiestas Patrias!» y dos volantines que se mecen a los lados; en la carta, una escarapela junto a la hora; y la cinta de abajo parte con el saludo. El 11 de septiembre no se decora, y el 21 todo se va solo, sin recargar el televisor. Nada tapa los precios: en la carta los banderines son más chicos para que la lista entre completa. Si no se quiere, en Configurar → Pantallas → Fiestas Patrias se elige Automática, Prendida o Apagada; los televisores antiguos, que usan la pantalla simple, también se decoran y respetan lo que se elija. Con el modo suave los banderines y volantines se quedan quietos.",
+  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.27.zip"
 }
