@@ -1,5 +1,10 @@
 # Conectar la caja con el SII — guía
 
+> **Decisión del 23-09-2026:** la boleta se emitirá con **software propio, sin proveedor**.
+> El diseño vigente está en [docs/BOLETA-ELECTRONICA.md](BOLETA-ELECTRONICA.md).
+> Esta guía se conserva como antecedente; sus indicaciones sobre proveedor, emisión
+> sin internet y timbre impreso quedan superadas por ese diseño.
+
 > Para emitir **boleta electrónica** desde el punto de venta.
 > Escrita para el dueño del local; la parte técnica va al final.
 >
@@ -152,6 +157,8 @@ Se agrega sin migración manual: `create_all` crea las tablas nuevas y
 `poner_al_dia()` agrega las columnas que falten.
 
 **Lo que NO se va a hacer acá:**
+
+> **Decisión superada el 23-09-2026:** se desarrollará la emisión y firma propias para controlar el flujo local sin depender de un proveedor; los secretos se protegerán fuera del árbol del programa. Ver [el diseño vigente](BOLETA-ELECTRONICA.md).
 
 - **Firmar los DTE nosotros mismos.** Implica manejar el certificado, el
   timbraje, el envío al SII, los reintentos y el seguimiento de estado. Es un

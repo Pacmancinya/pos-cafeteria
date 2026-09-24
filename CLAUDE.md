@@ -208,14 +208,15 @@ ahí; el conector completo está pendiente.
 5. `docs/PUBLICAR-ACTUALIZACIONES.md`: cómo llega una versión a las cajas.
 6. `docs/INSTALACION.md`: cómo se instala en un local.
 7. `docs/SII.md`: lo que falta para emitir boleta electrónica.
+8. `docs/BOLETA-ELECTRONICA.md`: diseño de emisión con software propio, sin proveedor.
 
 ---
 
 ## Pendiente técnico
 
 - **Boleta electrónica (DTE 39).** Es lo más importante que falta: hoy el comprobante dice
-  «NO ES BOLETA». Hay que elegir proveedor con API y conectarse; incluye una cola para
-  cuando no hay internet. Ver `docs/SII.md`.
+  «NO ES BOLETA». Se hará con software propio, sin proveedor; se emite sin internet y
+  queda en cola el envío. Ver `docs/BOLETA-ELECTRONICA.md`.
 - **El cambio de nombre** a Caja Clara en el programa, el instalador, el icono y los
   documentos, sin cortar las actualizaciones.
 - **El repositorio a privado o a una organización**, siguiendo el procedimiento de arriba.
