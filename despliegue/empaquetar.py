@@ -30,7 +30,7 @@ from core.config import APP_VERSION
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, "despliegue")
-NOMBRE = f"Kofe-actualizacion-v{APP_VERSION}"
+NOMBRE = f"CajaClara-actualizacion-v{APP_VERSION}"
 
 INCLUIR = [
     "Kofe.py",              # el lanzador de la aplicación: también se actualiza
@@ -87,4 +87,4 @@ if __name__ == "__main__":
     print(f"  {destino}")
     print(f"  Armado el {datetime.now():%d-%m-%Y %H:%M}\n")
     print("  Esto es una ACTUALIZACIÓN: reemplaza el programa de una caja que ya")
-    print("  está instalada. Para instalar de cero va Kofe-instalar.zip.\n")
+    print("  está instalada. Para instalar de cero va CajaClara-instalar-vX.Y.zip.\n")

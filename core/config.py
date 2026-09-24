@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 # La versión tiene que coincidir con la de version.json cuando se publica.
 # Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
 # novedades entre versiones, o nadie distingue una de otra.
-APP_VERSION = "2.30"
-APP_NOMBRE = "Que se vea lo nuevo"
+APP_VERSION = "2.31"
+APP_NOMBRE = "Se llama Caja Clara"
 VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
 
 # De dónde se enteran las cajas de que hay una versión nueva (el canal estable;
@@ -35,6 +35,12 @@ HOST = os.getenv("POS_HOST", "0.0.0.0")
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_URL = os.getenv("POS_DB_URL", f"sqlite:///{os.path.join(RAIZ, 'pos.db')}")
+
+
+def modo_demo() -> bool:
+    """Sólo la marca junto al ejecutable habilita la demostración."""
+    return os.path.isfile(os.path.join(RAIZ, "MODO-DEMO.txt"))
+
 
 # El local vive en Chile: guardamos UTC y mostramos hora local.
 # Windows NO trae la base de zonas horarias: sin el paquete `tzdata` esto revienta.
@@ -244,6 +250,11 @@ REDONDEO_PRECIO = 50
 # táctil se prende acá y vuelve entero.
 TECLADO_EN_PANTALLA = False
 
+# Sigue siendo «Kofe» a propósito, aunque el producto se llame Caja Clara: esto lo usa el
+# Kofe.py congelado de las cajas instaladas para el título de la ventana y el nombre del
+# acceso directo. Cambiarlo acá renombraría la ventana y el icono de un local que ya
+# existe. El nombre que se ve en la caja, el comprobante y los televisores sale de la
+# base (apps/pos/local.py).
 NOMBRE_LOCAL = os.getenv("POS_LOCAL", "Kofe")
 AVISOS = [
     "Lunes a sábado de 8:00 a 20:00",

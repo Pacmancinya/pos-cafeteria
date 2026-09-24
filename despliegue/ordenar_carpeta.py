@@ -26,7 +26,7 @@ DESTINO = os.getenv("KOFE_CARPETA", r"D:\Kofe")
 # (carpeta, [(origen, nombre con el que se guarda)])
 PLAN = [
     ("1 - Instalar en un local", [
-        (f"despliegue/Kofe-instalar-v{APP_VERSION}.zip", None),
+        (f"despliegue/CajaClara-instalar-v{APP_VERSION}.zip", None),
         ("docs/INSTALACION.md", "Cómo instalar, paso a paso.md"),
     ]),
     ("2 - Guías", [
@@ -35,7 +35,7 @@ PLAN = [
         ("docs/PUBLICAR-ACTUALIZACIONES.md", "Cómo publico una versión nueva.md"),
     ]),
     ("3 - Actualizaciones", [
-        (f"despliegue/Kofe-actualizacion-v{APP_VERSION}.zip", None),
+        (f"despliegue/CajaClara-actualizacion-v{APP_VERSION}.zip", None),
         ("VERSIONES.md", "Qué cambió en cada versión.md"),
     ]),
     # Las pantallas son OTRO programa desde la 2.2: acá va su guía, para que el
@@ -54,8 +54,8 @@ PLAN = [
 # Esta NO se toca nunca: es del dueño.
 DEL_DUENO = "4 - Registros del local"
 
-LEEME = """KOFE — PUNTO DE VENTA
-=====================
+LEEME = """CAJA CLARA — PUNTO DE VENTA
+===========================
 
 Versión {version} · "{nombre}"
 Ordenado el {fecha}
@@ -65,7 +65,7 @@ Qué hay en cada carpeta
 
   1 - Instalar en un local
       El ZIP que se le pasa a un local nuevo, y la guía de instalación.
-      Se extrae y se abre Kofe.exe (o INICIAR-POS.bat si Windows bloquea
+      Se extrae y se abre CajaClara.exe (o INICIAR-POS.bat si Windows bloquea
       el .exe). Queda un icono en el escritorio y de ahí en adelante se
       abre con ese icono, sin ventana negra al lado.
 

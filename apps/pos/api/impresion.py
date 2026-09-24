@@ -25,7 +25,7 @@ from apps.pos.api.turnos import (_conteo, _cuadre_de_medios, _efectivo_esperado,
 from apps.pos.db.models import Turno, Venta
 from apps.pos.db.session import get_session
 from core.config import (DENOMINACIONES, MEDIOS_PAGO, NOMBRE_LOCAL, NOMBRE_MEDIO,
-                         a_local, neto_iva)
+                         a_local, modo_demo, neto_iva)
 
 router = APIRouter(tags=["impresión"])
 
@@ -162,6 +162,7 @@ def _comprobante(venta_id: int, s: Session) -> tuple[str, str]:
     </table>
     {anulada}
     <div class="aviso">NO ES BOLETA<br>Comprobante interno del local</div>
+    {'<div class="aviso">DEMO · datos de ejemplo</div>' if modo_demo() else ''}
     <div class="centro chico" style="margin-top:9px">¡Gracias!</div>"""
     return f"Comprobante {v.numero}", cuerpo
 
@@ -244,6 +245,10 @@ def _bloques_comprobante(venta_id: int, s: Session) -> list:
         {"tipo": "separador"},
         {"tipo": "aviso", "texto": "NO ES BOLETA"},
         {"tipo": "chico", "texto": "Comprobante interno del local", "centrado": True},
+    ]
+    if modo_demo():
+        bloques.append({"tipo": "aviso", "texto": "DEMO - DATOS DE EJEMPLO"})
+    bloques += [
         {"tipo": "blanco"},
         {"tipo": "centro", "texto": "¡Gracias!"},
     ]

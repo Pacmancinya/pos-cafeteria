@@ -1,3 +1,6 @@
 # Lo firmado se guarda byte por byte: un CRLF metido por git rompería la firma.
 manifiesto.json -text
 manifiesto.firma -text
+
+# El .bat de la demo lleva CRLF en cualquier clon: cmd se confunde con los goto si llega con LF.
+despliegue/demo/REINICIAR-DEMO.bat -text

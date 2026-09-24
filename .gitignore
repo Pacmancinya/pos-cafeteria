@@ -42,6 +42,7 @@ __pycache__/
 # Resultado de construir, no fuente. Son 57 MB que se regeneran con
 # `python -m despliegue.construir_exe`.
 despliegue/Kofe/
+despliegue/CajaClara/
 despliegue/_construccion/
 *.zip
 .tmp-pytest-*/

@@ -49,7 +49,7 @@ router = APIRouter(prefix="/api/v1", tags=["códigos"])
 # consulta = un escaneo de verdad". Acá se cumple sola: solo se pregunta por un
 # código que la caja no conoce, y apenas se guarda el producto no se vuelve a
 # preguntar nunca.
-AGENTE = "Kofe-POS/1.0 (+https://github.com/Pacmancinya/pos-cafeteria)"
+AGENTE = "CajaClara-POS/1.0 (+https://github.com/Pacmancinya/pos-cafeteria)"
 URL_OFF = "https://world.openfoodfacts.org/api/v2/product/{}.json"
 
 # Corto a propósito: esto pasa con el cliente esperando. Si no contesta rápido,

@@ -22,7 +22,7 @@ from apps.pos.api import (actualizaciones, ajustes, catalogo, codigos, datos,
 from apps.pos.api import diagnostico as api_diagnostico
 from apps.pos.db.models import Turno
 from apps.pos.db.session import crear_tablas, engine
-from core.config import HOST, NOMBRE_LOCAL, PUERTO, VERSION, ip_en_la_red
+from core.config import HOST, NOMBRE_LOCAL, PUERTO, VERSION, ip_en_la_red, modo_demo
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 ESTATICOS = os.path.join(AQUI, "static")
@@ -34,6 +34,14 @@ diagnostico.preparar()
 @asynccontextmanager
 async def ciclo(app: FastAPI):
     crear_tablas()
+    # Modo demo: sin la marca MODO-DEMO.txt no hace nada. Si fallara, la caja abre
+    # igual: una demostración no puede dejar una caja sin arrancar.
+    try:
+        from tools.demo.inicio import preparar
+        if preparar():
+            diagnostico.log.info("Modo demo: base sembrada con datos de ejemplo")
+    except Exception:
+        diagnostico.log.exception("Modo demo: no se pudo sembrar")
     diagnostico.log.info("Arranca la caja v%s", VERSION)
     import apps.pos as paquete
     if paquete.RECUPERACION:
@@ -140,6 +148,7 @@ def salud():
     ip = ip_en_la_red() if HOST == "0.0.0.0" else "127.0.0.1"
     return {
         "ok": True, "version": VERSION, "local": local.nombre(),
+        "demo": modo_demo(),
         "turno_abierto": bool(t),
         # Lo que hay que abrir en cada televisor del local.
         "carta_url": f"http://{ip}:{PUERTO}/api/v1/carta",
@@ -186,6 +195,9 @@ def _html_con_version(nombre: str) -> HTMLResponse:
     ruta = os.path.join(ESTATICOS, nombre)
     with open(ruta, encoding="utf-8") as f:
         html = f.read().replace("__VERSION__", VERSION)
+    html = html.replace("__MARCA_DEMO__", (
+        '<span class="marca-demo" title="Datos de ejemplo">DEMO</span>'
+        if modo_demo() else ""))
     return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
 
 

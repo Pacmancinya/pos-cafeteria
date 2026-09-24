@@ -6,7 +6,7 @@ precios, así que un cambio acá se ve en las dos partes.
 
 ## Para empezar
 
-Doble clic en **`Kofe.exe`**. Se abre como cualquier aplicación, con su ventana propia.
+Doble clic en **`CajaClara.exe`** (en las cajas instaladas antes de la 2.31 se llama `Kofe.exe`). Se abre como cualquier aplicación, con su ventana propia.
 Para cerrarla, la cierras con la X.
 
 > La primera vez, Windows puede mostrar un aviso azul que dice *“Windows protegió tu PC”*.

@@ -44,14 +44,14 @@ CARTA = [
         ("Torta del día", "Cambia cada mañana", 4200, "torta", True, "Hasta agotar", ""),
     ]),
     ("Promos", [
-        ("Desayuno Kofe", "Café mediano + croissant", 5200, "croissant", False, "", ""),
+        ("Desayuno de la casa", "Café mediano + croissant", 5200, "croissant", False, "", ""),
         ("Media tarde", "Latte + alfajor", 4700, "alfajor", False, "", ""),
         ("Café + brownie", "El clásico de las cinco", 5800, "brownie", False, "", ""),
         ("Estudiantes", "Café chico + galleta, con credencial", 3500, "taza-cortado", False, "", "Lun a vie"),
     ]),
 ]
 
-ANTES = {"Desayuno Kofe": 5900, "Media tarde": 5300, "Café + brownie": 6300}
+ANTES = {"Desayuno de la casa": 5900, "Media tarde": 5300, "Café + brownie": 6300}
 
 
 def sembrar(forzar: bool = False) -> None:

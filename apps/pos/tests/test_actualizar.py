@@ -270,7 +270,7 @@ def test_un_paquete_sin_firma_no_se_instala(local, monkeypatch):
 def test_un_paquete_firmado_con_otra_llave_no_se_instala(local, monkeypatch):
     descargando(monkeypatch, zip_falso({"apps/pos/main.py": "nuevo"}, llave=bytes(32)))
     r = actualizar.aplicar("https://ejemplo.cl/p.zip")
-    assert "no es la de Kofe" in r["error"]
+    assert "no es la de Caja Clara" in r["error"]
     assert _main(local) == "viejo"
 
 

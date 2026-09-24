@@ -546,6 +546,7 @@ def test_crear_ventana_recibe_el_tamano_acotado_del_lanzador(decision_lanzador):
     creaciones = []
     decision_lanzador.update({
         "NOMBRE_VENTANA_BASE": "Caja", "NOMBRE_LOCAL": "Prueba", "PUERTO": 8090,
+        "_titulo": lambda: "Caja Clara",
         "webview": SimpleNamespace(
             screens=[SimpleNamespace(x=0, y=0, frame=rectangulo(1366, 728))],
             create_window=lambda *args, **kwargs: creaciones.append(kwargs),

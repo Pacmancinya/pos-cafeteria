@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Kofe — la aplicación de escritorio del punto de venta.
+"""Caja Clara — la aplicación de escritorio del punto de venta.
 
-Esto es lo que se congela con PyInstaller y queda como `Kofe.exe`. El .exe trae
+Hasta la 2.30 el producto se llamó Kofe, y este archivo conserva ese nombre porque es
+interno. Esto es lo que se congela con PyInstaller y queda como `CajaClara.exe` (las
+cajas instaladas antes de la 2.31 tienen `Kofe.exe`, con su copia vieja). El .exe trae
 adentro Python y las librerías (fastapi, uvicorn, sqlmodel, pywebview…), pero
 **no** trae el código del punto de venta: ese sigue viviendo en archivos .py
 sueltos al lado del .exe.
@@ -151,7 +153,10 @@ NOMBRE_VENTANA_BASE = "Caja"
 # Sin esto, Windows agrupa la ventana bajo "Python" y le pone su icono en la
 # barra de tareas, aunque el .exe tenga el nuestro.
 ID_EN_LA_BARRA = "Kofe.PuntoDeVenta"
-ICONO = os.path.join(CARPETA, "despliegue", "icono", "kofe.ico")
+# Desde la 2.31 el icono es el de Caja Clara; kofe.ico queda por si falta.
+ICONO = next((r for r in (os.path.join(CARPETA, "despliegue", "icono", n)
+                          for n in ("caja-clara.ico", "kofe.ico")) if os.path.exists(r)),
+             os.path.join(CARPETA, "despliegue", "icono", "caja-clara.ico"))
 CERROJO = "Kofe-punto-de-venta-8090"     # nombre del mutex de instancia única
 ESPERA_MAXIMA = 25                        # segundos que le damos al servidor
 
@@ -213,8 +218,10 @@ def esperar_a_que_muera(pid: int, segundos: int = 20) -> None:
 # 4. El servidor
 # ---------------------------------------------------------------------------
 def _titulo() -> str:
-    from core.config import NOMBRE_LOCAL
-    return f"{NOMBRE_VENTANA_BASE} de {NOMBRE_LOCAL}"
+    # Desde la 2.31 (CajaClara.exe) la ventana se llama como el producto. Tiene que ser
+    # fijo: traer_al_frente() busca la ventana abierta por este mismo título. Las cajas
+    # instaladas antes conservan su Kofe.exe congelado, con «Caja de <local>».
+    return "Caja Clara"
 
 
 def puerto_libre(puerto: int) -> bool:
@@ -335,7 +342,7 @@ def main() -> int:
 
     maximizada, ancho, alto = _abrir_maximizada()
     webview.create_window(
-        f"{NOMBRE_VENTANA_BASE} de {NOMBRE_LOCAL}",
+        _titulo(),              # el mismo que busca traer_al_frente()
         f"http://127.0.0.1:{PUERTO}/",
         width=ancho,
         height=alto,

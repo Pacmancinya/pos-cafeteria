@@ -37,6 +37,8 @@ def crear_tablas() -> None:
     # una caja que ya vendió cada vez que se actualiza el programa.
     from apps.pos.db.migraciones import poner_al_dia
     poner_al_dia()
+    from apps.pos.local import conservar_nombre_instalado
+    conservar_nombre_instalado(engine)
     # Llevar cuenta es optativo: arrancar nunca crea insumos ni recetas.
 
 

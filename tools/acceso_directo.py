@@ -36,7 +36,16 @@ import sys
 from core.config import NOMBRE_LOCAL, RAIZ
 
 MARCA = os.path.join(RAIZ, ".acceso-directo")
-NOMBRE = f"{NOMBRE_LOCAL} - Punto de venta"
+
+
+def _nombre() -> str:
+    """«Caja Clara» en las instalaciones nuevas (CajaClara.exe, desde la 2.31). Las
+    instaladas antes conservan «<local> - Punto de venta»: renombrarlo les dejaría dos
+    iconos en el escritorio."""
+    if getattr(sys, "frozen", False) and os.path.basename(sys.executable).lower() == "cajaclara.exe":
+        return "Caja Clara"
+    return f"{NOMBRE_LOCAL} - Punto de venta"
+
 
 # Sube de número cuando cambia A QUÉ apunta el acceso directo. Es lo único que
 # hace que una caja ya instalada corrija su icono: si no cambia, no se toca nada.
@@ -54,8 +63,17 @@ def _destino() -> tuple[str, str]:
     dejaría un icono que no abre nada, que es peor que no tener icono.
     """
     if getattr(sys, "frozen", False):
-        exe = os.path.join(RAIZ, "Kofe.exe")
-        return (exe, "") if os.path.exists(exe) else ("", "")
+        # Desde la 2.31 el ejecutable de las instalaciones nuevas es CajaClara.exe;
+        # las cajas instaladas antes siguen con Kofe.exe (una actualización no cambia
+        # el exe). El que está corriendo es el que sirve en este computador.
+        yo = os.path.abspath(sys.executable)
+        if os.path.basename(yo).lower() in ("cajaclara.exe", "kofe.exe") and os.path.exists(yo):
+            return yo, ""
+        for nombre in ("CajaClara.exe", "Kofe.exe"):
+            exe = os.path.join(RAIZ, nombre)
+            if os.path.exists(exe):
+                return exe, ""
+        return "", ""
 
     # Sin congelar, el que da la ventana sin consola es pythonw.exe. Si estamos
     # corriendo bajo python.exe (probando desde la terminal), se usa su hermano.
@@ -93,7 +111,7 @@ def _donde_puede_estar() -> list[str]:
         base = os.environ.get(var)
         if base:
             carpetas.append(os.path.join(base, cola))
-    return [os.path.join(c, NOMBRE + ".lnk") for c in carpetas]
+    return [os.path.join(c, _nombre() + ".lnk") for c in carpetas]
 
 
 def _libreta() -> dict:
@@ -138,9 +156,10 @@ def _escribir(lnk: str, destino: str, args: str) -> bool:
     sobre uno que ya existe lo abre con sus propiedades y `.Save()` lo pisa, así
     que no hay que borrarlo antes.
     """
-    icono = os.path.join(RAIZ, "despliegue", "icono", "kofe.ico")
-    if not os.path.exists(icono):
-        icono = destino
+    # caja-clara.ico llega con las instalaciones nuevas; el actualizador no copia .ico,
+    # así que una caja instalada antes de la 2.31 sigue con kofe.ico.
+    icono = next((r for r in (os.path.join(RAIZ, "despliegue", "icono", n)
+                              for n in ("caja-clara.ico", "kofe.ico")) if os.path.exists(r)), destino)
 
     orden = (
         f"$d={_ps(lnk)};"
@@ -185,7 +204,7 @@ def crear_si_falta() -> str:
         if not _escribir(lnk, destino, args):
             return ""
         _anotar(lnk, destino, args)
-        return f"Acceso directo «{NOMBRE}» dejado en el escritorio."
+        return f"Acceso directo «{_nombre()}» dejado en el escritorio."
 
     # Lo borró el dueño. No se vuelve a crear: pelearle cada mañana es peor que
     # no tener icono.
@@ -202,4 +221,4 @@ def crear_si_falta() -> str:
     if not _escribir(lnk, destino, args):
         return ""
     _anotar(lnk, destino, args)
-    return f"Acceso directo «{NOMBRE}» corregido: ahora abre la caja sin ventana negra."
+    return f"Acceso directo «{_nombre()}» corregido: ahora abre la caja sin ventana negra."

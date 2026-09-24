@@ -194,14 +194,14 @@ def _origen_confiable(url: str) -> bool:
 def _problema_de_firma(contenido: dict, manifiesto: bytes | None, firma_hex: str | None,
                        version_esperada: str | None) -> str | None:
     if manifiesto is None or not firma_hex:
-        return ("Este paquete no viene firmado por Kofe, así que no se instala. "
+        return ("Este paquete no viene firmado por Caja Clara, así que no se instala. "
                 "Tu caja quedó como estaba.")
     try:
         sello = bytes.fromhex(firma_hex)
     except ValueError:
         return "La firma del paquete está rota. No se instala nada."
     if not any(firma.verificar(bytes.fromhex(k), manifiesto, sello) for k in LLAVES_PUBLICAS):
-        return ("La firma del paquete no es la de Kofe. No se instala nada: puede ser "
+        return ("La firma del paquete no es la de Caja Clara. No se instala nada: puede ser "
                 "un paquete adulterado. Avísale a soporte.")
     try:
         datos = json.loads(manifiesto.decode("utf-8"))

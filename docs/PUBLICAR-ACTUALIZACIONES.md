@@ -111,7 +111,7 @@ actualizaciones a nadie, en este orden:
 
 1. Crea una clave por local en GitHub (*fine-grained token*, solo lectura de *Contents* de
    este repositorio). Una por local: si una se filtra, se revoca esa sola.
-2. En cada caja, pon la clave en la variable `POS_CLAVE_DESCARGA` (Kofe.exe la lee al
+2. En cada caja, pon la clave en la variable `POS_CLAVE_DESCARGA` (CajaClara.exe o Kofe.exe la lee al
    arrancar). Con clave, la caja baja el zip por la API de GitHub, que sí la acepta.
 3. Comprueba que UN local actualiza con su clave.
 4. Recién ahí, pasa el repositorio a privado.

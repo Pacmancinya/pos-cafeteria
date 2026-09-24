@@ -30,7 +30,7 @@ La linea descarga la version publicada en main.
 
 OPCION 2: CON PENDRIVE (no requiere internet)
 
-En un computador con Kofe, usa la opcion 1 para obtener el script publicado.
+En un computador con Caja Clara, usa la opcion 1 para obtener el script publicado.
 
 
 Copia esta carpeta a un pendrive y llevala al local.

@@ -1,4 +1,8 @@
-# Punto de venta — cafetería
+# Caja Clara — punto de venta
+
+> Hasta la 2.30 se llamó **Kofe**. En el código quedan nombres internos con ese nombre
+> (`Kofe.py`, `%USERPROFILE%\.kofe`, `Kofe-respaldos`) y las cajas instaladas antes
+> de la 2.31 abren con `Kofe.exe`: no se cambian, porque las cajas dependen de ellos.
 
 > Caja registradora para una cafetería chilena. Registra ventas, cuadra el turno, y
 > **es el dueño de la carta**: las pantallas del local leen los precios de acá, así que
@@ -71,10 +75,10 @@ pos-cafeteria/
 │
 ├── Kofe.py                ← el lanzador: abre la ventana y levanta el servidor
 ├── despliegue/
-│   ├── construir_exe.py   ← arma Kofe.exe + la carpeta que se entrega (~56 MB)
+│   ├── construir_exe.py   ← arma CajaClara.exe, la carpeta que se entrega y la demo
 │   ├── empaquetar.py      ← arma el ZIP de ACTUALIZACIÓN (~170 KB)
 │   ├── ordenar_carpeta.py ← arma D:\Kofe, todo ordenado para una persona
-│   └── icono/             ← kofe.svg y el .ico que usa el ejecutable
+│   └── icono/             ← caja-clara.svg y el .ico que usa el ejecutable
 ├── tools/
 │   ├── demo/seed.py       ← carta de ejemplo (la misma de las pantallas)
 │   ├── demo/ventas.py     ← ventas de ejemplo para mostrar los informes
@@ -236,7 +240,7 @@ lo más vendido, historial por fecha, apertura y cierre de turno con arqueo por 
 y cierre imprimibles en 80 mm, respaldo automático de la base, exportación a Excel para el
 contador, importación de la carta desde Excel/CSV con previsualización, candado de red con PIN,
 actualización desde la misma caja, aplicación de Windows
-propia (`Kofe.exe`, sin instalar Python) y el endpoint de carta que alimenta las pantallas
+propia (`CajaClara.exe`, sin instalar Python) y el endpoint de carta que alimenta las pantallas
 del local. **175 tests en verde.**
 
 **No hace (a propósito, ver CONTRATO sección 6):** boleta electrónica, cobro de tarjetas,

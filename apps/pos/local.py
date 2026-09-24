@@ -19,12 +19,25 @@ import secrets
 
 from sqlmodel import Session, select
 
-from apps.pos.db.models import Ajuste
+from apps.pos.db.models import Ajuste, Producto, Venta
 from apps.pos.db.session import engine
 
-NOMBRE_POR_DEFECTO = "Kofe"
+NOMBRE_POR_DEFECTO = "Mi local"
 PIN_DE_FABRICA = "2468"
 CANALES = ("estable", "piloto")
+
+
+def conservar_nombre_instalado(base) -> None:
+    """Fija el antiguo defecto antes de que una caja usada pase a «Mi local»."""
+    with Session(base) as s:
+        guardado = s.get(Ajuste, "local_nombre")
+        if guardado and guardado.valor.strip():
+            return
+        usada = (s.exec(select(Producto.id).limit(1)).first() is not None
+                 or s.exec(select(Venta.id).limit(1)).first() is not None)
+        if usada:
+            # POS_LOCAL también podía identificar una instalación antigua.
+            guardar(s, local_nombre=os.getenv("POS_LOCAL", "").strip() or "Kofe")
 
 
 def _leer(*claves: str) -> dict:

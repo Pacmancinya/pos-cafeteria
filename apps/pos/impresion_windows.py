@@ -63,7 +63,7 @@ public static class ReciboCrudo {
         Comprobar(OpenPrinter(nombre, out h, IntPtr.Zero));
         bool documento = false;
         try {
-            var doc = new DOCINFO { pDocName = "Comprobante interno Kofe", pDataType = "RAW" };
+            var doc = new DOCINFO { pDocName = "Comprobante interno Caja Clara", pDataType = "RAW" };
             Comprobar(StartDocPrinter(h, 1, ref doc) != 0);
             documento = true;
             Comprobar(StartPagePrinter(h));
@@ -131,7 +131,7 @@ public static class ReciboCaja {
             doc.PrinterSettings.PrintToFile = false;
             doc.PrinterSettings.Duplex = Duplex.Simplex;
             doc.PrintController = new StandardPrintController();
-            doc.DocumentName = "Comprobante interno Kofe";
+            doc.DocumentName = "Comprobante interno Caja Clara";
             // PaperSize / Margins usan centésimas de pulgada, no milímetros.
             int ancho = (int)Math.Round(papel * 100.0 / 25.4);
             int alto = Math.Min(1102, Math.Max(160, lineas.Length * 15 + 32));

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Convierte kofe.svg en kofe.ico (el icono de la aplicación en Windows).
+"""Convierte caja-clara.svg en caja-clara.ico (el icono de la aplicación en Windows).
 
 No usa Pillow ni nada externo: un .ico es una cabecera de 6 bytes, una entrada
 de 16 bytes por tamaño, y los PNG pegados uno detrás del otro. Windows acepta
@@ -19,8 +19,8 @@ import sys
 import tempfile
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-SVG = os.path.join(AQUI, "kofe.svg")
-ICO = os.path.join(AQUI, "kofe.ico")
+SVG = os.path.join(AQUI, "caja-clara.svg")
+ICO = os.path.join(AQUI, "caja-clara.ico")
 
 # 256 para el explorador en vista grande, 16 para la barra de tareas y la
 # esquina de la ventana. Los del medio evitan que Windows escale a ojo.

@@ -1,6 +1,11 @@
-"""Arma Kofe.exe y el paquete que se le entrega al local.
+"""Arma CajaClara.exe, el paquete que se le entrega al local y el paquete de demostración.
 
     .venv/Scripts/python -m despliegue.construir_exe
+
+Hasta la 2.30 el producto se llamó Kofe y el ejecutable, Kofe.exe. Las cajas instaladas
+antes siguen con Kofe.exe para siempre (una actualización no cambia el exe); desde la 2.31
+las instalaciones nuevas traen CajaClara.exe. El guion de entrada sigue siendo `Kofe.py`:
+es un nombre interno y no lo ve nadie.
 
 ## La decisión de fondo
 
@@ -26,11 +31,14 @@ nada, y el .exe tomó el cambio.
 
 ## Lo que sale
 
-    despliegue/Kofe/            ← la carpeta que se le pasa al local (~45 MB)
-      Kofe.exe                  ← doble clic acá
-      _internal/                ← Python y las librerías. No se toca.
-      apps/ core/ tools/        ← el programa. Esto es lo que se actualiza.
+    despliegue/CajaClara/                 ← la carpeta que se le pasa al local (~45 MB)
+      CajaClara.exe                       ← doble clic acá
+      _internal/                          ← Python y las librerías. No se toca.
+      apps/ core/ tools/                  ← el programa. Esto es lo que se actualiza.
       docs/  LEEME.md
+    despliegue/CajaClara-instalar-vX.Y.zip   ← para un local de verdad
+    despliegue/CajaClara-demo-vX.Y.zip       ← la misma carpeta + MODO-DEMO.txt: se abre
+                                                con carta, usuarios y ventas de ejemplo
 """
 from __future__ import annotations
 
@@ -43,11 +51,15 @@ from datetime import datetime
 
 from core.config import APP_VERSION
 
+NOMBRE = "CajaClara"
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, "despliegue")
 TRABAJO = os.path.join(SALIDA, "_construccion")
-DESTINO = os.path.join(SALIDA, "Kofe")
-ICONO = os.path.join(SALIDA, "icono", "kofe.ico")
+DESTINO = os.path.join(SALIDA, NOMBRE)
+ICONO = os.path.join(SALIDA, "icono", "caja-clara.ico")
+# Lo que convierte una instalación en demostración (ver tools/demo/inicio.py).
+DEMO = os.path.join(SALIDA, "demo")
+ARCHIVOS_DEMO = ["MODO-DEMO.txt", "REINICIAR-DEMO.bat", "LEEME-DEMO.txt"]
 
 # Estas librerías van ADENTRO del .exe. PyInstaller no las encuentra solo
 # porque el código que las usa se carga desde archivos sueltos que él no mira.
@@ -77,7 +89,7 @@ def construir_exe() -> None:
                                  # se abre: más lento y más sospechoso para el
                                  # antivirus, sin ninguna ventaja acá
         "--windowed",            # sin ventana negra detrás
-        "--name", "Kofe",
+        "--name", NOMBRE,
         "--distpath", os.path.join(TRABAJO, "dist"),
         "--workpath", os.path.join(TRABAJO, "build"),
         "--specpath", TRABAJO,
@@ -125,7 +137,7 @@ def copiar_el_programa() -> int:
     if os.path.exists(ICONO):
         d = os.path.join(DESTINO, "despliegue", "icono")
         os.makedirs(d, exist_ok=True)
-        shutil.copy2(ICONO, os.path.join(d, "kofe.ico"))
+        shutil.copy2(ICONO, os.path.join(d, "caja-clara.ico"))
         copiados += 1
     return copiados
 
@@ -137,13 +149,16 @@ def pesar(carpeta: str) -> float:
     return total / (1024 * 1024)
 
 
-def comprimir() -> str:
-    destino = os.path.join(SALIDA, f"Kofe-instalar-v{APP_VERSION}.zip")
+def comprimir(nombre_zip: str, extras: list[str] | None = None) -> str:
+    """La carpeta del programa en un ZIP; `extras` (de despliegue/demo) van a su raíz."""
+    destino = os.path.join(SALIDA, nombre_zip)
     with zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
         for raiz, _, nombres in os.walk(DESTINO):
             for n in nombres:
                 p = os.path.join(raiz, n)
-                z.write(p, os.path.join("Kofe", os.path.relpath(p, DESTINO)))
+                z.write(p, os.path.join(NOMBRE, os.path.relpath(p, DESTINO)))
+        for n in extras or []:
+            z.write(os.path.join(DEMO, n), os.path.join(NOMBRE, n))
     return destino
 
 
@@ -153,22 +168,24 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    print("\n  Kofe · construyendo la aplicación\n")
+    print("\n  Caja Clara · construyendo la aplicación\n")
     if os.path.exists(TRABAJO):
         shutil.rmtree(TRABAJO, ignore_errors=True)
     if os.path.exists(DESTINO):
         shutil.rmtree(DESTINO, ignore_errors=True)
 
     construir_exe()
-    shutil.move(os.path.join(TRABAJO, "dist", "Kofe"), DESTINO)
+    shutil.move(os.path.join(TRABAJO, "dist", NOMBRE), DESTINO)
     n = copiar_el_programa()
     print(f"  {n} archivos del programa, sueltos al lado del .exe")
 
     shutil.rmtree(TRABAJO, ignore_errors=True)
-    zip_final = comprimir()
+    zip_final = comprimir(f"{NOMBRE}-instalar-v{APP_VERSION}.zip")
+    zip_demo = comprimir(f"{NOMBRE}-demo-v{APP_VERSION}.zip", ARCHIVOS_DEMO)
 
     print(f"\n  {DESTINO}  ·  {pesar(DESTINO):.0f} MB")
-    print(f"  {zip_final}  ·  {os.path.getsize(zip_final) / (1024*1024):.0f} MB")
+    for z in (zip_final, zip_demo):
+        print(f"  {z}  ·  {os.path.getsize(z) / (1024*1024):.0f} MB")
     print(f"  Armado el {datetime.now():%d-%m-%Y %H:%M}\n")
-    print("  Se entrega el ZIP. Se extrae y se abre Kofe.exe. No necesita")
-    print("  instalar Python ni nada más.\n")
+    print("  Se entrega el ZIP. Se extrae y se abre CajaClara.exe. No necesita")
+    print("  instalar Python ni nada más. El de demo NUNCA va a un local de verdad.\n")

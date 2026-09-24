@@ -1,11 +1,16 @@
-# CLAUDE.md — Kofe, el punto de venta
+# CLAUDE.md — Caja Clara, el punto de venta
 
 Guía para cualquier sesión de Claude que abra este repositorio. Léela entera antes de
 tocar algo: acá está lo que no sale en las pruebas y que ya rompió cajas de verdad.
 
-> **Nombre.** El producto se va a llamar **Caja Clara**. Hoy el programa, el repositorio y
-> los archivos todavía dicen «Kofe». El cambio de nombre se hace con cuidado: cada caja
-> instalada busca sus actualizaciones en una dirección fija (ver «Cómo llega una versión»).
+> **Nombre.** Desde la 2.31 el producto se llama **Caja Clara** (hasta la 2.30, Kofe). Quedan
+> con el nombre viejo, a propósito, los identificadores de los que dependen las cajas
+> instaladas: `Kofe.py`, `Kofe.exe` en las cajas instaladas antes de la 2.31 (las nuevas traen
+> `CajaClara.exe`), `%USERPROFILE%\.kofe`, `Kofe-respaldos`, la impresora «Kofe Tickets», el
+> mutex y el nombre del repositorio. **«Kofe» también es el nombre de un local real** (el
+> café piloto): en los televisores y en el nombre del local no se toca. El repositorio
+> todavía se llama pos-cafeteria: cambiar su dirección se planifica (ver «Cómo llega una
+> versión»).
 
 ---
 
@@ -18,7 +23,7 @@ actualiza sola desde este repositorio, que es **público** a propósito (las caj
 `version.json` sin clave; lo que protege las actualizaciones es la firma, no el secreto).
 
 Corre en el computador del local: un servidor FastAPI en `127.0.0.1:8090` y una ventana
-propia (`Kofe.exe`, pywebview). Los datos del local viven en su `pos.db` (SQLite) y no
+propia (`CajaClara.exe`, o `Kofe.exe` en las cajas de antes; pywebview). Los datos del local viven en su `pos.db` (SQLite) y no
 salen de ahí.
 
 ---
@@ -58,7 +63,7 @@ O doble clic en `INICIAR-POS.bat`. Pruebas, desde la raíz:
 ```
 
 Con las carpetas, no `pytest` pelado: en un equipo donde se armó el exe, pytest entra a
-`despliegue/Kofe/_internal` y se cae recogiendo las pruebas de las librerías empaquetadas.
+`despliegue/CajaClara/_internal` y se cae recogiendo las pruebas de las librerías empaquetadas.
 `conftest.py` fija una base de prueba **antes** de importar nada: las pruebas nunca tocan
 `pos.db`. Algunas pruebas corren el JavaScript de la pantalla con Node (`*.cjs` en
 `apps/pos/tests`); sin Node se saltan.
@@ -91,7 +96,7 @@ apps/pos/firma.py, vuelta.py   firma y «volver a la versión anterior» (solo b
 apps/pos/balanza.py     cobro de etiquetas de balanza
 apps/pos/impresion_windows.py  impresión por el driver de Windows y ESC/POS en crudo
 tools/                  demo, respaldo, restaurar, firmar_version, auditar pantallas, balanza
-despliegue/             construir Kofe.exe (construir_exe.py) y los zips
+despliegue/             construir CajaClara.exe (construir_exe.py), los zips y la demo
 docs/                   contrato, instalación, publicar actualizaciones, SII
 ```
 
@@ -130,11 +135,11 @@ Resumen de `docs/PUBLICAR-ACTUALIZACIONES.md` (léelo antes de publicar):
 
 Ninguna de estas sale en las pruebas.
 
-**Módulos dentro de Kofe.exe.** El exe trae solo los módulos de la biblioteca estándar que
+**Módulos dentro del exe.** El exe trae solo los módulos de la biblioteca estándar que
 PyInstaller vio en los imports de `Kofe.py`; el código de la caja vive afuera y nunca se
 analizó. Un import nuevo de la biblioteca estándar en `apps/`, `core/` o `tools/` que no
 esté en el exe hace caer la caja justo después de actualizarse. Antes de publicar, revisar
-con `.venv/Scripts/pyi-archive_viewer.exe -l -r -b despliegue/Kofe/Kofe.exe` (más los
+con `.venv/Scripts/pyi-archive_viewer.exe -l -r -b despliegue/CajaClara/CajaClara.exe` (más los
 `_internal/*.pyd` y `sys.builtin_module_names`: `math`, `time` y `sys` vienen incluidos).
 
 **Caché del navegador.** `main.py` reemplaza `__VERSION__` por el número de versión en los
@@ -165,7 +170,7 @@ con LF; la firma cubre lo guardado. Los zips para probar una actualización se a
 `RAW`, en página de códigos CP850 (tildes y ñ), a 32 columnas en rollo de 58 mm y 48 en
 80 mm, con corte al final. Solo recibe texto armado por el servidor.
 
-**Balanza.** Kofe cobra etiquetas de balanza en tres modos (ticket + total, PLU + peso,
+**Balanza.** La caja cobra etiquetas de balanza en tres modos (ticket + total, PLU + peso,
 PLU + precio). El precio lo decide siempre el servidor (`apps/pos/balanza.py`), nunca el
 navegador. Viene apagada: se prende por local en Ayuda → Ajustes → Balanza.
 
@@ -189,7 +194,7 @@ con `sqlite3.Connection.backup`, nunca copiando el archivo; en un `.bat` va
 
 ---
 
-## Kofe y Gesfact
+## Caja Clara y Gesfact
 
 Gesfact es otro producto, de otra empresa: usa las cámaras del local para ver cada venta
 y la cruza con las boletas. **En este repositorio no hay ninguna conexión implementada con
@@ -201,7 +206,7 @@ ahí; el conector completo está pendiente.
 
 ## Para entender el proyecto, en este orden
 
-1. `LEEME.md`: Kofe explicado para el dueño de un local, sin tecnicismos.
+1. `LEEME.md`: la caja explicada para el dueño de un local, sin tecnicismos.
 2. `README.md`: cómo arrancarlo, cómo está organizado y las trampas conocidas.
 3. `docs/CONTRATO.md`: el modelo de datos, la API y el porqué de cada decisión.
 4. `VERSIONES.md`: qué trajo cada versión; es la mejor historia del producto.

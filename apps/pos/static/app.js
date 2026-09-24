@@ -2515,9 +2515,10 @@ async function mostrarCandado(motivo) {
 }
 
 function pintarPrimerUsuario() {
-  // El nombre de fábrica no se sugiere: una cafetería nueva que deja «Kofe»
-  // escrito sale así en el comprobante y en sus televisores.
-  const sugerido = NOMBRE_DEL_LOCAL && NOMBRE_DEL_LOCAL !== "Kofe" ? NOMBRE_DEL_LOCAL : "";
+  // El nombre de fábrica no se sugiere: una cafetería nueva que deja «Mi local»
+  // (o «Kofe», el de fábrica hasta la 2.30) sale así en el comprobante y en sus televisores.
+  const sugerido = NOMBRE_DEL_LOCAL && !["Kofe", "Mi local"].includes(NOMBRE_DEL_LOCAL)
+    ? NOMBRE_DEL_LOCAL : "";
   $("#candadoCaja").innerHTML = `
     <h1>Una caja nueva</h1>
     <p>Todavía no hay nadie registrado. Primero los datos del local; después el

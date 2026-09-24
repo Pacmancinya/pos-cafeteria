@@ -7,7 +7,7 @@
 
 ## Lo que recibes
 
-Un archivo **`Kofe-instalar.zip`** de unos 29 MB. Adentro va la aplicación completa:
+Un archivo **`CajaClara-instalar-vX.Y.zip`** de unos 29 MB. Adentro va la aplicación completa:
 **no hay que instalar Python ni nada más**. Se extrae y se abre.
 
 ## Lo que necesitas
@@ -21,7 +21,7 @@ Un archivo **`Kofe-instalar.zip`** de unos 29 MB. Adentro va la aplicación comp
 
 ### 1. Desbloquea el ZIP ANTES de extraerlo
 
-Clic derecho sobre `Kofe-instalar.zip` → **Propiedades** → abajo de todo, si aparece una
+Clic derecho sobre `CajaClara-instalar-vX.Y.zip` → **Propiedades** → abajo de todo, si aparece una
 casilla que dice **Desbloquear**, márcala y dale **Aceptar**.
 
 > **Por qué.** Windows le pone una marca de "bajado de internet" a todo lo que sale de un
@@ -35,19 +35,19 @@ casilla que dice **Desbloquear**, márcala y dale **Aceptar**.
 
 ### 2. Descomprime el ZIP donde quieras dejarlo
 
-Clic derecho sobre `Kofe-instalar.zip` → **Extraer todo**. Recomendado: dejar la carpeta
-en el **Escritorio** o en `C:\Kofe`.
+Clic derecho sobre `CajaClara-instalar-vX.Y.zip` → **Extraer todo**. Recomendado: dejar la carpeta
+en el **Escritorio** o en `C:\CajaClara`.
 
 > ⚠️ **No lo dejes dentro del ZIP.** Si haces doble clic sin extraer, Windows lo abre en
 > una carpeta temporal y se pierde todo cada vez, ventas incluidas.
 
-### 3. Doble clic en `Kofe.exe`
+### 3. Doble clic en `CajaClara.exe`
 
 Se abre la aplicación, con su ventana y su icono de tacita. La primera vez demora unos
 segundos más porque prepara la base de datos.
 
 > Dentro de la carpeta hay otras cosas (`_internal`, `apps`, `core`…). **No se tocan.**
-> Lo único que se abre es `Kofe.exe`.
+> Lo único que se abre es `CajaClara.exe` (en las cajas instaladas antes de la 2.31 se llama `Kofe.exe`).
 
 ### 4. Si Windows muestra un aviso azul
 
@@ -98,7 +98,7 @@ Guárdala.
 ### Que se abra con un clic desde el Escritorio
 
 **No hay que hacer nada.** La primera vez que arranca, la caja deja sola un icono
-«Kofe - Punto de venta» en el escritorio, apuntando al lanzador que de verdad sirve en
+«Caja Clara» en el escritorio (en las cajas instaladas antes de la 2.31, «Kofe - Punto de venta»), apuntando al lanzador que de verdad sirve en
 ese equipo. Si el dueño lo borra, no se vuelve a crear: se entiende que no lo quiere.
 
 No lo crees a mano con **Enviar a → Escritorio**: eso apunta al archivo sobre el que
@@ -111,7 +111,7 @@ Para dejarlo en la barra de tareas: abre el programa, clic derecho en su icono d
 ### Que se abra solo al prender el computador
 
 1. Tecla **Windows + R**, escribe `shell:startup` y Enter.
-2. Se abre una carpeta. Copia ahí el icono «Kofe - Punto de venta» del escritorio
+2. Se abre una carpeta. Copia ahí el icono «Caja Clara» del escritorio
    (cópialo, no lo arrastres: arrastrar lo MUEVE y desaparece del escritorio).
 
 ### Que no se apague la pantalla
@@ -155,7 +155,7 @@ Las actualizaciones pesan unos **120 KB**, no 29 MB: solo viaja el programa, no 
 
 1. Cierra la aplicación.
 2. Descomprime el ZIP de actualización **encima** de la carpeta, aceptando reemplazar.
-3. Vuelve a abrir `Kofe.exe`.
+3. Vuelve a abrir `CajaClara.exe` (o `Kofe.exe`).
 
 **No se pierden las ventas, los usuarios ni los precios**: `pos.db` no viene en el ZIP, así
 que tu base se queda como está. Y si la versión nueva agrega campos, el programa se los
@@ -187,4 +187,4 @@ agrega solo a la base al arrancar.
 
 La carpeta también trae `INICIAR-POS.bat`, que hace lo mismo pero usando el Python del
 computador (y lo instala si falta). Sirve para probar cambios en el código sin volver a
-construir el ejecutable. Para el local no hace falta: `Kofe.exe` es más simple.
+construir el ejecutable. Para el local no hace falta: `CajaClara.exe` es más simple.
