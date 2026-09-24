@@ -1,6 +1,6 @@
 {
-  "version": "2.30",
-  "nombre": "Que se vea lo nuevo",
-  "novedades": "Arregla la 2.29, que en muchas cajas no se alcanzó a ver: la caja se actualizaba, el número subía, y la pantalla seguía siendo la anterior porque el navegador tenía guardada la versión vieja. Por eso el comprobante seguía saliendo a medias, sin cortar y con el diseño antiguo aunque la impresora estuviera bien configurada. Ahora cada archivo que carga la caja lleva el número de la versión, así que al actualizar siempre se ve lo nuevo, y eso vale también para la pantalla de entrar y para los televisores. Con esto, en una impresora de tickets el comprobante sale entero, se corta solo y se ve como un ticket de verdad: el nombre del local grande arriba, los precios a la derecha y el TOTAL destacado. Recuerda elegir el ancho del ROLLO (58 u 80 mm) en Configurar.",
-  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.30.zip"
+  "version": "2.31",
+  "nombre": "Se llama Caja Clara",
+  "novedades": "El programa cambia de nombre: desde ahora se llama Caja Clara. En tu caja no cambia nada de lo que importa: tus ventas, tu carta, tu gente y el nombre de tu local quedan exactamente igual, en la pantalla, en el comprobante y en los televisores. Los computadores que se instalen desde ahora traen el ícono nuevo, una boleta con un visto bueno. Además, la caja se puede abrir en modo demostración, con una carta y ventas de ejemplo, para mostrársela a alguien sin tocar un local de verdad.",
+  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.31.zip"
 }
