@@ -1,8 +1,12 @@
 # Boleta electrónica — diseño de implementación
 
-> **Decisión del 23-09-2026: software propio, sin proveedor externo de emisión.**
-> `[ROADMAP]`: diseñado, todavía no construido ni certificado. Este documento guía la
-> implementación y supera el camino con proveedor descrito en [SII.md](SII.md).
+> **Etapa 2, para después.** El mismo 23-09-2026 se decidió partir **con un proveedor**
+> (la caja le manda la venta y el proveedor timbra, firma y envía) y dejar este diseño
+> propio para más adelante. Mientras tanto, lo que se construya para el proveedor
+> (documento por venta, cola, estados, notas de crédito, opción del voucher) tiene que
+> servir igual para esta etapa: el proveedor es una pieza que se cambia, no el centro.
+>
+> `[ROADMAP]`: diseñado, todavía no construido ni certificado.
 >
 > Base: investigación técnica de fase 0. Las decisiones de diseño se expresan como lo
 > que se construirá; no son funciones disponibles hoy. Los contratos externos y las

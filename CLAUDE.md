@@ -208,15 +208,17 @@ ahí; el conector completo está pendiente.
 5. `docs/PUBLICAR-ACTUALIZACIONES.md`: cómo llega una versión a las cajas.
 6. `docs/INSTALACION.md`: cómo se instala en un local.
 7. `docs/SII.md`: lo que falta para emitir boleta electrónica.
-8. `docs/BOLETA-ELECTRONICA.md`: diseño de emisión con software propio, sin proveedor.
+8. `docs/BOLETA-ETAPA1-LIOREN.md` y `docs/BOLETA-ELECTRONICA.md`: la boleta, primero con
+   Lioren y después con software propio.
 
 ---
 
 ## Pendiente técnico
 
 - **Boleta electrónica (DTE 39).** Es lo más importante que falta: hoy el comprobante dice
-  «NO ES BOLETA». Se hará con software propio, sin proveedor; se emite sin internet y
-  queda en cola el envío. Ver `docs/BOLETA-ELECTRONICA.md`.
+  «NO ES BOLETA». Primera etapa: con Lioren, la caja timbra y Lioren firma y envía
+  (`docs/BOLETA-ETAPA1-LIOREN.md`). Segunda etapa: software propio, diseñado en
+  `docs/BOLETA-ELECTRONICA.md`. Ver también `docs/SII.md`.
 - **El cambio de nombre** a Caja Clara en el programa, el instalador, el icono y los
   documentos, sin cortar las actualizaciones.
 - **El repositorio a privado o a una organización**, siguiendo el procedimiento de arriba.

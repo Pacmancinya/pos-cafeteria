@@ -1,9 +1,10 @@
 # Conectar la caja con el SII — guía
 
-> **Decisión del 23-09-2026:** la boleta se emitirá con **software propio, sin proveedor**.
-> El diseño vigente está en [docs/BOLETA-ELECTRONICA.md](BOLETA-ELECTRONICA.md).
-> Esta guía se conserva como antecedente; sus indicaciones sobre proveedor, emisión
-> sin internet y timbre impreso quedan superadas por ese diseño.
+> **Decisión del 23-09-2026:** la boleta parte **con Lioren** ([BOLETA-ETAPA1-LIOREN.md](BOLETA-ETAPA1-LIOREN.md), el camino b
+> de esta guía) y más adelante pasa a **software propio**, cuyo diseño está en
+> [docs/BOLETA-ELECTRONICA.md](BOLETA-ELECTRONICA.md). Desde el 01-01-2026 el timbre ya
+> no se imprime en la boleta (Res. Ex. SII 207 de 2025): lo que esta guía dice del timbre
+> impreso quedó atrás.
 
 > Para emitir **boleta electrónica** desde el punto de venta.
 > Escrita para el dueño del local; la parte técnica va al final.
@@ -158,7 +159,7 @@ Se agrega sin migración manual: `create_all` crea las tablas nuevas y
 
 **Lo que NO se va a hacer acá:**
 
-> **Decisión superada el 23-09-2026:** se desarrollará la emisión y firma propias para controlar el flujo local sin depender de un proveedor; los secretos se protegerán fuera del árbol del programa. Ver [el diseño vigente](BOLETA-ELECTRONICA.md).
+> **Por ahora sigue vigente:** la primera etapa usa un proveedor. Firmar nosotros mismos es la etapa 2, diseñada en [BOLETA-ELECTRONICA.md](BOLETA-ELECTRONICA.md).
 
 - **Firmar los DTE nosotros mismos.** Implica manejar el certificado, el
   timbraje, el envío al SII, los reintentos y el seguimiento de estado. Es un
