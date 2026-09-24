@@ -1,0 +1,7 @@
+Llaves SOLO para las pruebas de apps/pos/tests/test_fiscal_ted.py.
+
+Se hicieron con «openssl genrsa -traditional 1024» el 23-09-2026 y no corresponden a
+ningún local, CAF ni certificado real: con ellas no se puede timbrar nada que el SII
+acepte. Están acá para que las pruebas del timbre (TED) sean repetibles.
+
+Un CAF de verdad trae la llave privada de un local: nunca va al repositorio.
