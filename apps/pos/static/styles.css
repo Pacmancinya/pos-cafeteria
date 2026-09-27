@@ -1,0 +1,1544 @@
+/* ==========================================================
+   Punto de venta — hoja de estilos
+   UI clara a propósito: la caja se usa 8 horas al día, muchas veces con luz
+   de vitrina entrando. El menú del local es oscuro; esto no.
+   ========================================================== */
+:root{
+  --papel:#FBF5EC;
+  --tarjeta:#FFFFFF;
+  --tinta:#2A150B;
+  --suave:#7A5B45;
+  --linea:#E7D9C7;
+  --clay:#C9552B;
+  --clay-osc:#A03F1C;
+  --verde:#1F8A4C;
+  --rojo:#B3261E;
+  --sombra:0 1px 2px rgba(42,21,11,.06), 0 6px 18px rgba(42,21,11,.07);
+  --f:"Segoe UI",system-ui,-apple-system,sans-serif;
+
+  /* Tamaños de lo que se toca con el dedo. Van como token y no como
+     padding porque con padding el alto real depende del font-size del
+     navegador: así había once alturas distintas sin que nadie lo decidiera. */
+  --toque:48px;        /* mínimo cómodo para un dedo */
+  --toque-alto:56px;   /* lo que se toca todo el día */
+  --toque-rey:64px;    /* cobrar, medios de pago, +/− del pedido */
+  --tecla:64px;        /* teclado numérico en pantalla */
+  --alto-teclado:0px;  /* lo sube teclado.js cuando se abre */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--f);background:var(--papel);color:var(--tinta);
+  display:flex;flex-direction:column;overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+
+/* ---------- barra superior ---------- */
+.barra{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  padding:10px 16px;background:var(--tarjeta);border-bottom:1px solid var(--linea);
+  flex:none;
+}
+.barra__marca{display:flex;align-items:center;gap:9px;font-size:16px}
+/* Modo demo (MODO-DEMO.txt): que nadie confunda la caja de muestra con una de verdad. */
+.marca-demo{font-size:11px;font-weight:800;letter-spacing:.08em;padding:2px 7px;border-radius:6px;background:#F5A524;color:#1F1300;white-space:nowrap}
+.punto{width:11px;height:11px;border-radius:50%;background:var(--verde);flex:none}
+.punto.off{background:#C0392B}
+.tabs{display:flex;gap:6px}
+.tab{
+  border:1px solid transparent;background:transparent;color:var(--suave);
+  font-size:15px;font-weight:600;padding:9px 18px;border-radius:9px;
+}
+.tab:hover{background:#F3E9DB;color:var(--tinta)}
+.tab.is-on{background:var(--clay);color:#fff}
+.tab[hidden]{display:none}
+.barra__der{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--suave)}
+.turno{cursor:pointer;padding:6px 12px;border-radius:8px;border:1px solid var(--linea);background:transparent;color:inherit}
+.turno:hover{background:#F3E9DB}
+.reloj{font-variant-numeric:tabular-nums;font-weight:600;color:var(--tinta)}
+.version{
+  cursor:pointer;font-size:12.5px;color:var(--suave);padding:5px 9px;
+  border-radius:7px;border:1px solid transparent;
+}
+.version:hover{background:#F3E9DB;border-color:var(--linea);color:var(--tinta)}
+.version.hay-nueva{
+  background:#EAF6EF;border-color:#BFE3CE;color:#14603A;font-weight:700;
+}
+.novedades{
+  background:var(--papel);border:1px solid var(--linea);border-radius:11px;
+  padding:13px 15px;margin-bottom:14px;font-size:14px;line-height:1.6;
+  max-height:220px;overflow:auto;
+}
+
+/* ---------- vistas ---------- */
+.vista{display:none;flex:1;min-height:0}
+.vista.is-on{display:flex}
+/* Las vistas que NO son la caja se desplazan enteras. Ojo: hay que agregar
+   acá cada vista nueva. Si falta, su contenido se corta abajo y no hay forma
+   de llegar al resto — el <body> tiene overflow:hidden a propósito, para que
+   la pantalla de venta no se mueva. Pasó con Bodega y con Ayuda. */
+.vista[data-vista="dia"],.vista[data-vista="carta"],
+.vista[data-vista="inventario"],.vista[data-vista="guias"]{overflow:auto;display:none}
+.vista[data-vista="dia"].is-on,.vista[data-vista="carta"].is-on,
+.vista[data-vista="inventario"].is-on,.vista[data-vista="guias"].is-on{display:block}
+.panel{padding:18px;max-width:1200px;margin:0 auto}
+
+/* ---------- rail de categorías ---------- */
+.rail{
+  width:186px;flex:none;background:var(--tarjeta);border-right:1px solid var(--linea);
+  padding:12px 10px;display:flex;flex-direction:column;gap:4px;overflow:auto;
+}
+.rail__cat{
+  display:flex;align-items:center;gap:10px;width:100%;
+  border:0;background:transparent;border-radius:11px;padding:12px 12px;
+  font:600 15px/1.25 var(--f);color:var(--suave);text-align:left;cursor:pointer;
+  position:relative;
+}
+.rail__cat:hover{background:#F6EFE4;color:var(--tinta)}
+.rail__cat.is-on{
+  background:color-mix(in srgb, var(--c) 13%, white);
+  color:var(--tinta);
+}
+.rail__cat.is-on::before{
+  content:"";position:absolute;left:0;top:9px;bottom:9px;width:4px;
+  border-radius:0 4px 4px 0;background:var(--c);
+}
+.rail__punto{width:11px;height:11px;border-radius:50%;background:var(--c);flex:none}
+.rail__n{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--suave);opacity:.75}
+
+/* ---------- productos ---------- */
+.productos{flex:1;display:flex;flex-direction:column;min-width:0;padding:14px 16px}
+
+.buscador{position:relative;margin-bottom:14px;flex:none}
+.buscador input{
+  width:100%;font-family:inherit;font-size:16px;padding:13px 42px 13px 44px;
+  border:1px solid var(--linea);border-radius:12px;background:var(--tarjeta);
+  color:var(--tinta);box-shadow:var(--sombra);
+}
+.buscador input::placeholder{color:#B0A08E}
+.buscador input:focus{outline:2px solid var(--clay);outline-offset:1px;border-color:transparent}
+.buscador__lupa{
+  position:absolute;left:15px;top:50%;transform:translateY(-50%);
+  width:19px;height:19px;fill:none;stroke:#B0A08E;stroke-width:2;stroke-linecap:round;
+  pointer-events:none;
+}
+.buscador__x{
+  position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  width:30px;height:30px;border:0;border-radius:50%;background:#EFE4D5;
+  color:var(--suave);font-size:14px;line-height:1;cursor:pointer;
+}
+.buscador__x:hover{background:#E3D4C0;color:var(--tinta)}
+
+.grilla{
+  flex:1;overflow:auto;display:grid;gap:12px;align-content:start;
+  grid-template-columns:repeat(auto-fill,minmax(158px,1fr));
+  /* EL ALTO DE LA FILA SE DEFINE ACÁ, no lo pone el azulejo. Suena a detalle y
+     no lo es: así estaba antes y los productos se veían encimados unos sobre
+     otros.
+     El azulejo pedía ser cuadrado (`aspect-ratio:1`) y la fila se dejaba llevar
+     por su contenido. Pero como las columnas son flexibles (`1fr`), cuando el
+     navegador mide la fila todavía no sabe cuánto va a medir el azulejo de
+     ancho — así que ignora el cuadrado y mide solo el texto: 42 px. Después
+     pintaba el azulejo de 193 px dentro de una fila de 42 y el dibujo se
+     DESBORDABA sobre la fila de abajo.
+     Con dos o tres productos casi no se notaba; con 30 en una categoría se veían
+     todos superpuestos, y así lo reportó el local. Con la fila definida acá el
+     azulejo la llena (`height:100%`) y no hay nada que adivinar. */
+  grid-auto-rows:minmax(158px,auto);
+}
+.prod{
+  height:100%;position:relative;overflow:hidden;
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:16px;
+  padding:0;box-shadow:var(--sombra);cursor:pointer;
+  display:flex;flex-direction:column;
+  transition:transform .07s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.prod::before{                       /* el color de la categoría, apenas insinuado */
+  content:"";position:absolute;inset:0;
+  background:color-mix(in srgb, var(--c) 9%, transparent);
+}
+.prod:hover{border-color:var(--c);box-shadow:0 4px 16px rgba(42,21,11,.12)}
+.prod:active{transform:scale(.96)}
+.prod__art{
+  position:relative;flex:1;display:grid;place-items:center;min-height:0;padding:6px 6px 0;
+}
+.prod__art svg{width:100%;height:100%;max-height:none;display:block}
+.prod__pie{position:relative;padding:0 11px 11px;text-align:left}
+.prod__nombre{
+  /* Dos líneas antes de cortar: "Croissant de almendras" tiene que leerse
+     entero, si no el cajero duda. */
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  font-size:14px;font-weight:600;line-height:1.2;color:var(--tinta);
+  overflow:hidden;
+}
+.prod__precio{
+  display:block;font-size:16px;font-weight:700;color:var(--c);
+  font-variant-numeric:tabular-nums;margin-top:2px;
+}
+.prod__cat{
+  display:block;font-size:11px;font-weight:600;color:var(--suave);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:1px;
+}
+.prod__tag{
+  position:absolute;top:8px;right:8px;z-index:1;
+  background:var(--c);color:#fff;font-size:10px;font-weight:700;
+  letter-spacing:.04em;text-transform:uppercase;padding:3px 7px;border-radius:99px;
+}
+.sin-resultados{
+  grid-column:1/-1;color:var(--suave);font-size:15px;text-align:center;
+  padding:44px 16px;line-height:1.6;
+}
+
+/* ---------- pedido ---------- */
+.pedido{
+  width:380px;flex:none;background:var(--tarjeta);border-left:1px solid var(--linea);
+  display:flex;flex-direction:column;
+}
+.pedido__top{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px;border-bottom:1px solid var(--linea);
+}
+.pedido__top h2{font-size:17px}
+.lineas{flex:1;overflow:auto;padding:8px 10px}
+.vacio{color:var(--suave);font-size:14px;text-align:center;padding:34px 12px;line-height:1.5}
+.linea{
+  display:grid;grid-template-columns:minmax(0,1fr) auto var(--toque);gap:10px;align-items:center;
+  padding:9px 6px;border-bottom:1px solid #F1E7DA;
+}
+.linea__txt{grid-column:1 / 3;grid-row:1;min-width:0;overflow-wrap:anywhere}
+.linea .cant{grid-column:1;grid-row:2}
+.linea .linea__sub{grid-column:2 / 4;grid-row:2}
+.linea__quitar{
+  grid-column:3;grid-row:1;width:var(--toque);height:var(--toque);
+  border:1px solid var(--linea);border-radius:10px;background:var(--papel);
+  color:var(--suave);font-size:20px;touch-action:manipulation;
+}
+.linea__quitar:hover,.linea__quitar:active{color:#A52A23;background:#FBECEA}
+.linea__txt b{display:block;font-size:14.5px}
+.linea__txt small{color:var(--suave);font-size:12.5px;font-variant-numeric:tabular-nums}
+.cant{display:flex;align-items:center;gap:2px}
+.cant button{
+  width:30px;height:30px;border-radius:8px;border:1px solid var(--linea);
+  background:var(--papel);font-size:17px;line-height:1;color:var(--tinta);
+}
+.cant button:hover{background:#F1E4D2}
+.cant span{min-width:26px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.linea__sub{font-weight:700;font-variant-numeric:tabular-nums;min-width:66px;text-align:right}
+.pedido__pie{padding:12px 16px 16px;border-top:1px solid var(--linea)}
+.total{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.total span{font-size:15px;color:var(--suave)}
+.total b{font-size:32px;font-variant-numeric:tabular-nums}
+
+/* ---------- botones ---------- */
+.btn{border:1px solid var(--linea);background:var(--tarjeta);color:var(--tinta);
+  font-size:15px;font-weight:600;padding:11px 18px;border-radius:10px}
+.btn:hover{background:#F3E9DB}
+.btn--fantasma{border-color:transparent;color:var(--suave);font-weight:500}
+.btn--cobrar{
+  width:100%;background:var(--verde);border-color:var(--verde);color:#fff;
+  font-size:19px;font-weight:700;padding:16px;
+}
+.btn--cobrar:hover{background:#1a7440}
+.btn--cobrar:disabled{background:#D8CFC3;border-color:#D8CFC3;cursor:not-allowed}
+.btn--peligro{color:var(--rojo);border-color:#E8C9C6}
+.btn--peligro:hover{background:#FBECEA}
+
+/* ---------- diálogos ---------- */
+/* El que hace scroll es la CAPA, no el diálogo.
+   Antes el diálogo se centraba con place-items:center y se le ponía tope de
+   alto: cuando el contenido no cabía, un elemento centrado que desborda se
+   corta ARRIBA y abajo por igual, y no hay forma de llegar al pie. Así se
+   perdía de vista el botón de confirmar en el cobro.
+   Con la capa desplazable y margin:auto en el diálogo, uno solo se centra
+   cuando cabe y crece hacia abajo cuando no. */
+.capa{
+  position:fixed;inset:0;z-index:20;display:none;overflow-y:auto;
+  background:rgba(42,21,11,.42);padding:20px;
+  overscroll-behavior:contain;
+}
+.capa.is-on{display:flex;justify-content:center}
+.dialogo{
+  background:var(--tarjeta);border-radius:16px;padding:22px 24px;width:min(460px,100%);
+  box-shadow:0 24px 60px rgba(42,21,11,.3);
+  margin:auto;                 /* centrado si cabe, pegado arriba si no */
+  height:fit-content;
+}
+.dialogo h2{font-size:21px;margin-bottom:16px}
+.dialogo__pie{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.medios{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.medio{
+  border:1.5px solid var(--linea);background:var(--tarjeta);color:var(--tinta);
+  font-size:15px;font-weight:600;padding:14px;border-radius:11px;
+}
+.medio.is-on{border-color:var(--verde);background:#EAF6EF;color:#14603A}
+.campo{display:block;margin-bottom:14px}
+.campo span{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--suave);margin-bottom:5px}
+.campo input,.campo select{
+  width:100%;font-family:inherit;font-size:18px;padding:11px 13px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--papel);color:var(--tinta);
+  font-variant-numeric:tabular-nums;
+}
+.campo input:focus,.campo select:focus{outline:2px solid var(--clay);outline-offset:1px}
+.rapidos{display:flex;gap:7px;flex-wrap:wrap;margin:-6px 0 14px}
+.rapidos button{
+  border:1px solid var(--linea);background:var(--papel);border-radius:8px;
+  padding:8px 13px;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;
+}
+.rapidos button:hover{background:#F1E4D2}
+.vuelto{
+  background:#EAF6EF;border:1px solid #BFE3CE;border-radius:11px;padding:12px 14px;
+  margin-bottom:14px;font-size:15px;display:none;
+}
+.vuelto.is-on{display:block}
+.vuelto b{font-size:26px;display:block;margin-top:3px;font-variant-numeric:tabular-nums;color:#14603A}
+.vuelto.falta{background:#FBECEA;border-color:#E8C9C6}
+.vuelto.falta b{color:var(--rojo)}
+
+/* ---------- arqueo de caja ---------- */
+.dialogo--ancho{width:min(560px,100%)}
+.arqueo{border:1px solid var(--linea);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.arqueo__fila{
+  display:grid;grid-template-columns:82px 1fr 88px;gap:10px;align-items:center;
+  padding:7px 12px;border-bottom:1px solid #F3EBE0;
+}
+.arqueo__fila:last-child{border-bottom:0}
+.arqueo__fila.tiene{background:#FBF5EC}
+.arqueo__valor{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+.arqueo__valor small{display:block;font-size:10.5px;font-weight:600;color:var(--suave);
+  text-transform:uppercase;letter-spacing:.05em}
+.arqueo__cant{display:flex;align-items:center;gap:5px}
+.arqueo__cant button{
+  width:34px;height:34px;flex:none;border-radius:9px;border:1px solid var(--linea);
+  background:var(--papel);font-size:19px;line-height:1;color:var(--tinta);cursor:pointer;
+}
+.arqueo__cant button:hover{background:#F1E4D2}
+.arqueo__cant input{
+  width:100%;min-width:0;text-align:center;font-family:inherit;font-size:17px;
+  font-weight:600;padding:7px 4px;border:1px solid var(--linea);border-radius:9px;
+  background:var(--tarjeta);color:var(--tinta);font-variant-numeric:tabular-nums;
+}
+.arqueo__cant input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.arqueo__sub{
+  text-align:right;font-variant-numeric:tabular-nums;font-size:15px;color:var(--suave);
+}
+.arqueo__fila.tiene .arqueo__sub{color:var(--tinta);font-weight:600}
+.arqueo__total{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:13px 14px;background:var(--tinta);color:#FFF8EF;border-radius:12px;margin-bottom:14px;
+}
+.arqueo__total span{font-size:14px;opacity:.75}
+.arqueo__total b{font-size:27px;font-variant-numeric:tabular-nums}
+.cuadre{border-radius:12px;padding:14px 16px;margin-bottom:14px;border:1px solid}
+.cuadre--ok{background:#EAF6EF;border-color:#BFE3CE}
+.cuadre--mal{background:#FBECEA;border-color:#E8C9C6}
+.cuadre__linea{display:flex;justify-content:space-between;font-size:14.5px;padding:2px 0;
+  font-variant-numeric:tabular-nums}
+.cuadre__dif{border-top:1px solid rgba(42,21,11,.15);margin-top:7px;padding-top:9px;
+  font-size:19px;font-weight:700}
+.cuadre--ok .cuadre__dif{color:#14603A}
+.cuadre--mal .cuadre__dif{color:var(--rojo)}
+.medios-turno{font-size:13.5px;color:var(--suave);margin-bottom:14px;line-height:1.7}
+.medios-turno b{color:var(--tinta);font-variant-numeric:tabular-nums}
+
+/* ---------- el día ---------- */
+.barra-dia{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
+  flex-wrap:wrap;margin-bottom:18px;
+}
+.barra-dia__acc{display:flex;gap:8px;flex-wrap:wrap}
+.campo--linea{margin:0}
+.campo--linea input,.campo--linea select{font-size:15px;padding:9px 12px;min-width:170px}
+/* .campo es display:block, que le gana al atributo `hidden`. Sin esta línea el
+   selector de turno queda a la vista en Día, Semana y Mes, donde no significa nada. */
+.campo[hidden]{display:none}
+.periodos{display:flex;gap:4px;background:#F3E9DB;padding:4px;border-radius:10px}
+.periodo{border:0;background:transparent;color:var(--suave);font-size:14px;font-weight:600;padding:8px 15px;border-radius:7px}
+.periodo.is-on{background:var(--tarjeta);color:var(--tinta);box-shadow:var(--sombra)}
+.ok{color:var(--verde);font-weight:600}
+.mal{color:var(--rojo);font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+.kpi{background:var(--tarjeta);border:1px solid var(--linea);border-radius:13px;padding:14px 16px;box-shadow:var(--sombra)}
+.kpi span{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--suave);margin-bottom:6px}
+.kpi b{font-size:25px;font-variant-numeric:tabular-nums}
+.kpi small{display:block;color:var(--suave);font-size:12.5px;margin-top:3px}
+/* minmax(0,…) y no 1fr a secas: una columna 1fr no baja del ancho mínimo de lo
+   que tiene adentro, y la tabla «Cierres de caja» (757 px, con Dif. y Ver/Imprimir)
+   empujaba la columna de la derecha 110 px fuera de la pantalla. Pero apretarla
+   dentro de una columna de 500 px escondía justo el descuadre. Por eso, más abajo
+   (PANTALLAS CHICAS), las dos tablas van una bajo la otra hasta 1500 px. */
+.dos-col{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:start}
+.dos-col h3{font-size:16px;margin-bottom:10px}
+.tabla-wrap{background:var(--tarjeta);border:1px solid var(--linea);border-radius:13px;overflow:auto;box-shadow:var(--sombra)}
+.tabla{width:100%;border-collapse:collapse;font-size:14px}
+.tabla th{
+  text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--suave);padding:10px 12px;border-bottom:1px solid var(--linea);white-space:nowrap;
+}
+.tabla td{padding:9px 12px;border-bottom:1px solid #F3EBE0;vertical-align:middle}
+.tabla tr:last-child td{border-bottom:0}
+.tabla .num{text-align:right;font-variant-numeric:tabular-nums}
+.anulada{color:var(--suave);text-decoration:line-through}
+.pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:#F3E9DB;color:var(--suave)}
+
+/* ---------- carta ---------- */
+/* Lo que se ve en El día cuando no hay turno que mirar. Es un cartel a
+   propósito y no un montón de ceros: un "$0" al lado de "Ticket promedio" se
+   lee como un dato, y no lo es. */
+.sin-turno{background:var(--tarjeta);border:1px dashed var(--linea);border-radius:13px;
+  padding:26px 20px;text-align:center;color:var(--suave);margin-bottom:22px}
+.sin-turno b{display:block;color:var(--tinta);font-size:17px;margin-bottom:5px}
+.ayuda{color:var(--suave);font-size:14px;line-height:1.55;margin-bottom:18px;max-width:70ch}
+.ayuda code{background:#F3E9DB;padding:1px 5px;border-radius:4px;font-size:13px}
+.grupo{margin-bottom:26px}
+.grupo h3{font-size:17px}
+.grupo__top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.grupo__top{flex-wrap:wrap}
+.grupo__plegar{
+  display:flex;align-items:center;gap:10px;min-height:var(--toque);padding:0 10px;
+  border:0;border-radius:10px;background:transparent;color:var(--tinta);
+  font:inherit;text-align:left;touch-action:manipulation;
+}
+.grupo__plegar:hover{background:#F3E9DB}
+.grupo__flecha{display:inline-block}
+.grupo__plegar[aria-expanded="false"] .grupo__flecha{transform:rotate(-90deg)}
+.grupo[hidden],.grupo__productos[hidden],.fila[hidden]{display:none}
+#buscarCarta::-webkit-search-cancel-button{display:none}
+.grupo__acc{display:flex;gap:8px;flex-wrap:wrap}
+.grupo__editar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
+.grupo__editar>input[type=text]{
+  flex:1;min-width:140px;font-family:inherit;padding:8px 12px;
+  border:1px solid var(--linea);border-radius:9px;background:var(--papel);color:var(--tinta);
+}
+.grupo__orden{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--suave)}
+.grupo__orden input{
+  width:56px;font-family:inherit;padding:8px 10px;text-align:center;
+  border:1px solid var(--linea);border-radius:9px;background:var(--papel);color:var(--tinta);
+}
+.fila__acc{display:flex;gap:6px}
+.fila{
+  display:grid;grid-template-columns:1fr 130px 110px auto;gap:10px;align-items:center;
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:11px;
+  padding:10px 12px;margin-bottom:8px;
+}
+.fila input[type="text"],.fila input[type="number"]{
+  width:100%;font-family:inherit;font-size:15px;padding:8px 10px;
+  border:1px solid var(--linea);border-radius:8px;background:var(--papel);color:var(--tinta);
+}
+.fila input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.fila .num input{text-align:right;font-variant-numeric:tabular-nums}
+.marca{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--suave);white-space:nowrap}
+.inactivo{opacity:.5}
+
+/* ---------- conectar las pantallas ---------- */
+.conectar{
+  background:#F3E9DB;border:1px solid var(--linea);border-radius:12px;
+  padding:14px 16px;margin-bottom:22px;font-size:14px;line-height:1.55;color:var(--suave);
+}
+.conectar b{color:var(--tinta)}
+.conectar[hidden]{display:none}
+.conectar summary{cursor:pointer;color:var(--tinta);font-weight:700;min-height:var(--toque);align-content:center}
+.conectar[open] summary{margin-bottom:10px}
+.conectar__url{
+  display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap;
+}
+.conectar code{
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:8px;
+  padding:8px 12px;font-size:14px;color:var(--tinta);user-select:all;
+}
+
+/* ---------- aviso flotante ---------- */
+/* z-index 85 y no 40: en 40 quedaba DEBAJO del candado y de la puerta de la
+   caja (los dos en 80), que tienen fondo opaco. O sea que justo donde más se
+   necesita —"PIN incorrecto", "no se pudo abrir la caja"— el mensaje se
+   escribía atrás y nadie lo leía nunca. Debajo del teclado en pantalla (90) sí:
+   ese ocupa el borde de abajo, que es donde se para el aviso. */
+.aviso{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);z-index:85;
+  background:var(--tinta);color:#FFF8EF;padding:13px 22px;border-radius:99px;
+  font-size:15px;font-weight:600;opacity:0;pointer-events:none;
+  transition:opacity .2s ease,transform .2s ease;box-shadow:0 14px 34px rgba(42,21,11,.35);
+}
+.aviso.is-on{opacity:1;transform:translate(-50%,0)}
+.aviso.malo{background:var(--rojo)}
+
+/* 760 y no 1100: con 1100 un monitor de 1024x768, o un notebook de 1366x768 con
+   Windows al 125% (1093 px útiles), se trataban como celular. La barra se doblaba,
+   los productos salían gigantes y el pedido con el botón Cobrar quedaba ABAJO de
+   todos los productos, fuera de la pantalla. Así lo vio el dueño en un local.
+   Esas pantallas usan las tres columnas apretadas del final de esta hoja. */
+@media (max-width:760px){
+  .rail{
+    width:100%;flex-direction:row;overflow-x:auto;padding:9px 10px;
+    border-right:0;border-bottom:1px solid var(--linea);
+  }
+  .rail__cat{width:auto;flex:none;padding:9px 14px;white-space:nowrap}
+  .rail__cat.is-on::before{display:none}
+  .rail__n{display:none}
+  .vista[data-vista="caja"]{flex-wrap:wrap}
+  .productos{flex:1 1 100%;order:2}
+  .pedido{order:3}
+}
+@media (max-width:900px){
+  .pedido{width:320px}
+  .dos-col{grid-template-columns:1fr}
+  .fila{grid-template-columns:1fr 110px;grid-auto-rows:auto}
+}
+
+/* ---------- teclado numérico en pantalla ---------- */
+.teclado{
+  /* Por encima de TODO, candado incluido (z-index 80): el teclado es la
+     superficie con la que se escribe, si algo lo tapa no sirve de nada. */
+  position:fixed;left:0;right:0;bottom:0;z-index:90;
+  background:var(--tarjeta);border-top:1px solid var(--linea);
+  box-shadow:0 -12px 34px rgba(42,21,11,.16);
+  padding:6px 12px 14px;touch-action:manipulation;user-select:none;
+}
+.teclado[hidden]{display:none}
+.teclado__caja{max-width:560px;margin:0 auto}
+.teclado__cab{display:flex;align-items:center;gap:12px;height:48px;padding:0 4px}
+.teclado__tit{
+  font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.teclado__eco{
+  margin-left:auto;font-size:30px;font-weight:700;color:var(--tinta);
+  font-variant-numeric:tabular-nums;
+}
+.teclado__grilla{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:var(--tecla);gap:8px}
+.teclado__t{
+  border:1px solid var(--linea);background:var(--papel);color:var(--tinta);
+  border-radius:13px;font:700 26px/1 var(--f);font-variant-numeric:tabular-nums;
+  display:grid;place-items:center;cursor:pointer;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .05s ease,background .1s ease;
+}
+.teclado__t:active{transform:scale(.94);background:#EBDCC7}
+.teclado__t--acc{font-size:20px;font-weight:600;color:var(--suave)}
+.teclado__t--ok{grid-row:span 2;background:var(--verde);border-color:var(--verde);
+  color:#fff;font-size:20px}
+.teclado__t--ok:active{background:#166634}
+.teclado__t--ancho{grid-column:span 2}
+.teclado__t--triple{grid-column:span 3}
+
+/* Centrado, solo para el PIN: ahí no hay nada detrás que mirar. */
+.teclado--centro{
+  inset:0;display:grid;place-items:center;padding:20px;
+  background:rgba(42,21,11,.42);border-top:0;box-shadow:none;
+}
+.teclado--centro .teclado__caja{
+  width:min(420px,100%);background:var(--tarjeta);border-radius:18px;
+  padding:10px 18px 20px;box-shadow:0 24px 60px rgba(42,21,11,.3);
+}
+.teclado--centro .teclado__eco{letter-spacing:.34em;font-size:34px}
+
+/* Con el teclado abierto el diálogo sube y se achica: si tapa el campo que
+   estás llenando —o el botón Confirmar venta— el teclado no sirve de nada. */
+.capa.con-teclado{align-items:flex-start;padding-bottom:calc(var(--alto-teclado) + 20px)}
+
+
+/* ==========================================================
+   CAPA TÁCTIL
+   Esto es lo último de la hoja a propósito: acá manda el TAMAÑO de todo lo
+   que se toca. Si más arriba una regla dice otro alto, gana esta.
+
+   La caja se usa de pie y con el dedo, no con mouse. El mínimo cómodo son
+   48 px; lo que se toca en cada venta va a 56 o 64. Antes de esto había 23
+   controles bajo el mínimo, y los peores eran los que más se tocan: los
+   +/− del pedido medían 30x30 y el chip que abre y cierra la caja, 33 de alto.
+   ========================================================== */
+/* --- 2. base común de todo lo tocable --- */
+.tab,.btn,.medio,.periodo,.turno,.version,.rapidos button,
+.cant button,.arqueo__cant button,.buscador__x{
+  display:inline-flex;align-items:center;justify-content:center;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;
+}
+.rail__cat,.prod,.linea,.marca,.teclado__t{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.prod,.tab,.rail__cat,.medio,.periodo,.marca{user-select:none}
+
+/* --- 3. tamaños --- */
+.tab{font-size:16px;padding:0 22px;min-height:var(--toque-alto);border-radius:11px}
+.tabs{gap:8px}
+.rail{width:210px;gap:6px;padding:12px 10px}
+.rail__cat{min-height:60px;padding:0 14px;font:600 16px/1.25 var(--f);justify-content:flex-start}
+.rail__cat.is-on::before{top:12px;bottom:12px;width:5px}
+.rail__n{font-size:14px}
+.turno{min-height:var(--toque);padding:0 16px;font-size:15px;border-radius:10px}
+.pantalla-completa{width:var(--toque);padding:0;font-size:26px;flex:none}
+.pantalla-completa[aria-pressed="true"]{background:var(--clay);color:white}
+.version{min-height:var(--toque);padding:0 14px;font-size:14px;border-radius:10px}
+.barra{padding:8px 16px}
+
+.buscador input{height:var(--toque-alto);padding:0 56px 0 52px;font-size:17px}
+.buscador__lupa{left:18px;width:21px;height:21px}
+.buscador__x{right:6px;width:var(--toque);height:var(--toque);font-size:18px}
+/* La fila crece junto con la columna: si acá el azulejo es más ancho, también
+   tiene que ser más alto, o el dibujo queda achatado. Ver el comentario largo
+   de .grilla más arriba: el alto lo manda la grilla, nunca el azulejo. */
+.grilla{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;
+        grid-auto-rows:minmax(168px,auto)}
+
+.pedido{width:420px}
+.linea{min-height:64px;gap:8px;padding:8px 4px}
+.cant{gap:6px}
+.cant button{width:var(--toque-alto);height:var(--toque-alto);border-radius:14px;font-size:26px}
+.cant span{min-width:40px;font-size:19px}
+.linea__sub{min-width:74px;font-size:15px}
+.btn--cobrar{min-height:var(--toque-rey);font-size:21px;padding:0 20px}
+
+.btn{min-height:var(--toque);padding:0 20px;font-size:16px;border-radius:11px}
+.btn--chico{min-height:var(--toque);padding:0 16px;font-size:15px}   /* reemplaza los style= de app.js */
+.btn--peligro{margin-left:8px}
+.dialogo__pie{gap:12px;margin-top:22px}
+
+.medios{gap:10px}
+.medio{min-height:var(--toque-rey);font-size:17px;padding:0 12px}
+.rapidos{gap:10px;margin:-4px 0 16px}
+.rapidos button{min-height:var(--toque-alto);padding:0 20px;font-size:17px;border-radius:11px;
+  display:inline-flex;align-items:center;justify-content:center}
+.campo input,.campo select{height:var(--toque-alto);padding:0 14px;font-size:19px}
+.campo--linea input{height:var(--toque-alto);min-width:200px;font-size:17px}
+.periodos{padding:4px;gap:6px}
+.periodo{min-height:var(--toque);padding:0 20px;font-size:16px;border-radius:9px}
+
+.dialogo--ancho{width:min(620px,100%)}
+.arqueo__fila{grid-template-columns:96px 1fr 96px;padding:6px 12px}
+.arqueo__cant{gap:6px}
+.arqueo__cant button{width:var(--toque-alto);height:var(--toque-alto);border-radius:14px;font-size:26px}
+.arqueo__cant input{height:var(--toque-alto);padding:0 6px;font-size:20px}
+.arqueo__valor{font-size:16px}
+.arqueo__sub{font-size:16px}
+
+.fila{grid-template-columns:1fr 150px 150px auto;gap:12px;padding:10px 12px}
+.fila input[type="text"],.fila input[type="number"]{height:52px;padding:0 12px;font-size:16px}
+.marca{min-height:52px;gap:12px;font-size:15px;cursor:pointer}
+.marca input[type="checkbox"]{width:28px;height:28px;flex:none;accent-color:var(--clay);cursor:pointer}
+.permisos-persona{min-width:0;border:1px solid var(--clay);border-radius:12px;padding:14px;margin:14px 0}
+.permisos-persona legend{font-weight:700;padding:0 6px}
+.permisos-persona .marca{padding:8px 0;white-space:normal}
+.permisos-persona .ayuda{margin:8px 0}
+.permisos-persona input[role="switch"]{appearance:none;width:48px;height:28px;border:2px solid var(--suave);border-radius:20px;background:var(--tarjeta);position:relative}
+.permisos-persona input[role="switch"]::before{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:var(--suave)}
+.permisos-persona input[role="switch"]:checked{border-color:var(--clay);background:var(--clay)}
+.permisos-persona input[role="switch"]:checked::before{transform:translateX(20px);background:white}
+.tabla th{padding:12px}
+.tabla td{padding:14px 12px}
+.conectar code{min-height:var(--toque);display:inline-flex;align-items:center;padding:0 14px;user-select:text}
+
+/* --- 4. botón de cerrar en los diálogos (hoy no hay ninguno) --- */
+.dialogo{position:relative;padding-top:26px}
+.dialogo__x{
+  position:absolute;top:12px;right:12px;width:var(--toque-alto);height:var(--toque-alto);
+  border:0;border-radius:50%;background:#F3E9DB;color:var(--suave);font-size:20px;
+  display:grid;place-items:center;touch-action:manipulation;
+}
+.dialogo__x:active{background:#E3D4C0}
+.capa--firme{pointer-events:auto}   /* el arqueo NO se cierra tocando el fondo */
+
+/* --- 5. :hover (ver decisiones) --- */
+.tab:hover,.rail__cat:hover,.periodo:hover,.turno:hover,.version:hover{background:transparent;color:inherit}
+.tab:active{background:#EADCC8;transform:scale(.97)}
+.rail__cat:active{background:#EFE3D2}
+.periodo:active,.turno:active,.version:active{background:#EADCC8}
+@media (hover:hover){
+  .btn:hover{background:#F3E9DB}
+  .cant button:hover,.rapidos button:hover,.arqueo__cant button:hover{background:#F1E4D2}
+  .buscador__x:hover{background:#E3D4C0}
+  .btn--cobrar:hover{background:#1a7440}
+  .btn--peligro:hover{background:#FBECEA}
+}
+.btn:active,.rapidos button:active,.cant button:active,
+.arqueo__cant button:active,.buscador__x:active,.medio:active{transform:scale(.95);background:#EADCC8}
+.btn--cobrar:active{transform:scale(.98);background:#166634}
+
+/* --- 6. scroll, inercia y doble tap --- */
+html,body{overscroll-behavior:none}
+.grilla,.lineas,.rail,.capa,.tabla-wrap,.novedades,
+.vista[data-vista="dia"],.vista[data-vista="carta"],.vista[data-vista="inventario"]{
+  overscroll-behavior:contain;scroll-behavior:smooth;
+}
+.grilla,.lineas,.capa,.rail{touch-action:pan-y}
+.tabla-wrap{touch-action:pan-x pan-y}
+::-webkit-scrollbar{width:12px;height:12px}
+::-webkit-scrollbar-thumb{background:#DCCDB8;border-radius:99px;border:3px solid var(--tarjeta)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* --- 7. confirmación al tocar --- */
+.prod.recien{animation:pulso .34s ease-out}
+.prod.recien::after{
+  content:"+1";position:absolute;top:10px;left:10px;z-index:2;
+  background:var(--verde);color:#fff;font:700 15px/1 var(--f);
+  padding:7px 11px;border-radius:99px;animation:sube .5s ease-out forwards;
+}
+@keyframes pulso{from{box-shadow:0 0 0 0 var(--c)}to{box-shadow:0 0 0 9px transparent}}
+@keyframes sube{0%{opacity:0;transform:translateY(6px)}25%{opacity:1;transform:translateY(0)}
+                100%{opacity:0;transform:translateY(-14px)}}
+.linea.recien{animation:destello .5s ease-out}
+@keyframes destello{from{background:#EAF6EF}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.prod.recien,.prod.recien::after,.linea.recien{animation:none}}
+
+/* --- 8. media queries: ajustar las existentes (L373 y L385) --- */
+@media (max-width:760px){
+  .rail{width:100%;touch-action:pan-x;scroll-snap-type:x proximity}
+  .rail__cat{min-height:var(--toque-alto);padding:0 18px;scroll-snap-align:start}
+}
+@media (max-width:900px){
+  .pedido{width:360px}
+  .fila{grid-template-columns:1fr 140px}
+  .dialogo__pie{flex-direction:column-reverse}
+  .dialogo__pie .btn{width:100%}
+}
+
+/* ---------- candado: quién está en la caja ---------- */
+.quien{
+  display:inline-flex;align-items:center;gap:8px;min-height:var(--toque);
+  padding:0 14px;border-radius:10px;border:1px solid var(--linea);
+  background:var(--tarjeta);color:var(--tinta);font-size:15px;font-weight:600;
+  touch-action:manipulation;
+}
+.quien:active{background:#EADCC8}
+.quien__punto{width:10px;height:10px;border-radius:50%;background:var(--verde);flex:none}
+
+.candado{
+  position:fixed;inset:0;z-index:80;display:grid;place-items:center;
+  background:var(--papel);padding:24px;overflow:auto;
+}
+.candado[hidden]{display:none}
+.candado__caja{width:min(520px,100%);text-align:center}
+.candado__caja h1{font-size:30px;margin-bottom:6px}
+.candado__caja>p{color:var(--suave);font-size:16px;line-height:1.6;margin-bottom:26px}
+.candado__gente{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.cara{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  border:1px solid var(--linea);background:var(--tarjeta);border-radius:18px;
+  padding:20px 18px;min-width:132px;box-shadow:var(--sombra);
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.cara:active{transform:scale(.96);border-color:var(--c)}
+.cara__ini{
+  width:66px;height:66px;border-radius:50%;background:var(--c);color:#fff;
+  display:grid;place-items:center;font:700 28px/1 var(--f);
+}
+.cara b{font-size:17px;color:var(--tinta)}
+.candado__nota{color:var(--suave);font-size:13.5px;line-height:1.6;margin-top:18px}
+.candado__caja .campo{text-align:left}
+/* El PIN malo sacude la caja en vez de sacar de la pantalla. */
+.candado--mal{animation:sacudir .4s}
+@keyframes sacudir{
+  0%,100%{transform:translateX(0)} 20%{transform:translateX(-9px)}
+  40%{transform:translateX(9px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)}
+}
+@media (prefers-reduced-motion:reduce){.candado--mal{animation:none}}
+
+/* ---------- bodega ---------- */
+.bajo-minimo td{background:#FFF6E9}
+.bajo-cero td{background:#FBECEA}
+.tabla td .btn--chico+.btn--chico{margin-left:8px}
+
+/* La gente que estuvo en un turno, en la tabla de cierres. */
+.quien-pill{
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+  background:color-mix(in srgb, var(--c) 12%, white);
+  border:1px solid color-mix(in srgb, var(--c) 30%, white);
+  color:var(--tinta);font-size:12.5px;padding:4px 10px;border-radius:99px;margin:2px 0;
+}
+.quien-pill b{font-variant-numeric:tabular-nums;color:var(--suave);font-weight:600}
+
+/* ---------- traer la carta de otro lado ---------- */
+.traer{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px}
+.traer__caja{
+  border:1.5px dashed var(--linea);border-radius:14px;padding:16px;
+  background:var(--papel);display:flex;flex-direction:column;gap:6px;cursor:pointer;
+}
+.traer__caja b{font-size:15.5px}
+.traer__caja span{font-size:13px;color:var(--suave);line-height:1.5}
+.traer__caja textarea{
+  margin-top:6px;width:100%;font-family:inherit;font-size:14px;padding:10px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--tarjeta);
+  color:var(--tinta);resize:vertical;cursor:text;
+}
+.traer__caja textarea:focus{outline:2px solid var(--clay);outline-offset:1px}
+#zonaArchivo:hover{border-color:var(--clay);background:#F6EFE4}
+@media (max-width:760px){.traer{grid-template-columns:1fr}}
+
+/* ---------- lo que no es efectivo, en el cierre ---------- */
+.tarjetas{
+  border:1px solid var(--linea);border-radius:12px;padding:14px 16px;
+  margin-bottom:14px;background:var(--papel);
+}
+.tarjetas__tit{
+  font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);margin-bottom:4px;
+}
+.tarjetas__fila{
+  display:grid;grid-template-columns:1fr auto 130px 96px;gap:12px;align-items:center;
+  padding:10px 0;border-top:1px solid #F1E7DA;
+}
+.tarjetas__fila b{font-size:15px}
+.tarjetas__detalle{font-size:12.5px;color:var(--suave);font-variant-numeric:tabular-nums}
+.tarjetas__esperado{
+  font-size:11.5px;color:var(--suave);text-transform:uppercase;letter-spacing:.05em;
+  text-align:right;line-height:1.5;
+}
+.tarjetas__esperado b{
+  display:block;font-size:16px;color:var(--tinta);text-transform:none;
+  letter-spacing:0;font-variant-numeric:tabular-nums;
+}
+.tarjetas__fila input{
+  width:100%;height:var(--toque-alto);text-align:right;padding:0 12px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:17px;font-variant-numeric:tabular-nums;
+}
+.tarjetas__fila input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.tarjetas__dif{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.tarjetas__dif.ok{color:var(--verde)}
+.tarjetas__dif.mal{color:var(--rojo)}
+@media (max-width:700px){
+  .tarjetas__fila{grid-template-columns:1fr 120px;grid-auto-rows:auto}
+  .tarjetas__esperado{text-align:left}
+}
+
+/* ---------- sacar plata del cajón en medio del turno ---------- */
+.retiros{
+  border:1px solid var(--linea);border-radius:12px;padding:14px 16px;
+  margin-bottom:16px;background:#FFF8EE;
+}
+.retiros__cab{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.retiros__cab b{font-size:15px}
+.retiros__botones{display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+.retiros__lista{margin-top:12px}
+.retiros__fila{
+  display:flex;gap:12px;align-items:center;justify-content:space-between;
+  padding:9px 0;border-top:1px solid #F1E7DA;
+}
+.retiros__que b{font-size:15px;font-variant-numeric:tabular-nums}
+.retiros__que small{display:block;color:var(--suave);font-size:12px;margin-top:2px}
+.retiros__fila.es-anulado .retiros__que{opacity:.5;text-decoration:line-through}
+.retiros__total{
+  margin-top:10px;padding-top:10px;border-top:1px solid #F1E7DA;
+  text-align:right;font-size:14px;font-variant-numeric:tabular-nums;
+}
+.retiros__form{margin-top:12px;padding-top:12px;border-top:1px solid #F1E7DA}
+.retiros__form-pie{display:flex;gap:10px;justify-content:flex-end}
+
+/* ---------- resumen del turno, en el cierre ---------- */
+.resumen-turno{
+  border:1px solid var(--linea);border-radius:12px;overflow:hidden;
+  margin-bottom:14px;background:var(--tarjeta);
+}
+.resumen-turno__tit{
+  font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);padding:12px 14px 0;
+}
+.resumen-turno .tabla{font-size:14.5px}
+.resumen-turno .tabla th{padding:8px 14px}
+.resumen-turno .tabla td{padding:9px 14px}
+.resumen-turno__total td{border-top:1.5px solid var(--linea);background:var(--papel)}
+.resumen-turno__pie{
+  padding:10px 14px 12px;font-size:13.5px;color:var(--suave);
+  border-top:1px solid #F1E7DA;
+}
+.resumen-turno__pie b{color:var(--tinta);font-variant-numeric:tabular-nums}
+
+/* ---------- ayuda ---------- */
+.panel--ayuda{max-width:1180px;padding-bottom:28px}
+.ayuda-cabecera{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:16px;margin-bottom:18px}
+.ayuda-cuerpo{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+.ayuda-lista{
+  display:flex;flex-direction:column;gap:8px;
+  position:sticky;top:0;max-height:calc(100vh - 170px);
+  overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 4px 16px 2px;   /* aire abajo: la última tarjeta no
+                                 puede quedar pegada al borde */
+}
+.ayuda-item{
+  text-align:left;border:1px solid var(--linea);background:var(--tarjeta);
+  border-radius:12px;padding:12px 14px;min-height:var(--toque-alto);
+  display:flex;flex-direction:column;gap:3px;touch-action:manipulation;
+}
+.ayuda-item b{font-size:15px;color:var(--tinta)}
+.ayuda-item small{font-size:12.5px;color:var(--suave);line-height:1.45}
+.ayuda-item:active{transform:scale(.99);background:#F6EFE4}
+.ayuda-item.is-on{border-color:var(--clay);background:#FBF1E7}
+.ayuda-item.is-on b{color:var(--clay-osc)}
+.ayuda-texto{
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:14px;
+  padding:24px 28px;box-shadow:var(--sombra);line-height:1.7;font-size:15.5px;
+}
+.ayuda-texto h2{font-size:23px;margin-bottom:14px}
+.ayuda-texto h3{font-size:17px;margin:22px 0 8px}
+.ayuda-texto p{margin-bottom:12px}
+.ayuda-texto ol,.ayuda-texto ul{margin:0 0 14px 22px}
+.ayuda-texto li{margin-bottom:7px}
+.ayuda-texto b{color:var(--tinta)}
+.ayuda-texto .ayuda{
+  background:var(--papel);border-left:4px solid var(--clay);border-radius:0 10px 10px 0;
+  padding:12px 16px;margin:0 0 14px;font-size:14.5px;
+}
+.version-fila{padding:12px 0;border-bottom:1px solid #F1E7DA}
+.version-fila:last-child{border-bottom:0}
+.version-fila__tit{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.version-fila__tit span{font-size:12.5px;color:var(--suave);white-space:nowrap}
+.version-fila p{font-size:14px;color:var(--suave);line-height:1.6;margin-top:4px}
+.version-fila.es-la-tuya{background:#EAF6EF;border-radius:10px;padding:12px 14px;
+  border-bottom:0;margin:4px 0}
+.version-fila.es-la-tuya .version-fila__tit span{color:#14603A;font-weight:700}
+@media (max-width:900px){.ayuda-cuerpo{grid-template-columns:1fr}}
+
+/* ---------- elegir el dibujo viéndolo ---------- */
+.dibujos{
+  border:1px solid var(--linea);border-radius:12px;background:var(--papel);
+  padding:10px 12px;max-height:min(46vh,420px);overflow:auto;
+  overscroll-behavior:contain;
+}
+.dibujos__grupo{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);margin:10px 0 6px;
+}
+.dibujos__grupo:first-child{margin-top:0}
+/* Recuadros más grandes: con 90 dibujos, lo que se busca es el NOMBRE, y en
+   80 px con letra de 10,5 no se alcanzaba a leer. */
+.dibujos__fila{display:grid;grid-template-columns:repeat(auto-fill,minmax(116px,1fr));gap:10px}
+.dibujo-op{
+  border:1.5px solid var(--linea);background:var(--tarjeta);border-radius:11px;
+  padding:6px 4px 5px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.dibujo-op svg{width:100%;height:48px;display:block}
+.dibujo-op small{font-size:12.5px;line-height:1.25;color:var(--suave);text-align:center}
+.dibujo-op:active{transform:scale(.95)}
+.dibujo-op.is-on{border-color:var(--clay);background:#FBF1E7}
+.dibujo-op.is-on small{color:var(--clay-osc);font-weight:700}
+
+/* ---------- el atajo de bodega en la ficha del producto ---------- */
+.tal-cual{
+  border:1px solid var(--linea);border-radius:12px;background:var(--papel);
+  padding:14px 16px;margin:16px 0 4px;
+}
+.tal-cual__tit{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);margin-bottom:6px;
+}
+.tal-cual__campos{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.tal-cual__campos .campo{margin-bottom:10px}
+@media (max-width:640px){.tal-cual__campos{grid-template-columns:1fr}}
+
+/* La dirección de cada pantalla, en la pestaña Carta. */
+.conectar__cual{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--suave);min-width:132px;
+}
+@media (max-width:700px){.conectar__cual{min-width:0}}
+
+/* ---------- cerrar caja: contar a la izquierda, mirar a la derecha ----------
+   Antes el cierre era una columna larga y todo lo de tarjetas aparecía recién
+   después de apretar "Ver si cuadra": el cajero llegaba a escribir el total de
+   Transbank sin haberlo visto venir. Ahora lo que se cuenta y lo que se compara
+   están lado a lado desde que se abre. */
+.dialogo--cierre{width:min(960px,100%)}
+.cierre{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 26px;align-items:start}
+.cierre__col{min-width:0}
+.cierre__paso{
+  display:flex;align-items:center;gap:9px;margin-bottom:7px;
+  font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--suave);
+}
+.cierre__paso b{
+  width:22px;height:22px;flex:none;border-radius:50%;background:var(--clay);color:#fff;
+  display:grid;place-items:center;font-size:12.5px;letter-spacing:0;
+}
+#zonaCuadre:not(:empty){margin-top:22px;border-top:1px solid var(--linea);padding-top:18px}
+
+/* En una columna angosta la fila de tarjetas no cabe en cuatro tramos: se
+   parte en dos filas de dos, igual que en pantalla chica. */
+.cierre .tarjetas__fila{grid-template-columns:1fr 132px;gap:8px 12px}
+
+/* Lo que está DENTRO del cajón y todavía no se cuenta. */
+.tapado{
+  display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--suave);background:#F3E9DB;
+  border-radius:6px;padding:3px 8px;white-space:nowrap;
+}
+.resumen-turno tr.es-tapado td{color:var(--suave)}
+
+@media (max-width:900px){
+  .dialogo--cierre{width:min(620px,100%)}
+  .cierre{grid-template-columns:1fr;gap:18px}
+}
+
+/* ---------- el equipo ---------- */
+.equipo{display:flex;flex-direction:column;gap:9px;max-height:52vh;overflow:auto;
+  overscroll-behavior:contain}
+.equipo__fila{
+  display:grid;grid-template-columns:auto 1fr auto;gap:13px;align-items:center;
+  text-align:left;border:1px solid var(--linea);background:var(--papel);
+  border-radius:13px;padding:10px 14px;min-height:var(--toque);color:var(--tinta);
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.equipo__fila:hover{background:#F6EFE4;border-color:var(--clay)}
+.equipo__fila:active{transform:scale(.99);background:#F1E4D2}
+.equipo__fila.es-baja{opacity:.55}
+.equipo__ini{
+  width:42px;height:42px;border-radius:50%;background:var(--c);color:#fff;
+  display:grid;place-items:center;font:700 18px/1 var(--f);
+}
+.equipo__quien b{display:block;font-size:15.5px}
+.equipo__quien small{color:var(--suave);font-size:12.5px}
+.equipo__ir{color:var(--clay);font-size:13.5px;font-weight:700}
+
+/* ---------- lo que no hace falta para vender ---------- */
+/* Plegado a propósito: quien ya sabe cuánto cobra escribe el precio y se va. */
+.avanzado{
+  border:1px dashed var(--linea);border-radius:12px;
+  padding:10px 14px;margin:14px 0 4px;
+}
+.avanzado>summary{
+  cursor:pointer;list-style:none;color:var(--suave);
+  font-size:13.5px;font-weight:600;min-height:var(--toque);
+  display:flex;align-items:center;gap:8px;
+}
+.avanzado>summary::-webkit-details-marker{display:none}
+.avanzado>summary::before{
+  content:"+";display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;flex:none;border-radius:7px;
+  border:1px solid var(--linea);background:var(--tarjeta);
+  font-size:16px;font-weight:700;line-height:1;color:var(--clay);
+}
+.avanzado[open]>summary{color:var(--tinta)}
+.avanzado[open]>summary::before{content:"\2212"}
+.avanzado__cuerpo{padding-top:4px}
+
+/* ---------- qué cobrar: el precio sugerido ---------- */
+.sugerido{
+  border:1px solid #CBE0D2;background:#F2F9F4;border-radius:12px;
+  padding:13px 15px;margin:2px 0 14px;
+}
+.sugerido__tit{
+  font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:#3F7355;margin-bottom:6px;
+}
+.sugerido__cifra{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sugerido__cifra b{font-size:30px;font-variant-numeric:tabular-nums;color:#14603A}
+.sugerido__cuenta{font-size:13.5px;color:var(--suave);line-height:1.55;margin:6px 0 10px}
+.sugerido__cuenta b{color:var(--tinta)}
+.sugerido__margenes{
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  border-top:1px solid #DCEBE1;padding-top:10px;
+}
+.sugerido__margenes>span{font-size:12.5px;color:var(--suave);font-weight:600}
+.sugerido__margenes input{
+  width:62px;height:var(--toque);text-align:right;padding:0 8px;
+  border:1px solid var(--linea);border-radius:9px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:15px;font-variant-numeric:tabular-nums;
+}
+.sugerido__margenes input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.chip{
+  min-height:var(--toque);padding:0 14px;border-radius:9px;font-size:14.5px;
+  font-weight:600;border:1px solid var(--linea);background:var(--tarjeta);
+  color:var(--suave);font-variant-numeric:tabular-nums;touch-action:manipulation;
+}
+.chip:hover{background:#F1E4D2;color:var(--tinta)}
+.chip.is-on{background:#14603A;border-color:#14603A;color:#fff}
+
+/* ---------- la caja la abrió otra persona ---------- */
+.aviso-ajena{
+  background:#FFF6E9;border:1px solid #EBD7B4;border-radius:11px;
+  padding:11px 14px;margin-bottom:16px;font-size:14px;line-height:1.55;
+  color:var(--tinta);
+}
+
+/* La dirección de respaldo para televisores viejos: se separa de las tres
+   normales para que no parezca una cuarta pantalla que haya que conectar. */
+.conectar__url--simple{
+  margin-top:12px;padding-top:12px;border-top:1px dashed var(--linea);
+}
+.conectar__url--simple .conectar__cual{color:var(--clay)}
+
+/* ---------- el lector de códigos de barra ---------- */
+.codigo-leido{
+  font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  font-size:26px;letter-spacing:.09em;text-align:center;
+  background:var(--papel);border:1px solid var(--linea);border-radius:12px;
+  padding:14px;margin-bottom:10px;color:var(--tinta);
+}
+.codigo-poner{display:flex;gap:8px;align-items:center}
+.codigo-poner input{
+  flex:1;min-width:0;height:var(--toque-alto);padding:0 14px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--tarjeta);
+  color:var(--tinta);font-family:ui-monospace,Consolas,monospace;font-size:16px;
+  letter-spacing:.05em;
+}
+.codigo-poner input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.codigo-fila{
+  display:flex;align-items:center;gap:10px;padding:7px 0;
+  border-bottom:1px solid #F3EBE0;
+}
+.codigo-fila:last-of-type{border-bottom:0}
+.codigo-fila code{
+  font-size:14.5px;letter-spacing:.05em;background:var(--papel);
+  border:1px solid var(--linea);border-radius:7px;padding:5px 10px;color:var(--tinta);
+}
+.codigo-cuantos{
+  font-size:12.5px;font-weight:700;color:#14603A;background:#EAF6EF;
+  border-radius:99px;padding:3px 10px;
+}
+
+/* ==========================================================
+   CELULAR (hasta 620 px)
+
+   La caja se pensó para un notebook y para un tablet. Pero se puede abrir
+   desde el celular —es la misma dirección de la red— y ahí se veía mal, no
+   "apretado": DIMINUTO, con la mitad derecha de la pantalla vacía.
+
+   La causa no era el diseño de la venta: era la BARRA DE ARRIBA. Medía 914 px
+   —cinco pestañas más cuatro chips, en una fila que no se doblaba— contra los
+   375 px de un celular. Chrome, para que quepa lo más ancho de la página,
+   achica TODO. El contenido, que sí cabía, quedaba entonces dibujado a escala
+   de 914 px en el borde izquierdo.
+
+   O sea: un solo elemento que no se dobla arruina la página entera. Por eso
+   acá lo primero es que la barra se doble.
+   ========================================================== */
+@media (max-width:620px){
+  .barra{flex-wrap:wrap;row-gap:8px;column-gap:8px;padding:8px 12px}
+  .barra__marca{order:1}
+  .barra__der{order:2;margin-left:auto;gap:8px}
+
+  /* Las pestañas pasan a una fila propia y se desplazan de lado. Cinco no
+     caben en 375 px, y hacerlas más chicas las deja imposibles de tocar. */
+  .tabs{
+    order:3;width:100%;overflow-x:auto;overscroll-behavior-x:contain;
+    scrollbar-width:none;-ms-overflow-style:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:none;white-space:nowrap}
+
+  /* El reloj sobra: el celular tiene el suyo arriba, más grande. */
+  .reloj{display:none}
+  .quien,.turno{padding:0 11px;font-size:14px}
+  .version{padding:0 8px;font-size:12px}
+
+  /* ---- el pedido, en un celular ----
+     Al lado no cabe, así que va abajo. Pero "abajo" con la pantalla de venta
+     sin scroll significaba a 1.037 px en una ventana de 812: el botón Cobrar
+     quedaba fuera de alcance y no había forma de llegar. La caja se podía
+     armar y no se podía cobrar.
+
+     Se arregla en dos partes: la vista entera pasa a desplazarse como una
+     página normal, y el total con su botón quedan PEGADOS abajo. Así el
+     Cobrar está siempre a la vista, que es lo que uno busca con el cliente
+     enfrente. */
+  .vista[data-vista="caja"]{flex-direction:column;overflow-y:auto;flex-wrap:nowrap}
+  .grilla{overflow:visible;flex:none}
+  .productos{flex:none}
+  .lineas{overflow:visible;max-height:none}
+
+  .pedido{
+    width:100%;flex:none;border-left:0;border-top:1px solid var(--linea);
+    position:sticky;bottom:0;z-index:5;
+  }
+  /* La sombra es para que se lea como una capa por encima de la grilla y no
+     como el final de la lista. */
+  .pedido__pie{box-shadow:0 -10px 24px rgba(42,21,11,.10)}
+  .productos{padding:10px 12px}
+  .buscador{margin-bottom:10px}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:10px}
+
+  /* Los diálogos ocupan la pantalla: en 375 px, un diálogo "centrado con
+     márgenes" deja el contenido en una columna de 300 px. */
+  .capa{padding:0}
+  .dialogo{
+    width:100%;max-width:none;border-radius:0;min-height:100%;
+    padding:20px 16px;margin:0;
+  }
+  .dialogo--ancho,.dialogo--cierre{width:100%}
+  .fila2{grid-template-columns:1fr}
+  .panel{padding:12px}
+}
+
+/* La cara de quien está entrando, sola, mientras escribe su PIN. */
+.cara--sola{margin:0 auto;pointer-events:none}
+.candado__nota .btn--chico{min-height:36px;padding:0 12px;font-size:13px}
+
+/* El buscador de dibujos. Sin él, encontrar uno entre 90 es hacer scroll y
+   esperar reconocerlo. */
+.dibujos__buscar{
+  width:100%;height:var(--toque);padding:0 14px;margin-bottom:8px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:15px;
+}
+.dibujos__buscar:focus{outline:2px solid var(--clay);outline-offset:1px}
+.dibujos__seccion[hidden],.dibujo-op[hidden]{display:none!important}
+
+/* ---------- cobrar: en dos columnas ----------
+   Apilado medía 711 px en una ventana de 660: había que scrollear 91 px para
+   llegar a "Confirmar venta". Un botón de confirmar que queda abajo del corte,
+   con el cliente esperando, es el peor lugar posible para esconder algo.
+
+   A lo ancho sobraba espacio: el diálogo usaba 460 px de los 1366 de la
+   pantalla. Es el mismo reparto que ya se hizo en el cierre de caja (.cierre). */
+.dialogo--cobro{width:min(760px,100%)}
+.cobro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 24px;align-items:start}
+.cobro__col{min-width:0}
+.cobro .medios{margin-bottom:0}
+.cobro .campo{margin-bottom:12px}
+.cobro .rapidos{margin:-2px 0 0}
+/* Los cuatro descuentos en una fila pareja. Sueltos, "20%" se caía solo a la
+   línea de abajo y la columna crecía 50 px por un botón. */
+#rapidosDesc{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+#rapidosDesc button{padding:0 6px;font-size:14px;white-space:nowrap}
+/* El vuelto es lo que se mira: que no quede apretado contra el borde. */
+.cobro .vuelto{margin-top:10px}
+
+/* ---- pago mixto ---- */
+.mixto{display:grid;gap:8px}
+.mixto__fila{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;margin:0}
+.mixto__fila span{font-size:14px;font-weight:600;color:var(--tinta)}
+.mixto__fila input{
+  width:100%;height:var(--toque-alto);text-align:right;padding:0 12px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--papel);
+  color:var(--tinta);font-family:inherit;font-size:17px;font-variant-numeric:tabular-nums;
+}
+.mixto__fila input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.mixto__resto{
+  margin-top:4px;padding:9px 12px;border-radius:10px;background:#FFF8EE;
+  border:1px solid #E7D9C7;font-size:14px;font-variant-numeric:tabular-nums;
+}
+.mixto__resto.es-ok{background:#EAF6EF;border-color:#BFE3CC;color:#14603A}
+.mixto__resto.es-mal{background:#FBECEA;border-color:#F0CFC9;color:var(--rojo)}
+
+@media (max-width:760px){
+  .dialogo--cobro{width:min(520px,100%)}
+  .cobro{grid-template-columns:1fr;gap:0}
+}
+
+/* ---------- pantallas BAJAS (notebook de 768 px o menos) ----------
+   No es lo mismo angosto que bajo, y acá el problema es el alto: en un notebook
+   quedan 620-660 px útiles y los diálogos se pensaron con más aire. Se aprieta
+   lo que no cuesta nada —los márgenes— antes que achicar lo que se toca. */
+@media (max-height:760px){
+  .capa{padding:10px}
+  .dialogo{padding:16px 20px}
+  .dialogo h2{margin-bottom:10px}
+  .dialogo__pie{margin-top:12px}
+  .cobro .campo{margin-bottom:9px}
+  .cobro{gap:6px 24px}
+  .vuelto{padding:10px 14px}
+  .vuelto b{font-size:23px}
+}
+
+/* Dos campos lado a lado. Se usaba en cuatro lugares —la ficha del producto, el
+   producto nuevo del escáner, el cobro— y NUNCA estuvo definida: el navegador
+   la ignoraba y los campos salían apilados. Nadie lo notó porque "apilado"
+   también se ve bien; solo se nota cuando el alto empieza a faltar. */
+.fila2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+@media (max-width:620px){.fila2{grid-template-columns:1fr;gap:0}}
+
+/* ---------- dónde mirar cuando no cuadra ----------
+   El cierre decía "sobran $1.450" y ahí quedaba: uno sabe que algo no calza y
+   no tiene dónde mirar. Esto es el dónde. */
+.pista{
+  border:1px solid #EBD7B4;background:#FFF6E9;border-radius:11px;
+  padding:11px 14px;margin-top:10px;font-size:13.5px;line-height:1.5;
+}
+.pista>b{display:block;margin-bottom:7px;font-size:14px}
+.pista__linea{
+  display:flex;justify-content:space-between;gap:12px;padding:2px 0;
+  font-variant-numeric:tabular-nums;
+}
+.pista__dif{border-top:1px solid rgba(42,21,11,.14);margin-top:6px;padding-top:7px;font-weight:700}
+
+.ventas-mini{
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:9px;
+  padding:4px 10px;margin-top:7px;max-height:190px;overflow:auto;
+}
+.ventas-mini__fila{
+  display:grid;grid-template-columns:46px 42px 1fr auto;gap:10px;align-items:center;
+  padding:6px 0;border-bottom:1px solid #F3EBE0;font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.ventas-mini__fila:last-child{border-bottom:0}
+.ventas-mini__hora,.ventas-mini__n{color:var(--suave);font-size:12px}
+.ventas-mini__medio{color:var(--suave)}
+.ventas-mini__fila.es-sospechosa{
+  background:#FFF1D8;margin:0 -10px;padding-left:10px;padding-right:10px;
+  border-radius:6px;font-weight:700;
+}
+.ventas-mini__fila.es-sospechosa .ventas-mini__hora,
+.ventas-mini__fila.es-sospechosa .ventas-mini__medio{color:var(--clay)}
+
+.tarjetas__pista{grid-column:1/-1}
+
+/* El fondo de anoche, mientras se cuenta en la mañana. */
+.fondo-anoche{
+  border:1px solid var(--linea);background:var(--papel);border-radius:11px;
+  padding:10px 14px;margin-bottom:12px;font-size:13.5px;
+}
+.fondo-anoche.es-ok{border-color:#BFE3CE;background:#EAF6EF}
+.fondo-anoche.es-mal{border-color:#E8C9C6;background:#FBECEA}
+
+/* Cuántos quedan, a la vista ANTES de agregar. Sin esto el tope solo se
+   descubría al chocar con él, y con el + del pedido ni siquiera eso. */
+.prod__quedan{
+  position:absolute;top:8px;left:8px;z-index:1;
+  background:rgba(42,21,11,.72);color:#fff;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;padding:3px 8px;border-radius:99px;
+  font-variant-numeric:tabular-nums;
+}
+.prod__quedan.es-cero{background:var(--rojo)}
+/* Cuando el pedido pasa lo que había, se dice en la línea y no solo en un
+   aviso que ya desapareció. */
+.linea__sobra{
+  display:block;font-size:11px;font-weight:700;color:var(--rojo);
+  margin-top:2px;letter-spacing:.02em;
+}
+
+/* ---------- la ficha del producto, en dos columnas ----------
+   Era la pantalla más larga del programa: nombre, precio, descripción,
+   categoría, códigos, el selector de 93 dibujos, etiqueta, oferta, destacado,
+   texto del destacado, a la venta y la bodega — todo en una sola columna. El
+   selector de dibujos solo ya ocupa media pantalla, y quedaba en el medio
+   empujando la mitad del formulario fuera de la vista.
+
+   A la izquierda lo que ES el producto; a la derecha cómo SE VE. */
+.dialogo--ficha{width:min(1000px,100%)}
+.ficha{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 26px;align-items:start}
+.ficha__col{min-width:0}
+.ficha .tal-cual{margin:6px 0 0}
+@media (max-width:900px){
+  .dialogo--ficha{width:min(620px,100%)}
+  .ficha{grid-template-columns:1fr;gap:0}
+}
+
+/* La propina que dice la máquina, debajo del total de ese medio. */
+.tarjetas__propina{
+  grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-top:8px;margin-top:2px;border-top:1px dashed var(--linea);
+}
+.tarjetas__propina>span{font-size:12.5px;color:var(--suave);font-weight:600}
+.tarjetas__propina input{
+  width:110px;height:var(--toque);text-align:right;padding:0 10px;
+  border:1px solid var(--linea);border-radius:9px;background:var(--tarjeta);
+  color:var(--tinta);font-family:inherit;font-size:15px;
+  font-variant-numeric:tabular-nums;
+}
+.tarjetas__propina input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.tarjetas__propina small{font-size:12px;color:var(--suave)}
+
+/* La caja no contesta: se dice arriba, por encima del candado y de los avisos
+   y por debajo del teclado. Antes no se decía nada y la pantalla parecía andar. */
+.sin-caja{
+  position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:86;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;max-width:min(92vw,760px);
+  padding:14px 18px;border-radius:14px;background:#7A2E1B;color:#FFF8EF;
+  box-shadow:0 18px 40px rgba(0,0,0,.28);font-size:15px;line-height:1.4;
+}
+.sin-caja[hidden]{display:none}
+.sin-caja b{font-size:16px}
+
+/* Ayuda → Ajustes (2.19): cada ajuste es un bloque con su título. */
+.ajuste{margin-top:22px;padding-top:18px;border-top:1px solid var(--linea)}
+.ajuste h4{margin:0 0 10px;font-size:16px}
+.ajuste__campos{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px}
+.ajuste__ancho{grid-column:1 / -1}
+.ajuste__fila{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.ajuste__ruta{flex:1;min-width:260px;font:inherit;font-size:15px;padding:10px 12px;
+  border:1px solid var(--linea);border-radius:10px;background:var(--papel);color:var(--tinta)}
+.ajuste__lugares{margin-top:10px;font-size:13.5px;color:var(--suave);
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ajuste__ok{color:var(--verde);font-weight:600;font-size:14px;margin:10px 0 0}
+.ajuste__alerta{margin:10px 0 0;padding:10px 13px;border-radius:10px;background:#FBEAE3;
+  color:#7A2E1B;font-size:14px;line-height:1.45}
+.pin-red{font:600 24px/1 ui-monospace,Consolas,monospace;letter-spacing:.16em;padding:9px 14px;
+  border-radius:10px;background:var(--papel);border:1px solid var(--linea);font-variant-numeric:tabular-nums}
+.pin-red--grande{display:inline-block;margin:12px 0 8px;font-size:42px}
+.dos-campos{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media (max-width:640px){.ajuste__campos,.dos-campos{grid-template-columns:1fr}}
+
+/* La fila de un medio que no se usó sigue en el formulario, solo escondida: el tilde de
+   abajo la trae de vuelta. `display:none` explícito porque .tarjetas__fila es grid y se
+   saltaría el atributo hidden. */
+.tarjetas__fila[hidden]{display:none}
+.tarjetas__sumar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tarjetas__sumar .chip{background:#fff;border:1px dashed var(--linea);color:var(--suave);
+  border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.tarjetas__sumar .chip:hover{border-style:solid;color:var(--tinta);background:#F3E9DB}
+
+.cantidad-bodega{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cantidad-bodega input{width:110px;text-align:center}
+#bodegaAvanzada summary{cursor:pointer;color:var(--suave);padding:10px 0}
+#recetasAnteriores{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+
+
+/* ==========================================================
+   PANTALLAS CHICAS DE ESCRITORIO
+   Va al final a propósito: tiene que ganarle a la capa táctil de arriba.
+
+   Las cajas de los locales no son monitores grandes. Son un monitor táctil de
+   1024x768, un notebook de 1366x768, o uno de 1920x1080 con Windows al 125% o
+   150%, que para la página son 1536 o 1280 px. Con la ventana maximizada quedan
+   entre 543 y 700 px de alto útil.
+
+   El criterio: las tres columnas (categorías, productos, pedido) se mantienen
+   hasta 761 px de ancho, porque el pedido con el botón Cobrar tiene que estar
+   SIEMPRE a la vista. Lo que se achica primero es lo que no se toca —márgenes,
+   letra, la cuenta de productos de cada categoría— y los azulejos. Lo que se
+   toca en cada venta no baja de 48 px.
+
+   Hay una prueba que recorre estas pantallas en esas resoluciones y mide que
+   Cobrar y los botones de abajo de cada diálogo se vean sin hacer scroll.
+   ========================================================== */
+
+/* --- la barra de arriba: en una sola fila hasta 761 px --- */
+@media (min-width:761px) and (max-width:1180px){
+  .barra{gap:10px;padding:6px 12px;flex-wrap:nowrap}
+  .tabs{gap:4px}
+  .tab{padding:0 14px;font-size:15px;min-height:var(--toque)}
+  .barra__der{gap:6px;flex-wrap:nowrap;min-width:0}
+  .turno{padding:0 11px;font-size:14px}
+  /* «Resumen de caja · Javiera» se corta con puntos antes que doblar la barra.
+     line-height 2 px menos que el alto: los bordes suman 2 y si no, mide 50. */
+  #turnoEstado{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:calc(var(--toque) - 2px)}
+  .version{padding:0 8px;font-size:12.5px}
+  /* Sin esto, cuando falta ancho el navegador parte lo que tiene espacios:
+     «El / día» en dos líneas, y el nombre del local o de quien atiende en tres. */
+  .tab,.version{white-space:nowrap}
+  .tabs{flex:none}
+  .barra__marca{min-width:0}
+  .barra__marca b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .quien{min-width:0;white-space:nowrap}
+  .quien b{overflow:hidden;text-overflow:ellipsis;max-width:110px}
+  .rail{width:158px;padding:10px 8px}
+  .rail__cat{min-height:52px;padding:0 10px;font-size:15px;gap:8px}
+  .pedido{width:340px}
+  .productos{padding:12px}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px;
+          grid-auto-rows:minmax(146px,auto)}
+}
+/* Entre 1181 y 1440 —1280 es un 1920 al 150%, y 1366 el notebook de siempre— la
+   barra también se doblaba en dos filas con un nombre de local o de cajero largo:
+   74 px menos para vender. Acá solo la barra; las columnas ya caben. */
+@media (min-width:1181px) and (max-width:1440px){
+  .barra{gap:10px;flex-wrap:nowrap}
+  .barra__der{gap:8px;flex-wrap:nowrap;min-width:0}
+  #turnoEstado{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;line-height:calc(var(--toque) - 2px)}
+  .tab,.version{white-space:nowrap}
+  .tabs{flex:none}
+  .barra__marca{min-width:0}
+  .barra__marca b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .quien{min-width:0;white-space:nowrap}
+  .quien b{overflow:hidden;text-overflow:ellipsis;max-width:140px}
+}
+@media (min-width:761px) and (max-width:960px){
+  .barra__marca b{display:none}          /* el punto de color basta */
+  .reloj{display:none}                   /* la hora ya está en la barra de Windows */
+  .tab{padding:0 11px}
+  #turnoEstado{max-width:120px}
+  .rail{width:124px;padding:8px 6px}
+  .rail__cat{padding:0 8px;font-size:14px;gap:6px}
+  .rail__n{display:none}
+  .pedido{width:300px}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(124px,1fr));grid-auto-rows:minmax(128px,auto)}
+}
+
+/* --- el día: las dos tablas una bajo la otra antes de apretarlas ---
+   Lado a lado solo cuando cabe entera la de cierres de caja, con su columna de
+   descuadre: desde 1501 px, y ahí el panel del día se ensancha para dársela. */
+@media (max-width:1500px){
+  .dos-col{grid-template-columns:minmax(0,1fr)}
+}
+@media (min-width:1501px){
+  .vista[data-vista="dia"] .panel{max-width:1480px}
+  .dos-col{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+}
+
+/* --- pantallas BAJAS: notebook de 768 con Windows al 125% (543 px útiles) --- */
+@media (min-width:761px) and (max-height:620px){
+  .barra{padding-top:4px;padding-bottom:4px}
+  .tab{min-height:var(--toque)}
+  .pedido__top{padding:8px 14px 6px}
+  .pedido__pie{padding:8px 14px 10px}
+  .total{margin-bottom:6px}
+  .total b{font-size:26px}
+  .linea{min-height:56px;padding:5px 4px}
+  .cant button{width:var(--toque);height:var(--toque);font-size:22px}
+  .rail__cat{min-height:var(--toque)}
+  .buscador{margin-bottom:8px}
+  .buscador input{height:var(--toque)}
+}
+
+/* --- los botones de abajo de un diálogo, siempre a la vista ---
+   Con 543 a 700 px de alto, la ficha del producto (846 px), el cobro en dos
+   formas de pago (799) y el cierre de caja (1.474) no caben. La capa se desplaza
+   —ver el comentario de .capa: si se desplazara el diálogo, un diálogo centrado
+   que no cabe se corta arriba y abajo— pero el pie con Guardar, Confirmar venta
+   o Cerrar caja quedaba abajo del corte, y había que saber que estaba ahí.
+
+   Ahora el pie se PEGA al borde de abajo mientras el resto pasa por detrás.
+   Cuando el diálogo cabe entero no cambia nada: el pie está donde siempre.
+   Los márgenes negativos lo estiran de borde a borde del diálogo, para que tape
+   lo que pasa por detrás; el `bottom` negativo lo baja hasta el borde real de la
+   pantalla, sin dejar a la vista el relleno de la capa. */
+:root{--capa-pad:20px;--dlg-px:24px;--dlg-pb:22px}
+.capa{padding:var(--capa-pad)}
+.dialogo{padding-left:var(--dlg-px);padding-right:var(--dlg-px);padding-bottom:var(--dlg-pb)}
+.dialogo > .dialogo__pie{
+  position:sticky;bottom:calc(-1 * var(--capa-pad));z-index:3;
+  margin-left:calc(-1 * var(--dlg-px));margin-right:calc(-1 * var(--dlg-px));
+  margin-bottom:calc(-1 * var(--dlg-pb));
+  padding:12px var(--dlg-px) var(--dlg-pb);
+  background:var(--tarjeta);border-radius:0 0 16px 16px;
+  box-shadow:0 -1px 0 var(--linea);
+}
+@media (max-height:760px){
+  :root{--capa-pad:10px;--dlg-px:20px;--dlg-pb:16px}
+}
+@media (max-width:620px){
+  :root{--capa-pad:0px;--dlg-px:16px;--dlg-pb:20px}
+  .dialogo > .dialogo__pie{border-radius:0}
+}
+.capa.con-teclado > .dialogo > .dialogo__pie{position:static;margin-bottom:0}
+
+/* El pie pegado tapaba el campo al que se llega con Tab: el navegador desplaza la
+   capa hasta dejar el campo justo en el borde de abajo, sin saber que ahí está el
+   pie. Contando billetes en un notebook con teclado —Tab, número, Tab— los de
+   $1.000 y $500 quedaban escondidos detrás de «Abrir caja». scroll-padding le
+   dice cuánto del borde de abajo está ocupado. */
+.capa{scroll-padding-bottom:calc(var(--capa-pad) + 100px)}
+.capa.con-teclado{scroll-padding-bottom:0}
+
+/* De 621 a 900 px la capa táctil apila los botones del pie uno sobre otro, a lo
+   ancho. Pegado, eso tapaba 136 a 196 px de una pantalla de 529: un tercio. Ahí
+   el diálogo mide 460 a 760 px y los botones caben en fila. */
+@media (min-width:621px) and (max-width:900px){
+  .dialogo__pie{flex-direction:row;flex-wrap:wrap}
+  .dialogo__pie .btn{width:auto}
+}
+@media (max-width:620px){
+  .capa{scroll-padding-bottom:calc(var(--capa-pad) + 220px)}
+  .dialogo__pie .btn--peligro{margin-left:0}   /* apilado, el margen lo corría */
+}
+
+/* --- el celular: la caja apilada, con el pedido pegado abajo ---
+   Antes esto vivía en max-width:620px y lo de las categorías en 1100. Entre
+   621 y 760 (un tablet parado) quedaba una mezcla: categorías en fila y pedido
+   al lado. Ahora todo lo apilado empieza en el mismo punto. */
+@media (max-width:760px){
+  .vista[data-vista="caja"]{flex-direction:column;overflow-y:auto;flex-wrap:nowrap}
+  .grilla{overflow:visible;flex:none}
+  .productos{flex:none}
+  /* Con tope. Sin él, un pedido de siete productos medía 1.125 px: el pedido
+     entero está pegado abajo, pero si es más alto que la pantalla lo que queda
+     a la vista es su parte de ARRIBA, y Cobrar se iba por debajo del borde.
+     El tope se descuenta de lo que ocupan la barra y el pie del pedido (unos
+     560 px): con un tope fijo del 34%, en un celular de 360x640 el pedido tapaba
+     todos los productos desde la segunda línea y no había cómo agregar otro. */
+  .lineas{overflow:auto;max-height:max(72px, calc(100vh - 560px))}
+  .pedido{
+    width:100%;flex:none;border-left:0;border-top:1px solid var(--linea);
+    position:sticky;bottom:0;z-index:5;
+  }
+  .pedido__pie{box-shadow:0 -10px 24px rgba(42,21,11,.10)}
+}

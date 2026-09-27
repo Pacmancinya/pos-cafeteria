@@ -1,0 +1,44 @@
+CAJA CLARA - DEMO PARA MOSTRAR EN 5 MINUTOS
+===========================================
+
+Es la caja de verdad, con datos de ejemplo. Sirve para mostrarsela a un dueno de
+local en un notebook. NUNCA la instales en un local: para eso esta el instalador
+normal (CajaClara-instalar-vX.Y.zip).
+
+
+ANTES DE LA REUNION (una sola vez, 3 minutos)
+---------------------------------------------
+1. Clic derecho en el ZIP -> Propiedades -> marcar "Desbloquear" -> Aceptar.
+   (Si no, Windows marca los archivos como bajados de internet y la caja se abre
+    en el navegador en vez de en su ventana.)
+2. Extraer el ZIP en el Escritorio. Nunca abrirlo desde dentro del ZIP.
+3. Doble clic en CajaClara.exe. La primera vez prepara los datos de ejemplo: tarda
+   unos segundos mas.
+
+
+LOS PIN
+-------
+   Ana   (duena)   PIN 1111   ve todo: informes, carta, cierre, configuracion
+   Luis  (cajero)  PIN 2222   vende y cierra su caja
+
+La caja de hoy ya esta abierta y hay 7 dias de ventas, para mostrar los informes.
+
+
+QUE MOSTRAR, EN ESTE ORDEN
+--------------------------
+1. Vender: tocar dos productos, Cobrar, efectivo con vuelto.   (1 min)
+2. Tarjeta y anular una venta con su motivo.                  (1 min)
+3. Entrar como Ana: el resumen del dia y la semana.           (1 min)
+4. Cerrar la caja: el conteo por billetes y el cuadre.        (1 min)
+5. Cambiar un precio en la carta y verlo al tiro en la caja.  (1 min)
+
+
+PARA DEJARLA COMO NUEVA
+-----------------------
+Doble clic en REINICIAR-DEMO.bat: cierra la caja, borra los datos de ejemplo y la
+vuelve a abrir con ventas frescas. Solo funciona en esta carpeta de demo.
+
+
+LO QUE DICE EL PAPEL
+--------------------
+El comprobante dice "NO ES BOLETA" y "DEMO". La boleta electronica esta en camino.

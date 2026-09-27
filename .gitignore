@@ -1,0 +1,49 @@
+# Lo que NUNCA puede salir del local
+# ====================================
+# Este repositorio es PÚBLICO: el actualizador lee version.json sin credenciales
+# y para eso tiene que serlo. Así que acá lo que importa no es el orden, es que
+# nada de lo de abajo se publique nunca.
+
+# La llave que firma las sesiones de una caja. Quien la tenga puede fabricarse
+# una galleta de dueño sin saber ningún PIN.
+.secreto
+# Libreta de a qué apunta el acceso directo de ESTE computador: lleva rutas
+# locales (el escritorio de una persona). Estuvo versionada hasta la 2.0 y no
+# debía: en un clon nuevo aparecía la libreta de otra máquina. El actualizador
+# nunca la tocó porque descarta los archivos que empiezan con punto.
+.acceso-directo
+.env
+
+# La base del local: ventas, usuarios, precios reales.
+pos.db
+pos.db-wal
+pos.db-shm
+
+# Copias de esa misma base.
+respaldos/
+registros/
+_version_anterior/
+
+# El perfil del navegador incrustado. Guarda cookies de sesión y el pedido a
+# medio armar del cajero.
+datos-ventana/
+
+# Lo que queda cuando algo falla en el equipo de alguien.
+problema-ventana.txt
+
+# Cosas del entorno, no del programa
+# ====================================
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Resultado de construir, no fuente. Son 57 MB que se regeneran con
+# `python -m despliegue.construir_exe`.
+despliegue/Kofe/
+despliegue/CajaClara/
+despliegue/_construccion/
+*.zip
+.tmp-pytest-*/
+auditoria-pantallas/

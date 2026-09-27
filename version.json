@@ -1,0 +1,6 @@
+{
+  "version": "2.31",
+  "nombre": "Se llama Caja Clara",
+  "novedades": "El programa cambia de nombre: desde ahora se llama Caja Clara. En tu caja no cambia nada de lo que importa: tus ventas, tu carta, tu gente y el nombre de tu local quedan exactamente igual, en la pantalla, en el comprobante y en los televisores. Los computadores que se instalen desde ahora traen el ícono nuevo, una boleta con un visto bueno. Además, la caja se puede abrir en modo demostración, con una carta y ventas de ejemplo, para mostrársela a alguien sin tocar un local de verdad.",
+  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.31.zip"
+}

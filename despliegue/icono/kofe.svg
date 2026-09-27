@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Icono de la aplicación. Tiene que leerse a 16 px en la barra de tareas:
+       por eso es una taza maciza sin detalle fino, en los colores de Kofe. -->
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D9622F"/>
+      <stop offset="1" stop-color="#A03F1C"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="58" fill="url(#fondo)"/>
+
+  <!-- vapor: se pierde a 16 px, pero a 48 y más le da vida -->
+  <g stroke="#FFF3E4" stroke-opacity=".55" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M104 64 c-9 -12 7 -18 -1 -30"/>
+    <path d="M132 58 c-9 -12 7 -18 -1 -30"/>
+  </g>
+
+  <!-- asa -->
+  <path d="M176 112 c30 -4 34 46 -2 50" fill="none" stroke="#FFF3E4" stroke-width="17" stroke-linecap="round"/>
+
+  <!-- taza -->
+  <path d="M62 100 h116 l-11 74 q-3 20 -23 20 h-48 q-20 0 -23 -20 Z" fill="#FFF3E4"/>
+  <!-- café -->
+  <ellipse cx="120" cy="101" rx="52" ry="12" fill="#3A1B0C"/>
+  <!-- plato -->
+  <rect x="38" y="204" width="164" height="20" rx="10" fill="#FFF3E4"/>
+</svg>

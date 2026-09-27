@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Punto de venta</title>
+<link rel="stylesheet" href="/static/styles.css?v=__VERSION__">
+</head>
+<body>
+
+<header class="barra">
+  <div class="barra__marca">
+    <span class="punto"></span>
+    <b id="nombreLocal">Punto de venta</b>
+    __MARCA_DEMO__
+  </div>
+  <nav class="tabs">
+    <button class="tab is-on" data-vista="caja">Caja</button>
+    <button class="tab" data-vista="dia">El día</button>
+    <button class="tab" data-vista="carta">Carta</button>
+    <button class="tab" data-vista="inventario">Bodega</button>
+    <button class="tab" data-vista="guias" id="btnConfigurar">Configurar</button>
+  </nav>
+  <div class="barra__der">
+    <button class="quien" id="quienEsta" hidden>
+      <span class="quien__punto"></span><b id="quienNombre"></b>
+    </button>
+    <button class="turno" id="verEquipo" data-permiso="usuarios" hidden
+            title="Quiénes entran a la caja">Equipo</button>
+    <button type="button" class="turno" id="turnoEstado">…</button>
+    <button type="button" class="turno pantalla-completa" id="btnPantallaCompleta"
+            aria-label="Pantalla completa" title="Pantalla completa (F11)" aria-pressed="false">⛶</button>
+    <span class="version" id="version" title="Ver versión y buscar actualizaciones">v…</span>
+    <span class="reloj" id="reloj">--:--</span>
+  </div>
+</header>
+
+<!-- Cuando la caja no contesta, se dice. Lo prende vigilarLaCaja() en app.js. -->
+<div class="sin-caja" id="sinCaja" role="alert" hidden>
+  <b>La caja no está respondiendo.</b>
+  <span>Si no se arregla sola en un minuto, recarga. Si tampoco, cierra el programa y ábrelo de nuevo.</span>
+  <button class="btn" data-recargar>Recargar</button>
+</div>
+
+<!-- ══════════ CAJA ══════════ -->
+<main class="vista is-on" data-vista="caja">
+  <nav class="rail" id="rail"></nav>
+
+  <section class="productos">
+    <div class="buscador">
+      <svg class="buscador__lupa" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>
+      </svg>
+      <input id="buscar" type="text" placeholder="Buscar producto…" autocomplete="off" spellcheck="false">
+      <button class="buscador__x" id="limpiarBuscar" hidden aria-label="Limpiar">✕</button>
+    </div>
+    <div><button type="button" class="btn" id="btnVarios" hidden>+ Productos varios</button></div>
+    <div class="grilla" id="grilla"></div>
+  </section>
+
+  <aside class="pedido">
+    <div class="pedido__top">
+      <h2>Pedido</h2>
+      <button class="btn btn--fantasma" id="btnLimpiar">Limpiar</button>
+    </div>
+    <div class="lineas" id="lineas">
+      <p class="vacio">Toca un producto para empezar</p>
+    </div>
+    <div class="pedido__pie">
+      <div class="total">
+        <span>Total</span>
+        <b id="total">$0</b>
+      </div>
+      <button class="btn btn--cobrar" id="btnCobrar" disabled>Cobrar</button>
+    </div>
+  </aside>
+</main>
+
+<!-- ══════════ EL DÍA ══════════ -->
+<main class="vista" data-vista="dia">
+  <div class="panel">
+    <div class="barra-dia">
+      <label class="campo campo--linea"><span>Día</span>
+        <input type="date" id="fechaDia"></label>
+      <div class="periodos">
+        <button class="periodo" data-periodo="turno">Turno</button>
+        <button class="periodo is-on" data-periodo="dia">Día</button>
+        <button class="periodo" data-periodo="semana">Semana</button>
+        <button class="periodo" data-periodo="mes">Mes</button>
+      </div>
+      <!-- Solo aparece mirando por turno. Si el día tuvo dos cajas, acá se elige
+           cuál: las cifras de arriba son de la que esté elegida y de ninguna otra. -->
+      <label class="campo campo--linea" id="campoTurno" hidden><span>Qué turno</span>
+        <select id="selTurno"></select></label>
+      <div class="barra-dia__acc">
+        <button class="btn" id="btnHoy">Hoy</button>
+        <button class="btn" id="btnExportar">Descargar para el contador</button>
+        <button class="btn" id="btnRespaldar">Respaldar ahora</button>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="dos-col">
+      <div>
+        <h3 id="tituloVentas">Ventas de hoy</h3>
+        <div class="tabla-wrap"><table class="tabla" id="tablaVentas"></table></div>
+        <!-- La plata que salió y entró del cajón a mano. Vacío cuando no hubo. -->
+        <div id="zonaCaja"></div>
+      </div>
+      <div>
+        <h3>Lo más vendido</h3>
+        <div class="tabla-wrap"><table class="tabla" id="tablaTop"></table></div>
+        <h3 style="margin-top:22px">Cierres de caja</h3>
+        <div class="tabla-wrap"><table class="tabla" id="tablaTurnos"></table></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ══════════ CARTA ══════════ -->
+<main class="vista" data-vista="carta">
+  <div class="panel">
+    <div class="buscador">
+      <svg class="buscador__lupa" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>
+      </svg>
+      <input id="buscarCarta" type="search" placeholder="Buscar producto en la carta…"
+             aria-label="Buscar producto en la carta" autocomplete="off" spellcheck="false">
+      <button type="button" class="buscador__x" id="limpiarBuscarCarta" hidden
+              aria-label="Limpiar búsqueda de la carta">✕</button>
+    </div>
+    <p class="ayuda">Lo que cambies acá se ve en la caja y en las pantallas del local.
+      El precio se escribe sin puntos: <code>3400</code> se muestra como $3.400.</p>
+    <details class="conectar" id="pantallasLocal">
+      <summary>Las pantallas del local</summary>
+      <div id="conectar"></div>
+    </details>
+    <div id="editorCarta"></div>
+    <p class="ayuda" id="cartaSinResultados" role="status" hidden>No hay productos con ese nombre.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+      <button class="btn" id="btnNuevaCat">+ Agregar categoría</button>
+      <button class="btn" id="btnImportar" data-permiso="editar_carta">Traer la carta de un archivo</button>
+    </div>
+  </div>
+</main>
+
+<!-- ══════════ BODEGA ══════════ -->
+<main class="vista" data-vista="inventario">
+  <div class="panel">
+    <div class="barra-dia">
+      <div>
+        <h3 style="margin-bottom:4px">Lo que hay en la bodega</h3>
+        <p class="ayuda" style="margin:0">Toca un producto para cambiar cuántos hay. Se descuenta solo al vender.</p>
+      </div>
+    </div>
+    <label class="campo"><span>Buscar en bodega</span>
+      <input id="buscarBodega" type="search" autocomplete="off"
+        placeholder="Nombre o código de barras"></label>
+    <div class="tabla-wrap"><table class="tabla" id="tablaInsumos"></table></div>
+    <details id="bodegaAvanzada" style="margin-top:24px">
+      <summary>Avanzado: insumos y recetas anteriores</summary>
+      <p class="ayuda">Aquí se conservan los insumos, sus medidas y sus movimientos.
+        Los productos anteriores sin conteo siguen aquí hasta que marques su cuenta en la Carta.</p>
+      <button class="btn" id="btnNuevoInsumo">+ Insumo</button>
+      <div class="tabla-wrap"><table class="tabla" id="tablaInsumosAnteriores"></table></div>
+      <div id="recetasAnteriores"></div>
+    </details>
+  </div>
+</main>
+
+<!-- ══════════ AYUDA ══════════ -->
+<main class="vista" data-vista="guias">
+  <div class="panel" id="panelAjustes"></div>
+
+  <div class="panel panel--ayuda">
+    <div class="ayuda-cabecera">
+      <div>
+        <h3>Guías</h3>
+        <p class="ayuda" style="margin:0">Cómo se hace cada cosa, explicado paso a paso.
+          Se puede leer de pie, con el local abierto.</p>
+      </div>
+      <span class="version" id="versionAyuda" title="Ver qué cambió en cada versión"></span>
+    </div>
+    <div class="ayuda-cuerpo">
+      <nav class="ayuda-lista" id="listaGuias"></nav>
+      <article class="ayuda-texto" id="textoGuia"></article>
+    </div>
+  </div>
+
+</main>
+
+<!-- ══════════ COBRAR ══════════ -->
+<div class="capa" id="capaCobro">
+  <!-- Dos columnas. En una pantalla de notebook (660 px útiles) esto medía 711
+       px apilado: había que scrollear 91 px para llegar a "Confirmar venta", o
+       sea el botón más importante quedaba abajo del corte. A lo ancho sobra
+       espacio de sobra. Se apila solo en pantallas angostas. -->
+  <div class="dialogo dialogo--cobro">
+    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
+    <h2>Cobrar <span id="cobroTotal"></span></h2>
+
+    <div class="cobro">
+      <div class="cobro__col">
+        <div class="campo"><span>¿Con qué paga?</span>
+          <div class="medios" id="medios">
+            <button class="medio is-on" data-medio="efectivo">Efectivo</button>
+            <button class="medio" data-medio="debito">Débito</button>
+            <button class="medio" data-medio="credito">Crédito</button>
+            <button class="medio" data-medio="transferencia">Transferencia</button>
+          </div>
+          <label class="marca" style="margin-top:10px">
+            <input type="checkbox" id="pagoMixto"> Paga en dos formas (parte y parte)</label>
+        </div>
+
+        <!-- Pago mixto: una parte con cada medio. Aparece al marcar arriba. -->
+        <div id="mixtoGrid" hidden></div>
+
+        <!-- Descuento y propina van juntos y a la izquierda a propósito: son lo
+             que MENOS se usa. Lo de cada venta —el medio de pago y el vuelto—
+             manda. -->
+        <div class="fila2">
+          <label class="campo"><span>Descuento</span>
+            <input id="descuento" type="text" inputmode="numeric" placeholder="0"
+                   autocomplete="off"></label>
+          <label class="campo"><span>Propina</span>
+            <input id="propina" type="text" inputmode="numeric" placeholder="0"
+                   autocomplete="off"></label>
+        </div>
+        <div class="rapidos" id="rapidosDesc">
+          <button data-desc="0">Sin descuento</button>
+          <button data-desc="10">10%</button>
+          <button data-desc="15">15%</button>
+          <button data-desc="20">20%</button>
+        </div>
+      </div>
+
+      <div class="cobro__col">
+        <div id="bloqueEfectivo">
+          <label class="campo"><span>Con cuánto paga</span>
+            <input id="pagaCon" type="text" inputmode="numeric" placeholder="0"
+                   autocomplete="off"></label>
+          <div class="rapidos" id="rapidos"></div>
+          <div class="vuelto" id="vuelto"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialogo__pie">
+      <button class="btn btn--fantasma" id="cobroCancelar">Cancelar</button>
+      <button class="btn btn--cobrar" id="cobroConfirmar">Confirmar venta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ EDITAR PRODUCTO ══════════ -->
+<div class="capa" id="capaProducto">
+  <div class="dialogo" id="dialogoProducto"></div>
+</div>
+
+<!-- ══════════ TURNO ══════════ -->
+<!-- ══════════ EQUIPO ══════════ -->
+<div class="capa" id="capaEquipo">
+  <div class="dialogo dialogo--ancho" id="dialogoEquipo"></div>
+</div>
+
+<!-- ══════════ ACTUALIZACIONES ══════════ -->
+<div class="capa" id="capaVersion">
+  <div class="dialogo" id="dialogoVersion"></div>
+</div>
+
+<!-- capa--firme: adentro se cuenta plata. Un roce no puede botar el conteo. -->
+<div class="capa capa--firme" id="capaTurno">
+  <div class="dialogo" id="dialogoTurno"></div>
+</div>
+
+<div class="capa" id="capaImportar">
+  <div class="dialogo dialogo--ancho" id="dialogoImportar"></div>
+</div>
+
+<!-- ══════════ PRODUCTO NUEVO DESDE EL ESCÁNER ══════════ -->
+<!-- Va en una capa firme: acá se está armando un producto con el cliente
+     esperando, y un toque al lado no puede borrarlo. -->
+<div class="capa capa--firme" id="capaCodigo">
+  <div class="dialogo" id="dialogoCodigo"></div>
+</div>
+
+<div class="capa" id="capaInsumo">
+  <div class="dialogo" id="dialogoInsumo"></div>
+</div>
+
+<div class="capa capa--firme" id="capaBodega">
+  <div class="dialogo dialogo--ancho" id="dialogoBodega"></div>
+</div>
+
+<!-- El candado NO es una vista: es una capa que tapa todo. Si fuera vista,
+     escribir #/caja en la barra de direcciones la saltaría. -->
+<!-- ══════════ LA CAJA ESTÁ CERRADA ══════════
+     Tapa todo, igual que el candado. Desde la 2.5 no se puede usar el programa
+     sin abrir la caja: una venta sin turno no entra en ningún cuadre. -->
+<div class="candado" id="cajaCerrada" hidden>
+  <div class="candado__caja">
+    <h1 id="cajaCerradaLocal">Kofe</h1>
+    <p>La caja está cerrada.<br>
+       Ábrela para empezar el día: se cuenta el fondo con el que parte el cajón.</p>
+    <button class="btn btn--cobrar" id="abrirLaCaja">Abrir caja</button>
+    <p class="candado__nota">
+      ¿Terminaste por hoy? Cierra tu sesión y deja la caja cerrada.<br>
+      <button class="btn btn--fantasma btn--chico" id="salirSinCaja"
+              style="margin-top:10px">Salir de mi cuenta</button>
+    </p>
+  </div>
+</div>
+
+<div class="candado" id="candado" hidden>
+  <div class="candado__caja" id="candadoCaja"></div>
+</div>
+
+<div class="aviso" id="aviso"></div>
+
+<script src="/static/dibujos.js?v=__VERSION__"></script>
+<script src="/static/guias.js?v=__VERSION__"></script>
+<script src="/static/teclado.js?v=__VERSION__"></script>
+<script src="/static/escaner.js?v=__VERSION__"></script>
+<script src="/static/app.js?v=__VERSION__"></script>
+</body>
+</html>

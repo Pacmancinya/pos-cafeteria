@@ -1,0 +1,323 @@
+"""Configuración del punto de venta. Todo se puede pisar con variables de entorno."""
+from __future__ import annotations
+
+import os
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+# La versión tiene que coincidir con la de version.json cuando se publica.
+# Regla heredada de la Biblioteca Láser: nunca repetir el nombre ni el texto de
+# novedades entre versiones, o nadie distingue una de otra.
+APP_VERSION = "2.31"
+APP_NOMBRE = "Se llama Caja Clara"
+VERSION = APP_VERSION          # nombre viejo, se mantiene por compatibilidad
+
+# De dónde se enteran las cajas de que hay una versión nueva (el canal estable;
+# el piloto es version-piloto.json al lado). Si el repositorio pasa a ser
+# privado, cada local necesita su clave en POS_CLAVE_DESCARGA: ver
+# docs/PUBLICAR-ACTUALIZACIONES.md.
+URL_VERSION = os.getenv(
+    "POS_URL_VERSION",
+    "https://raw.githubusercontent.com/Pacmancinya/pos-cafeteria/main/version.json",
+)
+
+# Puerto fijo a propósito: el navegador guarda cosas por origen y si el puerto
+# baila, el cajero pierde la sesión. Ver docs/CONTRATO.md sección 4.
+PUERTO = int(os.getenv("POS_PUERTO", "8090"))
+
+# Escuchamos en toda la red del local porque las pantallas del menú suelen vivir
+# en OTRO computador y necesitan alcanzar /api/v1/carta.
+HOST = os.getenv("POS_HOST", "0.0.0.0")
+
+# ...y justamente por eso hay PIN de red (ver apps/pos/acceso.py). Desde la 2.19
+# lo elige cada local y vive en su base (apps/pos/local.py): antes era "2468" en
+# todas las cajas. POS_PIN sigue sirviendo para que una instalación lo deje fijo.
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_URL = os.getenv("POS_DB_URL", f"sqlite:///{os.path.join(RAIZ, 'pos.db')}")
+
+
+def modo_demo() -> bool:
+    """Sólo la marca junto al ejecutable habilita la demostración."""
+    return os.path.isfile(os.path.join(RAIZ, "MODO-DEMO.txt"))
+
+
+# El local vive en Chile: guardamos UTC y mostramos hora local.
+# Windows NO trae la base de zonas horarias: sin el paquete `tzdata` esto revienta.
+# Preferimos que reviente acá, con un mensaje claro, antes que caer a UTC en
+# silencio y entregar cierres de caja con las ventas partidas en dos días.
+try:
+    ZONA = ZoneInfo(os.getenv("POS_ZONA", "America/Santiago"))
+except Exception as e:  # ZoneInfoNotFoundError y parientes
+    raise RuntimeError(
+        "No se encontró la zona horaria del local. En Windows falta el paquete "
+        "de zonas horarias: instálalo con  .venv/Scripts/python -m pip install tzdata"
+    ) from e
+
+IVA = 0.19
+MEDIOS_PAGO = ("efectivo", "debito", "credito", "transferencia")
+
+# Las claves van sin tildes porque viajan por la API y se guardan en la base.
+# Esto es cómo se escriben cuando las lee una persona.
+NOMBRE_MEDIO = {
+    "efectivo": "Efectivo",
+    "debito": "Débito",
+    "credito": "Crédito",
+    "transferencia": "Transferencia",
+    # No es un medio que se elija: es la marca de una venta pagada en dos formas
+    # (parte efectivo, parte tarjeta). Cada parte se guarda como una fila de Pago.
+    "mixto": "Pago mixto",
+}
+
+# La plata que circula en Chile, de mayor a menor. Se usa para contar la caja
+# por denominación: es mucho más difícil equivocarse contando billetes que
+# escribiendo un total de memoria.
+DENOMINACIONES = (20000, 10000, 5000, 2000, 1000, 500, 100, 50, 10)
+
+# ---------------------------------------------------------------------------
+# Quién puede hacer qué
+# ---------------------------------------------------------------------------
+# Los permisos viven acá y no en la base a propósito: cambiar quién puede anular
+# una venta tiene que ser un cambio de programa que queda escrito, no algo que
+# alguien pueda editar desde la caja un sábado apurado.
+#
+# Las claves van sin tildes ni ñ porque viajan por la API y se guardan.
+ROLES = ("dueno", "cajero")
+
+NOMBRE_ROL = {"dueno": "Dueño", "cajero": "Cajero"}
+
+PERMISOS = {
+    "dueno": (
+        "vender", "anular", "anular_pasado",
+        "turno_abrir", "turno_cerrar", "turno_cerrar_ajeno",
+        "caja_retirar", "cobrar_varios",
+        "ver_dia", "ver_informes", "editar_carta",
+        "inventario", "inventario_ajustar",
+        "usuarios", "config",
+    ),
+    # El cajero vende y cuadra su caja. No edita precios ni corrige el pasado:
+    # no es desconfianza, es que un error suyo ahí no lo puede deshacer nadie.
+    #
+    # OJO con "turno_cerrar": lo tienen los dos, pero NO alcanza solo. Cerrar es
+    # firmar que el cajón que se contó en la mañana cuadra en la noche, así que
+    # además se compara Turno.abierto_por_id con quien pide el cierre (ver
+    # apps/pos/api/turnos.py). El que pasa por encima de esa comparación es
+    # "turno_cerrar_ajeno", que tiene solo el dueño. Si lees esta tupla sin leer
+    # esto, vas a creer que el cajero cierra cualquier caja, y no es así.
+    "cajero": (
+        "vender", "anular",
+        "turno_abrir", "turno_cerrar",
+        # Sacar plata del cajón durante el turno lo hace también el cajero: es el
+        # que está solo a las 9 de la mañana cuando hay que ir a comprar pan. No
+        # es un descuido dárselo: cada retiro queda firmado con su nombre y su
+        # hora, y eso —no un permiso que se lo quite— es lo que lo hace honesto.
+        "caja_retirar", "cobrar_varios",
+        "ver_dia", "inventario",
+    ),
+}
+
+
+# Todo lo que se puede dar o quitar, en el orden en que tiene sentido leerlo en la
+# pantalla del equipo. Los nombres son los que ve el dueño, no los de la API.
+CATALOGO_DE_PERMISOS = (
+    ("vender", "Vender"),
+    ("anular", "Anular una venta del día"),
+    ("anular_pasado", "Anular ventas de cajas ya cerradas"),
+    ("turno_abrir", "Abrir la caja"),
+    ("turno_cerrar", "Cerrar su caja"),
+    ("turno_cerrar_ajeno", "Cerrar la caja de otro"),
+    ("caja_retirar", "Sacar plata del cajón"),
+    ("cobrar_varios", "Cobrar un monto a mano"),
+    ("ver_dia", "Ver El día"),
+    ("ver_informes", "Ver los informes"),
+    ("editar_carta", "Editar la carta y los precios"),
+    ("inventario", "Ver la bodega"),
+    ("inventario_ajustar", "Corregir el stock"),
+    ("usuarios", "Crear y editar personas"),
+    ("config", "Cambiar los ajustes"),
+)
+
+TODOS_LOS_PERMISOS = tuple(clave for clave, _ in CATALOGO_DE_PERMISOS)
+
+
+def permisos_de(rol: str, propios: str = "") -> frozenset:
+    """Lo que esta persona puede hacer.
+
+    Sin nada propio manda el rol, que es lo de siempre y lo que tiene el 99% de la gente.
+    Con permisos propios escritos, esos MANDAN sobre el rol: así se puede tener a alguien
+    que solo vende —llega, abre la caja, vende, cierra y se va— sin inventar un rol nuevo
+    por cada combinación que pida un local.
+
+    Se filtran contra el catálogo a propósito: un permiso escrito a mano que ya no existe
+    no puede colarse, y uno que se saque del programa deja de valer aunque esté guardado.
+    """
+    escritos = [p.strip() for p in (propios or "").split(",") if p.strip()]
+    if escritos:
+        return frozenset(p for p in escritos if p in TODOS_LOS_PERMISOS)
+    return frozenset(PERMISOS.get(rol, ()))
+
+
+def puede(rol: str, permiso: str, propios: str = "") -> bool:
+    return permiso in permisos_de(rol, propios)
+
+
+# Cuántos minutos sin tocar nada antes de que la caja se bloquee sola. Existe
+# para que la presencia sea honesta: una sesión que alguien dejó abierta y se
+# fue diría que esa persona estuvo toda la tarde. Es el valor de fábrica: el
+# dueño lo cambia en Ayuda → Ajustes. Hasta la 2.18 había dos verdades —90
+# segundos acá, sin que nadie los usara, y 3 minutos escritos en la pantalla—.
+BLOQUEO_MINUTOS = 3
+
+# Con qué se firma la galleta de la sesión. Si no se define, se deriva de la
+# base de datos del local: así cada caja tiene su propia firma sin que nadie
+# tenga que inventar una clave, y reiniciar el programa no desloguea a nadie.
+SECRETO = os.getenv("POS_SECRETO", "")
+
+# ---------------------------------------------------------------------------
+# Inventario
+# ---------------------------------------------------------------------------
+# Las tres unidades base. Todo se guarda ENTERO en estas unidades: 200 ml de
+# leche es 200, 18 g de café es 18. Un litro y un kilo son formas de comprar,
+# no formas de guardar (ver docs/CONTRATO.md, sección de inventario).
+UNIDADES = ("g", "ml", "un")
+
+NOMBRE_UNIDAD = {"g": "gramos", "ml": "mililitros", "un": "unidades"}
+
+TIPOS_MOVIMIENTO = ("compra", "venta", "merma", "ajuste", "devolucion", "carga")
+
+
+def mostrar_cantidad(cantidad: int, unidad: str) -> str:
+    """3400 ml -> "3,4 L". Para que el dueño lea litros y kilos, no miles.
+
+    El guardado sigue siendo entero: esto es solo cómo se escribe en pantalla.
+    """
+    signo = "-" if cantidad < 0 else ""
+    n = abs(int(cantidad))
+    if unidad == "ml" and n >= 1000:
+        return f"{signo}{n / 1000:.1f}".replace(".", ",").replace(",0", "") + " L"
+    if unidad == "g" and n >= 1000:
+        return f"{signo}{n / 1000:.1f}".replace(".", ",").replace(",0", "") + " kg"
+    if unidad == "un":
+        return f"{signo}{n}"
+    return f"{signo}{n} {unidad}"
+
+
+def costo_de(cantidad: int, compra_costo: int, compra_contenido: int) -> int:
+    """Cuánto vale esa cantidad, en pesos enteros.
+
+    La división va SIEMPRE al final: el costo por unidad no se guarda porque la
+    leche sale $1,2 el mililitro y redondear eso a $1 le quita un 17% al valor
+    del inventario.
+    """
+    if compra_contenido <= 0:
+        return 0
+    return int(cantidad) * int(compra_costo) // int(compra_contenido)
+
+
+def total_del_conteo(conteo: dict) -> int:
+    """{'1000': 4, '500': 3} -> 5500. Ignora lo que no reconozca."""
+    total = 0
+    for valor, cantidad in (conteo or {}).items():
+        try:
+            v, c = int(valor), int(cantidad)
+        except (TypeError, ValueError):
+            continue
+        if v in DENOMINACIONES and c > 0:
+            total += v * c
+    return total
+
+# ---------------------------------------------------------------------------
+# Cuánto cobrar
+# ---------------------------------------------------------------------------
+# El margen es SOBRE LA VENTA, no sobre el costo, y es la trampa clásica de
+# poner precios: un 50% de margen es cobrar el DOBLE del costo; "50% sobre el
+# costo" sería cobrar 1,5 veces y se gana mucho menos. Se usa sobre la venta
+# porque es la misma cuenta que ya muestra `margen_pct` de la receta, y dos
+# definiciones distintas del mismo número en la misma pantalla confunden más
+# que no tener ninguna. La pantalla muestra las dos formas escritas al lado.
+MARGEN_SUGERIDO = 50            # % de la venta que se queda el local
+
+# Nadie cobra $2.437. El sugerido sube al múltiplo de $50 de arriba: así el
+# margen pedido es un PISO y no algo que el redondeo se come.
+REDONDEO_PRECIO = 50
+
+# ¿Se usa el teclado numérico en pantalla?
+#
+# Apagado por defecto desde la 2.5, y es un cambio de opinión con motivo: la
+# caja se diseñó "táctil primero" pensando en una pantalla táctil que todavía no
+# existe. En un notebook con teclado de verdad, un teclado dibujado que se abre
+# solo tapa media pantalla y estorba para escribir. Cuando llegue la pantalla
+# táctil se prende acá y vuelve entero.
+TECLADO_EN_PANTALLA = False
+
+# Sigue siendo «Kofe» a propósito, aunque el producto se llame Caja Clara: esto lo usa el
+# Kofe.py congelado de las cajas instaladas para el título de la ventana y el nombre del
+# acceso directo. Cambiarlo acá renombraría la ventana y el icono de un local que ya
+# existe. El nombre que se ve en la caja, el comprobante y los televisores sale de la
+# base (apps/pos/local.py).
+NOMBRE_LOCAL = os.getenv("POS_LOCAL", "Kofe")
+AVISOS = [
+    "Lunes a sábado de 8:00 a 20:00",
+    "Pedidos para llevar en la barra",
+]
+
+
+def ip_en_la_red() -> str:
+    """La IP del PC en la red del local, para saber qué dirección poner en las
+    pantallas. No abre conexión: solo le pregunta al sistema por dónde saldría."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def ahora() -> datetime:
+    """Instante actual en UTC, con tzinfo. Nunca uses datetime.now() pelado."""
+    return datetime.now(timezone.utc)
+
+
+def hoy_local() -> date:
+    return ahora().astimezone(ZONA).date()
+
+
+def como_utc(dt: datetime) -> datetime:
+    """Lo guardado, con su zona puesta.
+
+    SQLite devuelve los datetime SIN tzinfo, y restarle uno de esos a `ahora()`
+    —que sí la tiene— revienta. Todo lo que se guarda está en UTC, así que acá
+    se le pone la etiqueta que le corresponde. Úsalo siempre antes de restar.
+    """
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def a_local(dt: datetime) -> datetime:
+    """SQLite devuelve datetimes sin tzinfo; asumimos que lo guardado es UTC."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZONA)
+
+
+def rango_utc_del_dia(fecha: date) -> tuple[datetime, datetime]:
+    """Un día del calendario chileno, traducido al rango UTC que hay que consultar.
+
+    Existe porque el día del local no es el día UTC: a las 21:00 de Santiago ya es
+    el día siguiente en UTC, y el cuadre del turno saldría partido en dos.
+    """
+    inicio = datetime.combine(fecha, time.min, tzinfo=ZONA)
+    fin = inicio + timedelta(days=1)
+    return inicio.astimezone(timezone.utc), fin.astimezone(timezone.utc)
+
+
+def neto_iva(bruto: int) -> tuple[int, int]:
+    """Descompone un monto bruto en (neto, iva) sin perder ni ganar un peso.
+
+    El IVA se calcula por diferencia justamente para que neto + iva == bruto
+    siempre, incluso cuando el redondeo del neto tira para abajo.
+    """
+    neto = round(bruto / (1 + IVA))
+    return neto, bruto - neto

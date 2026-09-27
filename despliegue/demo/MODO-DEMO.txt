@@ -1,0 +1,10 @@
+Esta carpeta es una DEMOSTRACION de Caja Clara.
+
+Mientras este archivo este aca, al lado de CajaClara.exe, la caja abre con una carta,
+personas y ventas de EJEMPLO, y muestra la marca DEMO. Nada de lo que se venda aca es
+real ni se informa a nadie.
+
+No lo copies a la carpeta de un local de verdad. Si lo borras, la caja deja de sembrar
+datos de ejemplo (los que ya estan se quedan).
+
+Como usarla: LEEME-DEMO.txt

@@ -1,0 +1,1031 @@
+# CONTRATO — modelo de datos y API del punto de venta
+
+> **Fuente de verdad del proyecto.** Si el código y este documento no coinciden, gana el
+> código (`apps/pos/db/models.py`) — pero entonces hay que actualizar este archivo en el
+> mismo commit. Esa es la regla.
+>
+> `[IMPL]` = implementado y probado · `[ROADMAP]` = diseñado, todavía no construido.
+
+---
+
+## 1. Decisiones que mandan sobre todo lo demás
+
+**1. La plata es entera y bruta.** Todos los montos son **enteros en pesos chilenos**. Nada
+de decimales, nada de flotantes: en CLP no hay centavos y un `float` termina dando
+$3.399,9999. El precio guardado es el **bruto** (lo que paga el cliente, con IVA incluido),
+porque es lo que se muestra en la carta y lo que el cajero cobra.
+
+El neto y el IVA se **calculan al momento del informe**, nunca se guardan sueltos:
+
+```
+neto = round(bruto / 1.19)
+iva  = bruto - neto          # así neto + iva == bruto SIEMPRE, sin descuadres de $1
+```
+
+**2. La línea de venta congela nombre y precio.** `VentaLinea` guarda el nombre y el precio
+unitario **copiados** al momento de vender. Si mañana sube el café, las ventas de ayer no
+cambian. Un POS que recalcula el pasado es un POS que miente en el cuadre.
+
+**3. El punto de venta es el dueño de la carta.** Los productos viven acá y las pantallas
+del local los leen por `GET /api/v1/carta`. No hay dos listas de precios. Esto es lo que
+pidió el cliente: configurar todo desde el punto de venta.
+
+**4. Nombres del dominio en español.** `Producto`, `Venta`, `Turno`. El dominio es una
+cafetería chilena y lo va a leer gente que habla español. (En Gesfact los modelos están en
+inglés porque el dominio técnico es un SaaS; acá la decisión es al revés, a propósito.)
+
+**5. Una venta pagada no se edita. Se anula.** Corregir montos en el pasado rompe el cuadre
+y es exactamente el agujero que Gesfact existe para detectar. Anular deja rastro.
+
+**6. La caja es táctil primero.** Se usa de pie y con el dedo, no con mouse. El mínimo
+cómodo son 48 px de alto (`--toque`), 56 para lo que se toca todo el día (`--toque-alto`)
+y 64 para lo que se toca en cada venta (`--toque-rey`). Van como token y no como padding
+porque con padding el alto real depende del font-size del navegador — así había once
+alturas distintas sin que nadie lo decidiera. Los campos numéricos usan el teclado de
+`teclado.js`, no el de Windows, porque el de Windows tapa el botón *Confirmar venta*.
+
+> **Revertido en la 2.5, y con motivo.** El teclado numérico en pantalla queda APAGADO por
+> defecto (`TECLADO_EN_PANTALLA`). Se diseñó para una pantalla táctil que todavía no existe;
+> en el notebook del local hay un teclado de verdad, y un teclado dibujado que se abre solo
+> tapa media pantalla justo cuando uno quiere escribir. Los tamaños cómodos para el dedo se
+> quedan: no estorban con mouse y sirven el día que llegue la pantalla. El código del teclado
+> tampoco se borró — se prende desde los ajustes.
+
+**7. El stock de lo que se vende TAL CUAL, ya contado, SÍ bloquea. Lo demás avisa.**
+Desde la 2.12 no se vende lo que no hay: si un producto que se vende tal cual ya se contó y
+el saldo no alcanza, la venta se rechaza (en la pantalla y en el servidor). Lo que NO
+bloquea: los productos de receta (un capuchino puede quedar en negativo, y ese negativo es
+información) y los productos que todavía nadie contó. Ver la sección de inventario.
+
+> **Dado vuelta en la 2.12, y a propósito.** El dueño lo pidió después de ver, otra vez, que
+> se podía vender de más: ahora el tope es DURO. Pero revertir esta decisión sin cuidado
+> habría sido el peor error posible —dejar al local sin cobrar el lunes— así que el tope
+> solo muerde lo CONTADO (ver `Insumo.contado`): un producto que lleva cuenta pero que nadie
+> contó todavía se sigue vendiendo libre, como antes, hasta que alguien cuente la bodega. Y
+> el inventario pasó a ser obligatorio: todo producto lleva cuenta, los nuevos al crearse,
+> los importados al importar, y los viejos se ponen al día solos al arrancar. Lo que sigue
+> abajo es la historia de cómo se llegó hasta acá; se deja porque explica por qué el tope es
+> como es.
+>
+> **Matizado en la 2.5.** Sigue sin bloquear, pero ahora AVISA DE VERDAD: al pasar de lo
+> que queda, el primer toque no suma y dice cuántos hay. El segundo sí suma. Antes se podía
+> poner 12 de algo que tenía 3 sin que nada dijera nada, y el inventario quedaba en −9 hasta
+> el conteo. El tope se pasa a propósito porque el saldo es lo que dice el programa, no lo
+> que hay en la repisa: si llegó mercadería y nadie la anotó, negarse a vender sería peor
+> que descuadrar el inventario — el cliente está ahí con la plata en la mano. Solo aplica a
+> lo que se vende TAL CUAL: un capuchino no tiene "cuántos quedan", tiene leche y café.
+>
+> **Corregido en la 2.9. "Avisa" no era lo que decía ser, y hay video.** Lo de la 2.5 se
+> escribió como si el segundo toque fuera una confirmación. No lo era: el aviso se iba solo
+> a los tres segundos y el toque siguiente pasaba igual, viniera un segundo después o un
+> minuto. Con eso se vendieron 27 unidades de un producto que estaba en cero, y el local lo
+> reclamó tres veces —"me deja vender 30 que no existen"— antes de que quedara arreglado.
+>
+> Ahora es una PREGUNTA: dice cuántos quedan, cuántos se están poniendo y en cuánto va a
+> quedar el inventario, y hay que contestar que sí. El sí vale para ese producto y ese
+> pedido; se olvida al cobrar. Preguntar en cada toque sería peor —el cajero terminaría
+> apretando Aceptar sin leer, que es como se llega otra vez a 27.
+>
+> **Y había un agujero más grande abajo:** un producto sin inventario no tenía tope
+> NINGUNO. No es que el aviso fallara; es que `p.stock` venía nulo y la comparación no
+> existía. Un producto creado sin insumo se vendía sin límite y en silencio. La 2.9 agrega
+> `POST /inventario/llevar-la-cuenta-de-todo` y un panel en la Bodega que lo dice con esas
+> palabras, para no arreglarlos de a uno.
+>
+> **La lección, que es la misma de la decisión 12:** un aviso que se va solo no es un tope,
+> es un adorno. Si la regla importa, tiene que costar algo pasarla.
+
+**8. Reiniciar el programa pide el PIN de nuevo, pero no pierde nada.** Las galletas
+emitidas antes de que arrancara el proceso (`sesion.ARRANQUE`) no valen. Es la única
+respuesta honesta a un corte de luz: el programa no tiene cómo saber si al volver está la
+misma persona frente a la pantalla, y con la sesión viva, cualquiera que prenda el
+computador queda operando bajo el nombre del último cajero. Lo que sí sobrevive es todo lo
+demás — el turno abierto, las ventas, el pedido a medio armar y el conteo del cajón, que
+viven en la base o en el equipo. Al arrancar se cierran además las presencias que quedaron
+abiertas, con `salida_por="corte"`: si no, el turno diría que esa persona estuvo en la caja
+durante días.
+
+**9. Un diálogo donde se cuenta plata no se cierra solo.** Las capas con trabajo adentro
+(el arqueo de caja, el conteo de bodega) llevan `.capa--firme`: ni un toque en el fondo ni
+la tecla Escape las cierran. Además el conteo del cajón se guarda en el equipo mientras se
+cuenta y se recupera al reabrir. Perder un arqueo a medio contar obliga a contar el cajón
+entero de nuevo, y pasó de verdad.
+
+**10. La caja la cierra quien la abrió, o el dueño.** El cierre no es un trámite: es la
+firma de que el cajón que se contó en la mañana cuadra en la noche. Quien abrió es el único
+que sabe con cuánto partió el cajón y qué pasó durante el día, así que si cierra otro, el
+descuadre queda sin dueño — no hay a quién preguntarle dónde estuvo el error, y la
+diferencia se le carga a alguien que no contó ese fondo. Por eso el permiso `turno_cerrar`
+**no alcanza solo**: además se compara `Turno.abierto_por_id` con quien pide el cierre. El
+dueño pasa por encima siempre (`turno_cerrar_ajeno`), y no es un privilegio decorativo: el
+caso real es el cajero que se fue a las 19:00 sin cerrar, y una caja abierta hasta el día
+siguiente parte el arqueo en dos jornadas.
+
+> **Un turno sin `abierto_por_id` es de NADIE, no de otro.** Están así todos los turnos
+> anteriores a que existieran los usuarios —los nueve de la base del local, incluido el que
+> estaba abierto cuando se escribió esto—, los abiertos en modo provisorio y los de la carta
+> de ejemplo. Una guarda escrita como `abierto_por_id != mi_id` los deja imposibles de
+> cerrar. Tiene que ser `is not None and != mi_id`. Lo mismo si la fila del usuario ya no
+> existe: una caja que nadie puede nombrar no puede ser una caja que nadie puede cerrar.
+
+**11. El precio guardado es el que paga el cliente; el margen es sobre la venta.** Nadie
+le suma IVA a nada: `Producto.precio` es bruto (decisión 1) y el neto sale por diferencia
+en el informe. Sobre el margen sugerido, la definición es **sobre la venta** —
+`(precio − costo) / precio` — y no sobre el costo. Es la misma cuenta que `margen_pct` de
+la receta ya mostraba, y usar dos definiciones distintas del mismo número en la misma
+pantalla confunde más que no tener ninguna. Como la confusión cuesta plata de verdad (un
+"50% sobre el costo" gana la mitad que un 50% de margen), la pantalla escribe siempre las
+dos formas al lado: cuánto queda y cuántas veces el costo es el precio. El sugerido
+redondea SIEMPRE hacia arriba, para que el margen pedido sea un piso y no algo que el
+redondeo se come.
+
+**12. Las pantallas del menú las sirve la caja, en `/pantallas`.** Cada TV abre una
+dirección de la red y la carta le llega del MISMO origen: no hay archivo que copiar, ni IP
+que escribir, ni CORS que pelear.
+
+> **Esta decisión cambió dos veces, y la segunda fue un error mío que conviene dejar
+> escrito.** Antes de la 1.8 las pantallas eran un `.html` que había que copiar a CADA
+> televisor y al que había que escribirle la IP a mano: ese era el dolor, y la 1.8 lo
+> resolvió metiéndolas acá. En la 2.2 las saqué a un programa aparte, con el argumento de
+> que un almacén sin televisores no tenía por qué cargar ese código. El argumento no
+> aguanta: son **184 KB de archivos estáticos que nadie pide si nadie los abre**. A cambio,
+> la cafetería tenía que dejar una ventana negra más abierta todo el día, y la caja dejaba
+> de poder mostrar las direcciones de los TV porque ya no sabía en qué puerto estaban. Se
+> cambió algo que costaba nada por algo que costaba todos los días. Volvieron en la 2.8.
+
+> **Regla que sale de ahí:** antes de separar dos cosas por prolijidad, medir qué cuesta
+> tenerlas juntas. Si la respuesta es «184 KB», no se separan.
+
+**13. Un producto se crea en UN solo lugar.** `POST /api/v1/productos` con `tal_cual` crea
+la ficha, su insumo, la receta que los amarra y el saldo inicial **en la misma transacción**.
+Antes había que crearlo en la carta, ir a la bodega, escribir el nombre otra vez a mano y
+recién ahí amarrarlos. El resultado de ese diseño está en la base del local: **148 ventas y
+UN insumo cargado**. No es que el inventario no importe — es que entrar costaba más de lo
+que daba.
+
+> **Va todo junto o no va nada.** Un producto a medio crear —ficha sí, insumo no— es peor
+> que no haberlo creado: se vende, no descuenta, y nadie se entera hasta el conteo.
+
+**14. Lo que se vende y lo que se guarda se amarran por ID, nunca por nombre.**
+`Insumo.producto_id` es el vínculo. Antes se comparaban los NOMBRES y eso falló de tres
+formas distintas, las tres vistas en la base real: "Coca-Cola 1.5 L" y "Coca Cola 1.5L"
+creaban dos insumos y el saldo del primero quedaba huérfano; renombrar el producto dejaba
+el insumo con el nombre viejo —quedó uno llamado "Producto nuevo" apuntando a "redbul
+550ml"—; y la búsqueda no filtraba `activo`, así que podía amarrar la receta a un insumo
+sacado de la bodega, y entonces la venta no descontaba nada **sin dar ningún error**.
+
+> **`Producto` sigue SIN columna de stock**, y es a propósito (ver la sección de
+> inventario). La tentación en una botillería es obvia y el precio se paga el día que
+> exista el pack de 6: la botella saldría del stock por dos caminos y el inventario deja de
+> cuadrar. La receta de una línea cuesta una fila y hace que el pack y la unidad suelta
+> descuenten del mismo saldo, sin código nuevo.
+
+**15. Un código de barras identifica un producto, y un producto puede tener varios.**
+Tabla `CodigoBarra`, no una columna: la lata suelta y el pack de 6 traen códigos distintos
+y son el mismo trago. `cuantos` dice cuántas unidades entrega cada código.
+
+Se guardan **siempre normalizados a 13 dígitos**: un UPC-A de 12 es un EAN-13 con un cero
+adelante, y guardarlos distinto deja el mismo producto duplicado según qué lector lo leyó.
+Se valida el dígito verificador **antes** de buscar: una etiqueta arrugada devuelve dígitos
+cambiados, y sin esa validación se crea un producto fantasma.
+
+> **Los códigos que empiezan con 2 NO se guardan como códigos de producto.** Son los que imprime la balanza
+> del local para el pan, el fiambre y el queso: llevan el peso o el precio adentro, así que
+> **cambian con cada trozo**. Si se aceptaran, habría un producto nuevo por cada pan
+> vendido. Sí se pueden cobrar como etiquetas: el código se conserva en la venta.
+
+`core.codigos.leer_balanza` interpreta etiquetas EAN-13 según el ajuste
+`formato_balanza`, guardado como texto JSON. El resultado incluye `modo`:
+`plu_peso` entrega `plu` y `peso_kg`; `plu_precio`, `plu` y `total` en pesos;
+`ticket`, `ticket` y `total` en pesos. El PLU es texto y conserva ceros iniciales.
+El prefijo y las posiciones de código y valor se configuran por local, y
+`divisor_peso` convierte el valor a kilos. Se valida el verificador y se rechazan
+lecturas malformadas o de otro prefijo devolviendo `None`.
+
+El formato predeterminado es `{"modo":"ticket","prefijo":"25","codigo":[2,6],
+"valor":[6,12],"divisor_peso":1000}`: la etiqueta real `2539760001975` sigue
+siendo el ticket `3976` por $197. Una configuración nueva inválida se rechaza al
+guardar. Los rangos no pueden pisar el prefijo, el verificador ni otro campo, y **el
+prefijo tiene que empezar con 2**: con otro —780, el de Chile— los productos de
+verdad se leerían como tickets con el monto sacado de sus propios dígitos.
+
+Una configuración **guardada y rota** (una vuelta atrás de versión, un respaldo
+restaurado, la base tocada a mano) NO se lee con el de fábrica: `GET /ajustes` la
+muestra como la de fábrica con `formato_balanza_roto: true`, y ninguna etiqueta se
+cobra hasta guardarla de nuevo. Leer con el reparto equivocado cobraba 250 g de
+jamón ($2.248) como el «ticket 123» por $250. Por lo mismo, `leer_balanza` con un
+formato explícito inválido devuelve `None` en vez de caer al de fábrica.
+
+**La balanza viene apagada** (`usar_balanza: 0`). Apagada, `resolver` devuelve
+`None` y un código que empieza con 2 se rechaza como siempre. Es a propósito: con la
+balanza prendida, un código de ticket cobra el monto que trae adentro y el dígito
+verificador se calcula con lápiz, así que en un local sin balanza sería un cobro a
+mano sin el permiso de cobro a mano. Se prende en Ayuda → Ajustes.
+
+`apps.pos.balanza.resolver` es la cuenta compartida por escanear y cobrar. El GET
+busca primero los `CodigoBarra` conocidos. Una etiqueta reconocida devuelve
+`de_balanza: true`, `se_puede_guardar: false` y, si se puede cobrar, `balanza` con
+`codigo`, `modo`, `nombre`, `detalle`, `precio`, `producto_id` y `repetible`.
+Si no, devuelve `problema` sin `balanza`. Cuando SÍ se puede cobrar, `problema`
+dice «Recarga la pantalla (F5)…»: solo lo leen las pantallas anteriores a la 2.26,
+que con `problema` vacío ofrecían guardar la etiqueta como producto nuevo; la
+pantalla nueva mira `balanza` primero. Un código que ya es de un `CodigoBarra`
+nunca se lee como etiqueta, tampoco en el POST.
+
+El POST recibe `codigo_balanza`, `cantidad` y opcionalmente `precio_visto`: rechaza
+precio o producto enviados junto a la etiqueta con 422, vuelve a leer el formato
+actual y responde 409 si ya no se puede cobrar. `precio_visto` es lo que la
+pantalla MOSTRÓ y no se cobra con él: si el servidor calcula otro (cambió el precio
+por kilo o el formato desde que se escaneó), responde 409 en vez de registrar un
+monto distinto del que el cajero ya cobró en la máquina o dio de vuelto.
+
+Por peso se multiplica `Producto.precio_kilo` por kilos con `Decimal` y se
+redondea al peso entero con `ROUND_HALF_UP`. Por precio y por ticket se usa el
+total impreso. No se cobran peso o total cero ni precios mayores a $99.000.000.
+El PLU se compara sin ceros iniciales y debe pertenecer a un producto activo;
+al guardar una ficha se exige que sea numérico y único, incluso entre inactivos.
+
+Un ticket exige cantidad 1. Su código completo no puede repetirse en la venta
+ni en otra pagada de las últimas 24 horas; anularla libera el papel. La reserva
+de escritura abarca la consulta y el guardado para impedir cobros simultáneos.
+Los paquetes por PLU sí se repiten. Ninguna etiqueta topea ni mueve inventario
+por unidades, ni cuenta como cobro a mano. `/resumen.balanza` cuenta líneas,
+suma subtotales, separa cuántas fueron tickets y dice quién las cobró
+(`por_persona`), solo en ventas pagadas; El día lo muestra junto a los cobros a mano.
+Un ticket no pide el permiso de cobro a mano: en un local con balanza cobrarlos es
+lo de todos los días. Lo que lo compensa es que se ve sumado y con nombre. En «Lo
+más vendido», las etiquetas por peso salen como «Jamón (balanza)», aparte de las
+unidades del mismo producto.
+
+Un producto con `precio` 0 y `precio_kilo` mayor que 0 no se vende tocando su
+azulejo (409 en el servidor, aviso en la pantalla): se cobraba a $0. En el
+televisor sale con su precio por kilo y la etiqueta «Por kilo».
+
+> Si se vuelve a la 2.25 desde el aviso de versión después de cobrar etiquetas, la
+> caja sigue vendiendo, pero la 2.25 cuenta los tickets como cobros a mano (tienen
+> `producto_id` nulo) y saca del pedido abierto las líneas de balanza.
+
+Las columnas nuevas reciben sus defaults mediante `poner_al_dia`, conservando
+las ventas anteriores. La línea congela nombre, detalle, código, gramos y modo;
+el modo permite clasificar el pasado aunque cambie el formato o se borre el
+producto. Los gramos y el detalle se redondean a 1 g si el formato trae más
+precisión; el importe se calcula con el peso original. El detalle sale en la
+venta y el comprobante, y como última columna del CSV para el contador.
+
+**16. El escáner intercepta en fase de CAPTURA sobre `window`, y eso no es un detalle.**
+Un lector de pistola es un teclado: manda los dígitos y un Enter. La caja ya tenía dos
+oyentes globales de teclado, y sin interceptar antes que ellos pasaba esto: con el diálogo
+de cobro abierto, **el escaneo cobraba la venta** con "paga con $7.801.610.001.196"; con el
+carrito armado, el Enter abría solo el cobro; y frente al candado, un código de 13 dígitos
+se convertía en **tres intentos de entrar seguidos**. Está probado en `test_codigos.py` y
+verificado en el navegador. Si alguien mueve ese oyente a `document` o a fase de burbujeo,
+vuelven los tres.
+
+> **La cámara no es una opción en Windows, y no es cosa de esperar.** `BarcodeDetector`
+> delega en el sistema operativo y Windows no tiene esa API, así que en WebView2 sencilla-
+> mente no existe. Y escanear desde el celular por la red tampoco: `getUserMedia` exige
+> contexto seguro, y `http://192.168.x.x` no lo es. La pistola USB cuesta menos que
+> cualquiera de las salidas.
+
+**17. No existe una base de códigos de barra chilena, y el catálogo se arma solo.** GS1
+Chile **vende** códigos a los fabricantes; no publica un catálogo ni tiene API abierta.
+Open Food Facts sí es libre (ODbL, sin clave) pero tiene **6.680 productos chilenos** contra
+4,7 millones en el mundo, y **cero** cervezas, vinos y piscos: es una base nutricional. Para
+un almacén ayuda; para una botillería, casi nunca.
+
+Por eso Open Food Facts se usa **solo para sugerir el nombre**, editable, y nunca como
+catálogo. El precio no está en ninguna base del mundo: ese es del local. Lo que de verdad
+resuelve el problema es que cada producto se escriba UNA vez, la primera que pasa por la
+caja, y quede con su código para siempre.
+
+**18. Sin caja abierta no se vende, y no se usa el programa.** El servidor responde 409 a
+cualquier venta sin turno, y la pantalla tapa todo con una puerta hasta que se abra la caja.
+Antes se aceptaba y la venta quedaba con `turno_id` en nulo: no entraba en ningún cuadre, no
+aparecía en ningún cierre, y nadie se enteraba hasta que el efectivo del cajón no calzaba con
+nada. Una venta que no pertenece a ningún turno es plata sin dueño.
+
+> **La puerta tiene DOS salidas, y la segunda no es un adorno.** Además de «Abrir caja» está
+> «Salir de mi cuenta». Sin ella, cerrar la caja a las 20:00 dejaría al dueño encerrado: la
+> puerta le pediría abrirla de nuevo para poder hacer cualquier cosa. Terminar el día es
+> cerrar la caja y salir.
+
+> **No se puede salir dejando la caja PROPIA abierta**, pero sí dejando la de otro. La
+> condición es sobre la caja propia a propósito: si la abrió Javi y está Ana en pantalla, Ana
+> no puede cerrarla —decisión 10— así que si tampoco pudiera cambiar de usuario, no habría
+> forma de que Javi volviera a entrar a cerrar la suya. El bloqueo por inactividad no cuenta
+> como salir: bloquea la pantalla y deja el turno donde está.
+
+**19. Dos productos activos no pueden llamarse igual, y "igual" ignora tildes y
+mayúsculas.** `POST` y `PUT /api/v1/productos` responden 409 con el nombre del que ya
+existe. No es prolijidad: el nombre es lo ÚNICO con que cuenta el cajero para elegir. En la
+carta del local llegaron a quedar **nueve** productos llamados «Producto nuevo», y con eso
+el cajero no sabe cuál tocar, "lo más vendido" los cuenta por separado, y el saldo de uno no
+dice nada del otro aunque sean la misma botella.
+
+La comparación normaliza tildes y mayúsculas porque «Té» y «TE» tecleados con apuro son el
+mismo producto para quien mira la pantalla, y una regla que el ojo no puede verificar no
+sirve de nada.
+
+**Solo entre productos ACTIVOS.** Uno sacado de la carta libera su nombre: ya no se puede
+tocar ni vender, así que no hay con qué confundirlo. Y la unicidad NO es una restricción de
+la base: hay locales con duplicados de antes, y convertirlos en un error dejaría la caja sin
+arrancar. Se valida al escribir, que es donde se puede explicar.
+
+**Al editar solo se valida si el nombre CAMBIA**, y eso no es una concesión: los nueve
+«Producto nuevo» del local existen. Si se validara siempre, guardarles el precio daría 409 y
+quedarían congelados — inarreglables e irrenombrables, que es exactamente lo que hay que
+poder hacer con ellos. La regla existe para no crear colisiones nuevas, no para castigar las
+que ya están.
+
+> **Esto no reemplaza a la decisión 14.** El amarre sigue siendo por ID. Que los nombres no
+> se repitan es para la PERSONA que mira la pantalla, no para el programa.
+
+**20. Una cifra tiene que decir de qué momento es, o no se muestra.** El día se puede
+mirar por **turno** o por **día / semana / mes**, y son preguntas distintas: «cómo va MI
+turno» la hace el que está atendiendo; «cuánto se vendió» la hace el dueño.
+
+El local lo encontró así: caja recién abierta, sin una sola venta, y la pantalla —que había
+quedado en «Mes»— mostraba *Vendido hoy* con plata, ticket promedio y efectivo. **Ninguno
+de esos números estaba mal.** Eran del mes, y el rótulo decía «hoy» porque estaba escrito a
+mano en el HTML. Al lado de un cajón vacío eso no se lee como un total del mes: se lee como
+que la caja vendió algo que no vendió. Una cifra correcta con el rótulo equivocado hace más
+daño que una cifra que falta, porque nadie sospecha de ella.
+
+De ahí las tres reglas:
+
+- **El rótulo sale del período**, nunca de una palabra fija. «Vendido en el turno»,
+  «Vendido hoy», «Vendido en la semana», «Vendido en el mes».
+- **Con caja abierta, El día entra por turno.** Es lo que quiere ver quien está en la
+  caja. Si la persona elige otro período con el dedo, se respeta y no se le cambia solo.
+- **Sin turno elegido no se muestra nada**: un cartel, y las tablas vacías. Pedirlo lo
+  pidieron con estas palabras, «cuando la caja esté cerrada que no se muestre». Un `$0` al
+  lado de «Ticket promedio» también se lee como un dato, y no lo es. Y el selector **nunca
+  se para solo en un turno cerrado**: eso sería volver a mostrar plata de otro rato.
+
+**Y lo que se resta tiene que verse restándose.** El reclamo anterior fue «aparece lo
+sacado, pero no se resta». Se restaba —desde la 2.11— pero en ninguna parte se veía la
+cuenta, así que no había cómo creerle. Mirando un turno, el cuadro del cajón es la cuenta
+entera y en este orden: fondo de apertura, lo que entró en efectivo (con las propinas que
+quedaron en billetes), cada retiro e ingreso con su hora, su motivo y quién lo hizo, las
+propinas de tarjeta pagadas en efectivo, y el total. Ese total es `_efectivo_esperado()`,
+el mismo del cierre y el mismo del papel de 80 mm.
+
+**21. La caja se actualiza solo desde el canal oficial, y solo la actualiza el dueño.**
+`POST /api/v1/actualizacion` ignora cualquier dirección que venga en la petición: baja el
+zip que dice el `version.json` oficial, y pide el permiso `config`. Antes aceptaba la
+dirección de cualquier zip https y no pedía sesión. Como la caja escucha en toda la red del
+local —por los televisores— y el PIN de red viene igual en todas las instalaciones,
+cualquiera conectado al Wi-Fi del local podía hacer que la caja se instalara un programa
+ajeno. El campo `zip` se sigue aceptando porque las pantallas viejas lo mandan, pero no se
+usa. `BUSCAR-ACTUALIZACIONES.bat` no pasa por acá: corre en el mismo computador.
+
+> **Resuelto en la 2.19:** el paquete viene firmado y la caja revisa cada archivo antes de
+> instalar. Ver la decisión 23.
+
+**22. Cada local tiene su nombre, su RUT y su PIN de red, y viven en su base.** Hasta la
+2.18 salían de variables de entorno de Windows: el nombre era `POS_LOCAL` —si nadie lo
+tocaba, «Kofe»— y el PIN de red era `2468` en todas las instalaciones, escrito en la guía y
+en el código público. Una cafetería nueva aparecía como Kofe en la caja, en el comprobante y
+en sus televisores. Ahora son filas de `Ajuste` (`local_nombre`, `local_rut`,
+`local_direccion`, `pin_red`), el primer arranque las pide antes de crear al dueño, y el
+dueño las cambia en Ayuda → Ajustes.
+
+- **El primer arranque guarda el local y el PIN de red ANTES que el primer usuario.**
+  Mientras no hay nadie registrado la caja deja hacer todo (el dueño provisorio); apenas
+  existe el primero, esa puerta se cierra. Al revés, quedarían sin poder guardarse.
+- **Una caja sin dueño se configura solo desde su propio computador.** Mientras no hay
+  nadie registrado, el dueño provisorio es dueño únicamente en el computador de la caja;
+  desde un tablet o el Wi-Fi es cajero: vende, pero no crea el primer usuario, no cambia
+  el PIN de red ni los ajustes. Con el PIN de fábrica, igual en todas las cajas, cualquiera
+  en el Wi-Fi de una caja recién instalada podía crear el primer dueño con un PIN suyo y
+  quedarse con ella (revisión de Codex). El asistente del primer arranque aparece solo en
+  una instalación de verdad nueva —sin gente, sin ventas y sin nombre— y solo en ese
+  computador: una caja que ya vende sin usuarios sigue abriendo directo.
+- **El PIN de red nuevo es de 6 dígitos al azar** y se muestra una vez, en grande. Una caja
+  que ya estaba instalada sigue con `2468` —cambiarlo solo dejaría afuera sus tablets sin
+  aviso— pero el dueño ve un aviso rojo en Ajustes y lo cambia con un botón. `2468` no se
+  acepta como PIN nuevo. `POS_PIN` lo deja fijo, y entonces la caja no lo cambia.
+- **El RUT se valida con su dígito verificador** y se guarda como `12.345.678-5`. Un RUT mal
+  escrito en el comprobante es peor que ninguno, y el SII lo va a rechazar.
+- **La galleta de la red va firmada con la llave de la caja** (`.secreto`). Hasta la 2.18
+  era `sha256("pos-cafeteria:" + PIN)`: sin ningún secreto, se podía calcular desde el
+  código público sin escribir nunca el PIN, y el freno de la decisión 24 no habría servido
+  de nada. Cambiar el PIN deja afuera a los equipos que entraron con el viejo —menos al que
+  lo cambió, que recibe la galleta nueva—; reiniciar el programa, no.
+- **Los televisores toman el nombre de la carta**, aunque todavía no tenga productos.
+  Solo reemplazan lo que sigue siendo el ejemplo de Kofe o lo que puso la caja la vez
+  anterior (queda anotado en `CFG.auto`, así un cambio de nombre también llega); lo que se
+  escribió a mano en su Configurar se respeta. Las frases de Kofe («Tostado en Graneros»)
+  quedan en blanco en otro local. El logo se pensó para las cuatro letras de «Kofe»: un
+  nombre más largo se achica hasta caber en lo que se ve del televisor.
+
+**23. Las actualizaciones vienen firmadas, llegan por canal y se pueden deshacer.**
+
+- **Firmadas.** Cada versión trae `manifiesto.json` —su número y la huella SHA-256 de cada
+  archivo que se instala— y `manifiesto.firma`, una firma Ed25519 hecha con una llave que
+  NO está en el repositorio (vive en el computador de quien publica). La caja trae la llave
+  pública en `LLAVES_PUBLICAS` y revisa TODO antes de escribir el primer archivo: sin
+  firma, otra firma, un archivo distinto del firmado, uno de más o uno de menos, y no se
+  instala nada. La firma usa solo la biblioteca estándar (`apps/pos/firma.py`) porque lo
+  que viaja es el código, no las librerías de Kofe.exe; está probada contra
+  `cryptography` y contra los vectores del RFC 8032, y rechaza llaves de orden chico.
+- **Nunca hacia atrás.** El paquete tiene que ser más nuevo que la versión instalada y ser
+  justo la que anunció el canal: un paquete viejo, firmado de verdad, serviría para volver
+  a meter un error que ya se arregló.
+- **Por canal.** `version.json` es el canal estable y `version-piloto.json` el piloto; cada
+  local elige en Ayuda → Ajustes. Cada uno apunta al zip de una ETIQUETA (`vX.Y`), no de
+  `main`, así el estable no recibe lo que se está probando. La 2.12 tumbó El día en todos
+  los locales el mismo día.
+- **Se deshace.** `_version_anterior/` guarda solo lo que pisó la última actualización, con
+  la lista en `_cambios.json`, y el dueño vuelve con un botón (`POST
+  /api/v1/actualizacion/volver`). Antes se acumulaban copias de varias versiones: volver con
+  eso habría mezclado versiones.
+- **Nunca a medias.** Instalar va en tres pasos: mirar qué cambia; guardar los originales y
+  anotar la lista, marcada «a medias»; recién ahí reemplazar, cada archivo con un temporal
+  que se escribe a disco y se renombra. Si algo falla se vuelve atrás al tiro, y si se corta
+  la luz, `apps/pos/__init__.py` lo deshace al abrir, antes de importar nada más
+  (`apps/pos/vuelta.py`, solo biblioteca estándar). Volver atrás sigue las mismas reglas.
+  Reinstalar lo mismo no borra la vuelta atrás, y reintentar una instalación a medias no
+  pierde los originales. Antes la lista se escribía al final (revisión de Codex).
+- **Con topes.** Un paquete de más de 60 MB, que se expande a más de 200 MB o que trae más
+  de 5.000 archivos se rechaza antes de abrirlo: sin topes, un paquete sin firma podía
+  reventar la memoria de la caja antes de que se revisara la firma.
+- **Repositorio privado, cuando se decida.** Con `POS_CLAVE_DESCARGA` la caja baja con una
+  clave (una por local, para poder revocar la de uno). Sin clave baja como siempre. Ver
+  `docs/PUBLICAR-ACTUALIZACIONES.md`.
+
+**24. Ningún PIN se prueba diez mil veces.** Después de cinco intentos fallidos seguidos hay
+que esperar 30 segundos, y la espera se dobla con cada fallo nuevo hasta 15 minutos: por
+equipo y persona en el PIN de usuario, por equipo en el PIN de red. Mientras dura la espera
+ni el PIN bueno entra. Vive en memoria (`apps/pos/freno.py`): reiniciar el programa lo
+limpia, y está bien — quien puede reiniciar la caja ya está frente a ella.
+
+**25. La caja deja rastro, guarda afuera y no se traba con varios equipos.**
+
+- **Registro de errores.** `registros/kofe.log` (rota solo, nunca pasa de ~5 MB) anota los
+  errores del servidor, lo que tarda más de 2 segundos y los errores de la pantalla y de
+  los televisores, que llegan por `POST /api/v1/diagnostico/evento` (libre, con tope de 30
+  por minuto). El dueño baja todo en un .zip desde Ayuda → Ajustes —sin el PIN ni las
+  claves— para mandarlo por WhatsApp. Hasta la 2.18 los problemas llegaban como capturas y
+  la caja pegada se diagnosticó leyendo código.
+- **La copia de afuera.** Si el dueño eligió una carpeta (una que se sincroniza con la nube,
+  o un pendrive), cada respaldo se copia ahí y se ABRE y se revisa entero
+  (`integrity_check`) antes de darlo por bueno. El resultado queda en
+  `Ajuste.respaldo_afuera_estado` y se ve en Ajustes (si el dueño elige otra carpeta, deja
+  de mostrarse: no dice nada de la nueva). La copia va primero a un archivo aparte, que
+  recién al salir sana reemplaza a la del día: un pendrive que se desconecta a la mitad no
+  rompe la copia buena de antes. Cada caja anota su identidad (`Ajuste.instalacion_id`)
+  antes del primer respaldo, la lleva en cada uno y en el nombre de su carpeta de afuera:
+  dos sucursales que se llaman igual no se pisan. `tools/restaurar.py` vuelve la base a un
+  respaldo guardando primero la actual, y a una caja que ya vende no le pone un respaldo
+  que no se pueda comprobar que es suyo (`--sin-revisar-local` para hacerlo igual). Los
+  respaldos quedan en modo de diario normal, no WAL: son un solo archivo.
+- **SQLite en modo WAL, con 10 segundos de espera.** Sin WAL, una lectura larga frenaba las
+  escrituras hasta «database is locked». `synchronous` queda en FULL: una venta confirmada
+  no se pierde ni con un corte de luz.
+
+---
+
+## 2. Modelo de datos `[IMPL]`
+
+Tabla `apps/pos/db/models.py`. SQLModel sobre SQLite (archivo `pos.db`), migrable a
+Postgres cambiando `DB_URL` sin tocar código.
+
+```
+Categoria(id, nombre, orden, activa)
+    # "Café caliente", "Fríos", "Pastelería"…
+
+Producto(id, categoria_id→Categoria, nombre, descripcion, precio, plu, precio_kilo,
+         activo, llevar_cuenta, orden, destacado, badge,
+         antes, etiqueta, dibujo, color)
+    # precio  = bruto en CLP (entero)
+    # plu = identificador textual de balanza; vacío si no es de balanza
+    # precio_kilo = bruto en CLP por kg (entero, por defecto 0)
+    # llevar_cuenta = elección por producto. Altas/importaciones: False.
+    # NULL conserva recetas y comportamiento anteriores; al actualizar no se
+    # crean insumos ni se modifica ningún saldo. True cuenta unidades.
+    # antes   = precio tachado de oferta (opcional, entero)
+    # destacado = va al recuadro grande de la pantalla del menú (1 por categoría)
+    # dibujo   = "receta" del dibujo: taza, taza-cortado, mug, mug-espuma, mug-arte,
+    #            mug-crema, vaso, vaso-leche, vaso-limon, vaso-verde, vaso-menta,
+    #            frappe, croissant, croissant-almendras, torta, torta-manzana,
+    #            brownie, alfajor. Lo entienden IGUAL la caja y las pantallas.
+    # color/etiqueta = presentación; el POS no los usa para cobrar
+
+Turno(id, cajero, abierto_at, cerrado_at, monto_inicial,
+      efectivo_contado, diferencia, nota)
+    # un turno = una jornada de caja. El cierre compara lo contado con lo esperado.
+
+Venta(id, numero, turno_id→Turno, creada_at, estado,
+      total, propina, medio_pago, nota, anulada_at, anulada_motivo)
+    # numero    = correlativo global, empieza en 1
+    # estado    = pagada | anulada
+    # total     = suma de las líneas (SIN propina)
+    # medio_pago= efectivo | debito | credito | transferencia | mixto
+    #             "mixto" = se pagó en dos formas; el detalle va en Pago, y una
+    #             venta mixta no lleva propina.
+
+VentaLinea(id, venta_id→Venta, producto_id→Producto,
+           nombre, precio_unitario, cantidad, subtotal,
+           detalle="", codigo_balanza="", peso_g=0, modo_balanza="")
+    # nombre y precio_unitario son COPIAS congeladas (ver decisión 2)
+    # subtotal = precio_unitario * cantidad
+    # producto_id puede ser nulo: ticket de balanza o cobro a mano.
+    # codigo_balanza distingue las etiquetas; modo_balanza congela su modo.
+    # peso_g es el peso de UN paquete, solo para plu_peso.
+
+Pago(id, venta_id→Venta, medio, monto)
+    # Una parte de un pago MIXTO: cuánto se pagó con cada medio. Solo existe para
+    # las ventas mixtas; una venta de un solo medio NO escribe filas acá y usa su
+    # medio_pago. El cuadre, cuando no encuentra Pago, trata la venta como un pago
+    # único — así las ventas viejas cuadran sin migración. Suma = lo cobrado.
+
+Usuario(id, nombre, rol, pin_hash, activo, color, orden,
+        creado_at, ultimo_ingreso_at)
+    # rol      = dueno | cajero  (sin ñ: la clave viaja por la API)
+    # pin_hash = pbkdf2_sha256$iteraciones$sal$hash. NUNCA sale por la API.
+    #            Se hashea porque pos.db se copia a respaldos/ dos veces al día
+    #            y esa carpeta termina en pendrives y en el correo del contador.
+    # activo   = borrado lógico. Un usuario no se borra nunca: sus ventas
+    #            tienen que seguir diciendo quién las hizo.
+
+Presencia(id, usuario_id→Usuario, turno_id→Turno,
+          entro_at, salio_at, salida_por)
+    # Quién ESTUVO en la caja y desde cuándo hasta cuándo. Con solo el autor de
+    # cada venta, alguien que atendió dos horas sin cobrar nada sería invisible.
+    # salio_at nulo = está adentro ahora mismo
+    # salida_por    = cambio | bloqueo | salir
+
+Insumo(id, nombre, unidad, stock, minimo, activo, orden, contado,
+       formato, compra_contenido, compra_costo, producto_id→Producto)
+    # unidad = g | ml | un — la unidad BASE. Todo entero: 200 ml es 200.
+    # stock  = saldo en unidad base. Es una COPIA rápida de la suma del libro,
+    #          no la verdad. Puede quedar NEGATIVO y eso no es un error.
+    # contado= ¿el dueño ya dijo cuántos hay? El TOPE DURO solo bloquea lo
+    #          contado; un producto que lleva cuenta pero nadie contó se vende
+    #          libre. Sin esto, una actualización dejaría al local sin cobrar.
+    # producto_id = de qué producto es "el mismo" (tal cual). Nulo en un insumo
+    #          de verdad (leche), y nulo también cuando su producto se borró.
+    # formato/compra_contenido/compra_costo = cómo se compra ("Caja 1 L", 1000,
+    #          $1.200). El costo por mililitro NO se guarda: $1,2 redondeado a
+    #          $1 le quita un 17% al valor del inventario. Ver core.config.costo_de().
+
+Receta(id, producto_id→Producto, insumo_id→Insumo, cantidad)
+    # Una fila = un ingrediente. El latte son dos filas; el alfajor, una de 1 un.
+    # Un producto SIN filas acá no mueve stock, y eso NO es un error: es el
+    # estado normal el primer día.
+
+Movimiento(id, insumo_id→Insumo, creado_at, tipo, cantidad, saldo_despues,
+           costo, motivo, venta_id→Venta, turno_id→Turno, usuario_id, hecho_por)
+    # EL LIBRO. Fuente de verdad del stock. Solo se AGREGAN filas.
+    # tipo     = compra | venta | merma | ajuste | devolucion | carga
+    # cantidad = CON SIGNO: + entra, − sale. Un solo campo, para que sea
+    #            imposible escribir un informe que sume las mermas como si entraran.
+    # costo    = lo que valía esa cantidad, CONGELADO (igual que el precio en
+    #            VentaLinea): cuánto costó la merma de julio no puede depender
+    #            de lo que vale la leche hoy.
+    # hecho_por= nombre copiado, además del usuario_id.
+
+Turno(... , abierto_por_id→Usuario, cerrado_por_id→Usuario)
+Venta(... , usuario_id→Usuario, anulada_por_id→Usuario)
+    # NULL en las filas anteriores al login: a esas no se les inventa un autor.
+
+RetiroCaja(id, turno_id→Turno, tipo, monto, motivo, creado_at,
+           usuario_id→Usuario, hecho_por, anulado, anulado_at, anulado_por)
+    # La plata que se mueve a mano EN MEDIO del turno, sin cerrar la caja.
+    # tipo = "retiro" (sale, para comprar) | "ingreso" (entra, cambio que se
+    #        repone). El monto siempre es positivo; el signo lo pone el tipo.
+    # Libro de solo-agregar, como Movimiento, pero de PLATA. El motivo nunca va
+    # vacío. El retiro se aplica al efectivo esperado (retiro resta, ingreso suma)
+    # y NO se puede retirar más de lo que hay. Se corrige anulando (la fila
+    # queda), no borrando. NO es Turno.retiro, que es lo que se lleva al cerrar.
+```
+
+### Reglas de integridad
+- `Venta.total` == suma de `VentaLinea.subtotal` de esa venta. Se verifica en el test
+  `test_ventas.py::test_total_cuadra_con_lineas`.
+- Una venta siempre nace **pagada**: el POS registra la venta cuando ya se cobró. No hay
+  carrito a medio pagar en la base (el carrito vive en el navegador del cajero).
+- `producto_id` puede quedar apuntando a un producto borrado; por eso la línea guarda el
+  nombre. Nunca se borra una `VentaLinea`.
+
+### Extensión `[ROADMAP]` — boleta electrónica
+```
+Boleta(id, venta_id→Venta, folio, tipo_dte, emitida_at, estado, xml_path, pdf_path)
+```
+No está construido y **no bloquea nada**: el POS registra ventas y cuadra caja sin emitir
+boleta. Cuando se decida el proveedor de facturación electrónica se conecta acá. Ver la
+sección 6 de `README.md` antes de empezar eso.
+
+---
+
+## 3. API REST (`/api/v1`)
+
+Todas las respuestas son JSON. Los montos, enteros.
+
+### Carta (lo que consumen las pantallas del local) `[IMPL]`
+```
+GET /api/v1/carta
+```
+Devuelve **exactamente** el formato que esperan las pantallas de `menu-cafeteria`:
+
+```json
+{
+  "avisos": ["Lunes a sábado de 8:00 a 20:00"],
+  "categorias": [
+    {
+      "nombre": "Café caliente",
+      "productos": [
+        {"nombre":"Espresso","descripcion":"Doble carga","precio":1900,
+         "antes":null,"etiqueta":null,"dibujo":"taza","color":null}
+      ],
+      "destacado": {"nombre":"Mocha","descripcion":"…","precio":3900,
+                    "etiqueta":"Recomendado de hoy","dibujo":"mug"}
+    }
+  ]
+}
+```
+> 🔴 El `dibujo` viaja como **nombre de receta**, no como forma pelada: `mug-espuma`,
+> `vaso-limon`, `torta-manzana`. La caja y las pantallas tienen la misma tabla de recetas
+> (`apps/pos/static/dibujos.js` y `ART_DEFECTO` en las pantallas). Si se agrega una receta
+> hay que agregarla **en los dos lados**, o el producto se dibuja con el genérico.
+
+> 🔴 Este endpoint **manda CORS abierto** (`Access-Control-Allow-Origin: *`). Sin eso el
+> navegador de la pantalla rechaza la respuesta y el menú se queda con la carta vieja.
+> Es de solo lectura y solo expone precios públicos, así que abrirlo no filtra nada.
+
+### Operación de caja `[IMPL]`
+```
+GET  /api/v1/salud                      → {ok, version, turno_abierto}
+GET  /api/v1/categorias                 → categorías activas con sus productos
+POST /api/v1/ventas                     → registra una venta cobrada
+GET  /api/v1/ventas?fecha=AAAA-MM-DD    → ventas del día (sin líneas, liviano)
+GET  /api/v1/ventas?turno_id=N          → las de UN turno (manda sobre la fecha)
+GET  /api/v1/ventas/{id}                → una venta con sus líneas
+POST /api/v1/ventas/{id}/anular         → {motivo}
+GET  /api/v1/resumen?fecha=AAAA-MM-DD   → totales del día por medio de pago + neto/IVA
+                                          + sacado / metido / efectivo_neto / movimientos_caja
+GET  /api/v1/resumen?turno_id=N         → los mismos totales, pero de UN turno:
+                                          + turno{} y efectivo_en_caja
+```
+
+`turno_id` **manda sobre las fechas**: el rango sale del turno y las ventas y los
+movimientos se filtran por `turno_id`, no por hora. Un turno que no existe da 404 y no
+ceros — cero es un dato, y un dato inventado es peor que un error.
+
+Sin `turno_id`, `turno` viene `null` y `efectivo_en_caja` también: fuera de un turno esa
+pregunta no tiene respuesta, porque son varios cajones de varios turnos.
+
+**`efectivo_neto` y `efectivo_en_caja` no son lo mismo**, y confundirlos fue el bug:
+`efectivo_neto` es *de lo vendido en efectivo, cuánto queda después de lo que se sacó* y
+sirve para cualquier rango; `efectivo_en_caja` es *cuánta plata tiene que haber en el
+cajón*, necesita el fondo de apertura y por eso solo existe con un turno. Sale de
+`_efectivo_esperado()`, la misma función del cierre: El día y el cierre no pueden discrepar.
+
+`POST /api/v1/ventas` recibe:
+```json
+{"lineas":[{"producto_id":1,"cantidad":2}],
+ "medio_pago":"efectivo","propina":0,"nota":null,"paga_con":5000}
+```
+`paga_con` es opcional y solo sirve para devolver el **vuelto** calculado; no se guarda.
+
+### Respaldo y exportación `[IMPL]`
+```
+POST /api/v1/respaldo                        → copia la base a respaldos/pos-AAAA-MM-DD.db
+GET  /api/v1/respaldos                       → qué copias hay
+GET  /api/v1/exportar/ventas?desde=&hasta=   → CSV para el contador
+GET  /api/v1/exportar/detalle?desde=&hasta=  → CSV con una fila por producto vendido
+```
+El respaldo se dispara solo al **abrir el programa** y al **cerrar la caja**, además del
+botón. Usa la API de respaldo de SQLite, no una copia del archivo: copiar el `.db` mientras
+está en uso puede dejar una copia corrupta justo cuando más se necesita. Se guardan las
+últimas 30.
+
+Los CSV salen con separador `;` y `utf-8-sig` (BOM) porque así el Excel en español los
+abre en columnas y con los acentos correctos.
+
+### Papeles imprimibles `[IMPL]`
+```
+GET /comprobante/{venta_id}   → comprobante de 80 mm
+GET /cierre/{turno_id}        → papelito del cierre de caja
+```
+Son páginas HTML angostas que se mandan a imprimir con el navegador: funcionan con la
+impresora térmica **y** con cualquier impresora normal, sin drivers ni ESC/POS.
+
+> 🔴 El comprobante dice **NO ES BOLETA** en un recuadro, y no es decorativo: mientras no
+> esté conectada la facturación electrónica, un papel que se parezca a una boleta sin
+> serlo deja expuesto al local.
+
+### Turnos `[IMPL]`
+```
+GET  /api/v1/turnos/actual
+GET  /api/v1/turnos/denominaciones
+POST /api/v1/turnos/abrir              {cajero, conteo}
+POST /api/v1/turnos/cerrar             {conteo, fondo_siguiente, medios, nota}
+POST /api/v1/turnos/retiro             {monto, motivo}      ← sacar plata en medio del turno
+POST /api/v1/turnos/ingreso            {monto, motivo}      ← meter plata en medio del turno
+POST /api/v1/turnos/retiro/{id}/anular
+```
+El cierre calcula: `esperado = monto_inicial + ventas en efectivo − propinas de tarjeta
+pagadas en efectivo − retiros del turno + ingresos del turno`, y guarda la `diferencia`
+(contado − esperado).
+**Se guarda aunque descuadre** — ocultar el descuadre sería justamente lo contrario a lo
+que sirve. Esa cuenta vive en **una sola función** (`turnos._efectivo_esperado`): la
+pantalla, el cierre y el papel de 80 mm la llaman a ella. Antes cada uno la calculaba por
+su lado y el papel ni siquiera restaba las propinas pagadas — tres fórmulas que tenían que
+dar lo mismo y no lo daban.
+
+**Sacar plata en medio del turno** (`RetiroCaja`) es para ir a comprar cosas —gas, pan, un
+insumo que faltó— sin cerrar la caja. Es un libro de solo-agregar con quién, cuánto, cuándo
+y para qué; el motivo es obligatorio, porque un retiro sin motivo no se distingue de un
+faltante. **Lo puede hacer cualquiera** (permiso `caja_retirar`, dueño y cajero): el cajero
+es el que está solo en la mañana, y lo que cuida la plata no es un permiso sino que cada
+retiro queda firmado. Se corrige anulando, no borrando: la fila queda, con quién la anuló.
+Y el cuadre lo resta solo del efectivo esperado, o esa plata aparecería de noche como un
+faltante que no existe. **No es** el `retiro` del cierre, que es lo que se lleva el dueño al
+final del día. **No se puede sacar más de lo que hay** en el cajón: sacar plata que no está
+es imposible de verdad (no es como el stock, donde la repisa puede tener más que el papel).
+También se puede **meter plata** (`/ingreso`, mismo libro con `tipo="ingreso"`): cambio que
+se repone, un vuelto que vuelve. El ingreso no tiene tope y suma al efectivo esperado.
+
+**Pago mixto** (`Pago`): una venta se puede pagar en dos formas —parte efectivo, parte
+tarjeta—. La venta llega con `pagos: [{medio, monto}]` en vez de un solo `medio_pago`; la
+suma tiene que dar EXACTO lo cobrado (sin propina: un pago mixto va sin propina). Se guarda
+cada parte como una fila de `Pago`, la venta queda con `medio_pago="mixto"`, y el cuadre lee
+las partes: la de efectivo va al cajón, la de tarjeta se cuadra contra la máquina. Una venta
+de un solo medio no escribe `Pago` y sigue igual que siempre.
+
+> **Todo lo que reparte por medio de pago pasa por `turnos._pagos_de`.** No se puede indexar
+> por `venta.medio_pago` a secas: desde el pago mixto ese campo puede valer `"mixto"`, que no
+> es una forma de pago. En la 2.14 `/resumen` lo hacía y **una sola venta mixta tumbaba la
+> pantalla de El día con un KeyError**, dejando al dueño sin informe. Al repartir por partes,
+> además, la mitad en efectivo de un pago mixto suma donde tiene que sumar. Una venta mixta
+> cuenta 1 en cada medio que tocó: la pregunta es "cuántas ventas pasaron por acá", y por la
+> máquina pasó una.
+
+**El arqueo se cuenta por denominación**, no se escribe un total. `conteo` es
+`{"10000": 2, "500": 6}` y el servidor lo suma con `total_del_conteo()`, que ignora
+cualquier valor que no sea plata chilena. Se guarda el conteo completo (`conteo_apertura`,
+`conteo_cierre`) porque un descuadre con detalle se puede investigar y uno sin detalle
+solo se puede lamentar. `efectivo_contado` suelto sigue aceptándose para no romper nada
+que ya lo mande, pero si viene `conteo`, manda el conteo.
+
+`fondo_siguiente` es lo que queda en el cajón para el día siguiente; el `retiro` es el
+resto y lo calcula el servidor, nunca se pide escrito. No se puede dejar de fondo más de
+lo que se contó.
+
+**A ciegas es SOLO el efectivo.** Al abrir el cierre se muestra todo: cuántas ventas hubo,
+cuánto se pagó con cada tarjeta, cuánta propina, y los campos para escribir lo que dice la
+máquina. Lo único tapado es la columna del efectivo —ventas y propinas— porque es lo que
+está dentro del cajón: si el número que debería haber estuviera en pantalla, contar hasta
+llegar a esa cifra sería lo natural y el arqueo no probaría nada. Lo de tarjeta no está en
+el cajón y se cuadra contra un papel de afuera, así que taparlo no protegía nada y solo
+obligaba a escribir el total de Transbank sin haberlo visto venir.
+
+**El efectivo se CUENTA; las tarjetas se COPIAN.** Son dos cuadres distintos y por eso
+`conteo_cierre` y `conteo_medios` son campos separados. El conteo del cajón se hace por
+denominación y a ciegas; lo de tarjeta sale del comprobante de cierre de la máquina y de
+la app del banco, y se escribe tal cual. `medios` en la respuesta del turno trae, por cada
+forma de pago que no sea efectivo: `esperado`, `declarado` y `diferencia`.
+
+> **`esperado` incluye la propina, y eso es lo que hace que el cuadre sirva.** La máquina
+> le cobró al cliente el total CON propina adentro. Compararlo contra lo vendido a secas
+> daría una diferencia falsa todos los días, exactamente del tamaño de las propinas.
+
+Escribir lo del banco es **opcional**: sin eso, `declarado` y `diferencia` quedan en `null`
+y no se inventa un cuadre. Nadie se puede quedar sin cerrar la caja porque no encuentra un
+comprobante.
+
+**Las propinas se informan separadas** (`propinas.efectivo` / `propinas.tarjeta`): la de
+efectivo ya está en el cajón y se reparte de ahí; la de tarjeta la depositó el banco y hay
+que pagarla aparte. Sin esa distinción, o se reparte dos veces o no se reparte nunca.
+
+### Usuarios y sesión `[IMPL]`
+```
+GET  /api/v1/candado                    → los nombres para la pantalla de entrada (libre)
+GET  /api/v1/sesion                     → quién soy y qué puedo hacer
+POST /api/v1/sesion/entrar   {usuario_id, pin}
+POST /api/v1/sesion/salir    {por}      → cambio | bloqueo | salir
+GET/POST/PUT/DELETE /api/v1/usuarios[/{id}]
+GET  /api/v1/turnos/{id}/presencias     → quién estuvo, cuánto rato y en qué tramos
+```
+
+**Son DOS candados en capas, y es a propósito.** `acceso.py` cuida la RED (qué equipo
+puede hablarle a la caja) y `sesion.py` cuida la IDENTIDAD (quién está frente a la
+pantalla). Tienen reglas OPUESTAS para `127.0.0.1`: la red lo deja pasar libre porque el
+cajero no debe tener fricción, y el login tiene que morder justo ahí, porque ése es el PC
+de la caja. Fundirlos obligaría a romper una de las dos.
+
+**Con cero usuarios activos, la caja funciona sin login y todos entran como dueño.** No es
+un descuido: la base del local ya está vendiendo y no tiene usuarios; si esta versión
+exigiera login, el lunes en la mañana nadie podría cobrar. Al crear el primer usuario la
+puerta se cierra sola y no se vuelve a abrir mientras quede alguien activo. El primer
+usuario es SIEMPRE dueño, si no el local quedaría sin nadie capaz de crear usuarios.
+
+El PIN se guarda con PBKDF2-HMAC-SHA256 y sal (solo biblioteca estándar). La sesión es una
+galleta firmada con HMAC, no una tabla: la caja es un computador con 2-4 personas, no un
+SaaS. Lo que sí va a la base es la **presencia**, porque es el dato que se pidió. El rol se
+lee de la base en cada petición, no de la galleta: ascender o bajar a alguien tiene efecto
+al toque.
+
+La llave que firma las galletas vive en `.secreto`, un archivo suelto en la raíz. No va
+dentro de `pos.db` porque entonces viajaría en cada respaldo, o sea el respaldo sería una
+llave maestra. Empieza con punto: el actualizador nunca lo pisa. Perderlo cuesta
+exactamente una cosa — todos marcan su PIN una vez más.
+
+| Permiso | Dueño | Cajero |
+|---|:--:|:--:|
+| vender, anular, abrir caja, ver el día | ✅ | ✅ |
+| cerrar la caja que abrió esa misma persona | ✅ | ✅ |
+| cerrar una caja que abrió otro (`turno_cerrar_ajeno`) | ✅ | — |
+| ver la bodega y anotar compras y mermas | ✅ | ✅ |
+| editar la carta, informes, respaldos | ✅ | — |
+| ajustar stock (conteo físico), crear usuarios | ✅ | — |
+| anular una venta de una caja YA CERRADA | ✅ | — |
+
+> El cajero SÍ puede anular una venta del turno en curso. Prohibírselo suena prudente y no
+> lo es: a las 8 de la mañana el dueño no está, y el cajero terminaría dejando la venta
+> mala adentro — que descuadra la caja al cierre. El control es que toda anulación queda
+> con autor y motivo, no que no se pueda hacer.
+
+> El cajero **no** cierra la caja de otro, y ahí sí se le corta el paso. No es el mismo
+> caso que la anulación: una venta mala que queda adentro descuadra la caja, o sea que
+> impedirla causa el daño. Un cierre firmado por quien no contó el fondo no arregla nada —
+> el cajón ya está contado o no lo está— y en cambio borra al único testigo del descuadre.
+> La pantalla avisa ANTES de que se cuente un solo billete, con el nombre de quien la
+> abrió: enterarse después de contar sería hacerle contar la plata entera para nada.
+
+### Inventario `[IMPL]`
+```
+GET  /api/v1/inventario                      → insumos, valor, qué falta comprar
+GET  /api/v1/bodega?q=nombre_o_codigo         → productos unitarios con cuenta
+PUT  /api/v1/bodega/{insumo_id}/cantidad      → cantidad absoluta, stock_esperado, motivo
+GET  /api/v1/inventario/alertas
+GET  /api/v1/inventario/insumos/{id}/movimientos   → el libro de ese insumo
+POST/PUT/DELETE /api/v1/inventario/insumos[/{id}]
+POST /api/v1/inventario/compras  {insumo_id, envases, compra_costo}
+POST /api/v1/inventario/mermas   {insumo_id, cantidad, motivo}   ← motivo obligatorio
+POST /api/v1/inventario/conteo   {conteos:{"3":4000}, nota}
+POST /api/v1/inventario/recalcular
+GET/PUT/DELETE /api/v1/productos/{id}/receta
+POST /api/v1/productos/{id}/receta/tal-cual  {stock_inicial, minimo, compra_costo}
+POST /api/v1/inventario/llevar-la-cuenta-de-todo  -> {cuantos}
+```
+
+**Un solo modelo para los dos casos.** El alfajor que se vende tal cual también es un
+Insumo (unidad `un`) y su producto tiene una receta de una línea. Con dos mecanismos —una
+columna `stock` en Producto para lo simple y recetas para lo preparado— habría dos verdades
+y dos códigos que descontar, y el día que exista el combo "café + alfajor" el alfajor
+saldría de los dos lados y los números dejarían de cuadrar.
+
+**Inventario obligatorio (2.12): todo producto lleva cuenta.** Los nuevos reciben su insumo
+al crearse, los importados al importar, y los que venían de antes se ponen al día solos al
+arrancar (la función `dar_cuenta_a_los_que_faltan`, idempotente). El botón manual quedó de
+respaldo. **No toca a los que tienen receta de verdad:** un capuchino no "es" un insumo, se
+hace con leche y café, y convertirlo en su propio insumo descontaría dos veces. Empieza en
+cero: cero es la verdad hasta que alguien cuente, y un número inventado sería peor que
+ninguno. Se amarra por **id**, nunca por nombre —con dos "Cortado" en la base, buscar el
+insumo de vuelta por nombre le daba la receta dos veces al mismo y dejaba al otro sin ella.
+
+**`Insumo.contado`: el tope duro solo muerde lo que el dueño ya contó.** Sin esto,
+"inventario obligatorio" sería un desastre: al actualizar, los 30 productos que nunca se
+contaron pasarían a stock 0 y el lunes no se podría vender nada. Así que todo LLEVA cuenta
+(tiene insumo, aparece en la bodega, recibe mercadería) pero el tope recién bloquea cuando
+alguien contó —una compra, un conteo, o un stock inicial al crear—. Hasta entonces se vende
+como antes. La migración deja `contado=true` en los insumos que ya existían, porque su
+saldo venía de compras y conteos de verdad. En `GET /categorias`, `stock` viaja solo para
+los contados: un producto sin contar llega con `stock` nulo y no se topea.
+
+**El libro es la verdad; `Insumo.stock` es una copia rápida.** El saldo existe para que
+cobrar sea un UPDATE y no un SUM sobre todo el historial de la leche. Si alguna vez se
+despegan, manda el libro: `/recalcular` lo reconstruye y **reporta** las diferencias en vez
+de arreglarlas calladamente.
+
+**El stock de un producto de RECETA nunca bloquea una venta.** Un capuchino se hace con
+leche y café: su saldo sale de recetas que son estimaciones y siempre está algo equivocado.
+Y un saldo negativo es la señal más valiosa que da el sistema: −4 L dice "vendiste más
+lattes que la leche que tus papeles decían que tenías", o sea hay una compra sin registrar.
+Bloquear eso destruiría la señal, porque obligaría al cajero a inventar un ajuste falso para
+poder vender. Por eso el tope duro de la 2.12 **no** toca a los productos de receta ni a los
+que nadie contó todavía: solo a lo que se vende TAL CUAL y ya se contó, donde el saldo es un
+número exacto —"quedan 3 botellas"— y vender una cuarta es vender algo que no existe.
+
+**Anular devuelve el stock leyendo el libro, no la receta.** Si entremedio alguien cambió
+el latte de 200 a 180 ml, recalcular devolvería 180 y se perderían 20 ml para siempre sin
+que nadie lo note. Es el mismo principio por el que `VentaLinea` congela el precio. De
+regalo, una venta anterior a que existiera la receta no escribió movimientos y no devuelve
+nada, sin ningún caso especial.
+
+### Traer la carta de otro lado `[IMPL]`
+```
+POST /api/v1/importar/archivo   (multipart)  → previsualización
+POST /api/v1/importar/texto     {texto}      → previsualización
+POST /api/v1/importar/aplicar   {productos, sacar_lo_que_no_vino}
+```
+
+**Dos pasos separados, siempre.** Leer no escribe. El archivo de un cliente siempre trae
+algo raro —un total al final, una fila de encabezado, un producto repetido— y lo único que
+evita que eso entre a la caja es que una persona lo vea antes. `aplicar` recibe la lista ya
+revisada, no el archivo: lo que se guarda es lo que la persona confirmó en pantalla.
+
+**El .xlsx se lee con biblioteca estándar** (`core/planilla.py`): un xlsx es un ZIP con XML
+adentro. Agregar `openpyxl` obligaría al local a bajar los 29 MB del ejecutable otra vez en
+vez de una actualización de 140 KB — el mismo motivo por el que el código viaja suelto al
+lado del .exe.
+
+**El punto y la coma se resuelven por la forma, no por el símbolo.** `3.500` son tres mil
+quinientos, pero Excel guarda `4.0365000000000005` cuando la celda tenía una fórmula. Sin
+separar esos casos, ese precio entra a la caja como cuarenta mil billones de pesos: pasó
+con una planilla real. Ver `core.planilla.a_precio`, y `parece_precio` para distinguir un
+precio de un texto que tiene números («CARTA 2026» no vale $2.026).
+
+**Un archivo incompleto no puede borrar una carta.** Lo que está en la caja y no viene en
+el archivo se informa pero no se toca; sacarlo es una casilla aparte, en falso por defecto,
+y es borrado lógico.
+
+**Al actualizar solo se pisa el precio.** El dibujo y la descripción quedan como estaban:
+si alguien los ajustó a mano, esa decisión vale más que lo que adivinó el importador.
+
+### Administración de la carta `[IMPL]`
+```
+GET/POST/PUT/DELETE /api/v1/productos[/{id}]
+GET/POST/PUT/DELETE /api/v1/categorias[/{id}]
+```
+**Dos formas de sacar un producto, distintas a propósito** (desde la 2.12):
+- **Apagarlo** (`PUT` con `activo=false`, la casilla «A la venta») lo esconde de la carta
+  pero lo deja en la base. Es reversible y es lo que usa el importador cuando algo no vino.
+- **Borrarlo** (`DELETE`) elimina la fila DE VERDAD. La historia de ventas no se toca:
+  `VentaLinea` guarda nombre y precio copiados, así que se le suelta el vínculo
+  (`producto_id` a nulo) y la venta vieja sigue cuadrando. La `Receta` y los `CodigoBarra`
+  se borran (su `producto_id` no acepta nulo); el `Insumo` propio se queda —con su stock y
+  su libro— y solo se le suelta el vínculo, porque la mercadería sigue en la repisa y el
+  libro de movimientos no se toca. **Todo en una transacción:** SQLite recicla los id, así
+  que una fila huérfana se le pegaría al próximo producto que tome ese id.
+
+**Borrar una categoría** (`DELETE`) solo se deja si está VACÍA. Un producto no puede quedar
+sin categoría (`categoria_id` no acepta nulo) y SQLite no lo impediría solo, así que la
+guarda es código: se cuentan TODOS los productos, activos y apagados, y si hay alguno se
+niega con un mensaje que dice cuántos. `PUT` sobre una categoría cambia nombre y orden.
+
+---
+
+### Local, red, respaldo y diagnóstico `[IMPL]` (2.19)
+```
+GET  /api/v1/local                      → {nombre, rut, direccion}              (libre)
+PUT  /api/v1/local                      {nombre, rut?, direccion?}              (dueño)
+GET  /api/v1/red                        → {pin, de_fabrica, fijo}               (dueño)
+POST /api/v1/red/pin                    {pin?} → sin pin inventa uno de 6        (dueño)
+GET  /api/v1/ajustes                    + bloqueo_minutos, canal_actualizaciones,
+                                          respaldo_afuera, respaldo_afuera_estado
+GET  /api/v1/respaldo/lugares           → carpetas de nube y pendrives          (dueño)
+POST /api/v1/respaldo                   → … + afuera {configurado, ok, ventas, detalle}
+POST /api/v1/diagnostico/evento         {tipo, mensaje, donde?, detalle?}       (libre, tope)
+GET  /api/v1/diagnostico                → .zip con el registro y el estado      (dueño)
+GET  /api/v1/actualizacion/vuelta       → {disponible, version}
+POST /api/v1/actualizacion/volver       → deshace la última actualización       (dueño)
+```
+`POST /api/v1/sesion/entrar` y `POST /entrar` responden **429** con cuánto esperar
+cuando actúa el freno de intentos.
+
+## 4. Quién puede entrar `[IMPL]`
+
+El punto de venta escucha en **toda la red del local** (`0.0.0.0`), porque las pantallas
+del menú suelen vivir en otro computador. Pero en una cafetería el wifi de invitados está
+en la misma red: sin candado, un cliente podría abrir la caja desde el celular y registrar
+o anular ventas.
+
+La regla, en `apps/pos/acceso.py`:
+
+| Desde dónde | Qué pasa |
+|---|---|
+| El propio PC de la caja (`127.0.0.1`) | Entra directo, sin PIN. Cero fricción para el cajero. |
+| Otro equipo de la red | Pide el PIN una vez y deja una galleta de 180 días. |
+| Cualquiera, a `/api/v1/carta` y `/api/v1/salud` | Libre: son de solo lectura y muestran precios que ya están a la vista. |
+| Cualquiera, a `/api/v1/diagnostico/evento` | Libre y con tope: son los avisos de error de los televisores, que no tienen PIN. |
+
+Desde la 2.19 el PIN de red es de cada local: vive en su base, se crea al instalar y el dueño
+lo ve y lo cambia en Ayuda → Ajustes (`POS_PIN` lo deja fijo si la instalación lo pide). La
+galleta va firmada con la llave de la caja, así que reiniciar el programa no desloguea al
+tablet y cambiar el PIN sí. Y hay freno de intentos. Ver las decisiones 22 y 24.
+
+> Esto **no** dice quién vendió: solo impide que entre cualquiera desde la red. Quién es
+> la persona lo resuelve el otro candado, el de usuarios, más abajo en esta misma sección.
+
+## 5. Puertos y orígenes
+
+| Qué | Puerto | Por qué fijo |
+|---|---|---|
+| Punto de venta | **8090** | El navegador guarda la sesión por origen; si el puerto baila, se pierde |
+| Pantallas del menú | 8123 | Ya definido en `menu-cafeteria` |
+
+En la misma máquina o en la red del local: las pantallas apuntan a
+`http://<ip-del-pc-de-la-caja>:8090/api/v1/carta`.
+
+---
+
+## 6. Lo que NO hace este POS (y es a propósito)
+
+- **No emite boleta electrónica** todavía. Registra la venta y cuadra la caja.
+- **No cobra tarjetas.** El pago con tarjeta se hace en la máquina del banco.
+- **No cobra tarjetas.** El pago con tarjeta se hace en la máquina del banco y en el POS
+  se registra el medio de pago. Integrar Transbank es otro proyecto.

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 55 400 400" width="256" height="256">
+  <!-- Icono de Caja Clara: la boleta con el visto bueno del logo, sin el texto (a 16 px
+       en la barra de tareas no se leería). Mismas medidas y colores que el logo de
+       640 x 640; el viewBox recorta el cuadrado alrededor de la boleta. -->
+  <rect x="120" y="55" width="400" height="400" rx="84" fill="#0A7F62"/>
+
+  <!-- sombra de la boleta, corrida hacia abajo a la derecha -->
+  <path fill="#0A6850" d="M195 100 H469 V410
+        L455.3 428 L441.6 410 L427.9 428 L414.2 410 L400.5 428 L386.8 410 L373.1 428
+        L359.4 410 L345.7 428 L332 410 L318.3 428 L304.6 410 L290.9 428 L277.2 410
+        L263.5 428 L249.8 410 L236.1 428 L222.4 410 L208.7 428 L195 410 Z"/>
+
+  <!-- la boleta, con el corte dentado abajo -->
+  <path fill="#FFFFFF" d="M183 88 H457 V398
+        L443.3 416 L429.6 398 L415.9 416 L402.2 398 L388.5 416 L374.8 398 L361.1 416
+        L347.4 398 L333.7 416 L320 398 L306.3 416 L292.6 398 L278.9 416 L265.2 398
+        L251.5 416 L237.8 398 L224.1 416 L210.4 398 L196.7 416 L183 398 Z"/>
+
+  <!-- las dos líneas de texto de la boleta -->
+  <rect x="219" y="131" width="202" height="12" fill="#CDD6D5"/>
+  <rect x="219" y="159" width="202" height="12" fill="#CDD6D5"/>
+
+  <!-- el visto bueno -->
+  <polyline points="250,268 302,322 398,222" fill="none" stroke="#0A7F62"
+            stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
