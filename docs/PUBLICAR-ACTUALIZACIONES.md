@@ -41,6 +41,42 @@ con la llave que conoce. La llave privada vive en:
 
 ---
 
+## Dos repositorios, uno solo de trabajo
+
+| Repositorio | Para qué | Quién lo toca |
+|---|---|---|
+| `Pacmancinya/caja-clara` (privado) | Es donde se desarrolla: ramas, pull requests, `main`. | Todo el equipo |
+| `Pacmancinya/pos-cafeteria` (público) | Es el **canal**: las cajas instaladas leen su `version.json` y bajan el zip de sus etiquetas. | Solo quien publica, y solo para publicar |
+
+Las cajas ya instaladas tienen escrita la dirección del canal (`URL_VERSION`), así que
+`pos-cafeteria` tiene que seguir existiendo mientras haya una caja que mire ahí. No hace falta
+ninguna actualización para que eso siga funcionando.
+
+En el clon de quien publica: `origin` es `caja-clara` y `canal` es `pos-cafeteria`
+(`git remote add canal https://github.com/Pacmancinya/pos-cafeteria.git`).
+
+Las dos historias son la misma: `main` del canal siempre es un ancestro de `main` de
+`caja-clara`. Publicar es empujar al canal lo que ya está en `main` de `caja-clara`, con la
+etiqueta primero (paso 5 de abajo). Por eso `main` de `caja-clara` tiene que estar siempre
+listo para publicarse: lo que está a medias va en ramas.
+
+**Nadie hace commits en `pos-cafeteria`.** Si alguien lo hiciera, el empuje al canal fallaría
+por no ser un avance directo. No se fuerza: se trae primero (`git fetch canal`) y se revisa
+qué se coló.
+
+**Apuntar las cajas a otra dirección** (dejar `pos-cafeteria` de lado, o pasarlo a privado)
+**sí** necesita una actualización, y se hace con cuidado:
+
+1. Una versión nueva cambia `URL_VERSION` (`core/config.py`) y se publica por el canal de
+   hoy, primero al piloto.
+2. Se espera a que **todas** las cajas tengan esa versión. La que no la reciba queda sin
+   actualizaciones para siempre (sigue vendiendo, pero hay que ir a arreglarla a mano).
+3. Si la dirección nueva es privada, cada caja necesita su `POS_CLAVE_DESCARGA` **antes** de
+   recibir esa versión (ver «Si algún día el repositorio pasa a ser privado»).
+4. Recién ahí se apaga o se pasa a privado el canal viejo.
+
+---
+
 ## Publicar una versión nueva
 
 1. **Haces los cambios** y corres las pruebas: `.venv/Scripts/python -m pytest apps/pos/tests -q`.
@@ -61,7 +97,9 @@ con la llave que conoce. La llave privada vive en:
 5. **Commit de la firma, etiqueta y subida** (el script te dice los comandos exactos):
    ```bash
    git add manifiesto.json manifiesto.firma && git commit -m "Firma de la v2.19"
-   git tag v2.19 && git push && git push origin v2.19
+   git push origin main                  # caja-clara: queda el trabajo
+   git tag v2.19 && git push canal v2.19 # pos-cafeteria: la etiqueta ANTES que main
+   git push canal main                   # y recién ahí main, donde están los json que leen las cajas
    ```
 6. **Al piloto le llega sola.** Cuando haya andado bien unos días, copia el contenido de
    `version-piloto.json` a `version.json`, commit y push: ahí les llega a todos. No hay que

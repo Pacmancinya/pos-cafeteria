@@ -1,12 +1,16 @@
 # AGENTS.md — Caja Clara, el punto de venta
 
-> **Contexto de esta copia:** este repositorio es PRIVADO y de colaboración,
-> `Pacmancinya/caja-clara`. Las referencias de esta guía al repositorio público,
-> a main como distribución y a publicar versiones describen `Pacmancinya/pos-cafeteria`,
-> no esta copia. Aquí main integra desarrollo mediante ramas y pull requests.
-> No cambiar URLs de actualización ni firmar/publicar versiones como parte del trabajo
-> colaborativo. Leer [COLABORACION.md](COLABORACION.md). Las prohibiciones sobre datos
-> de locales y secretos siguen vigentes también en privado.
+> **Dónde se trabaja:** este repositorio, `Pacmancinya/caja-clara` (privado), es el ÚNICO
+> donde se desarrolla: cada cambio entra por rama y pull request hacia main.
+> `Pacmancinya/pos-cafeteria` (público) no se toca a mano: es solo el canal por el que las
+> cajas instaladas reciben actualizaciones (siguen leyendo su `version.json` y sus
+> etiquetas), y solo Ruperto le sube algo, al publicar una versión. Cuando esta guía habla
+> del «repositorio público» o de «main como lo que termina en las cajas», habla de ese
+> canal. Ver «Dos repositorios» en
+> [docs/PUBLICAR-ACTUALIZACIONES.md](docs/PUBLICAR-ACTUALIZACIONES.md).
+> Si no eres Ruperto, no cambies URLs de actualización ni firmes o publiques versiones.
+> Leer [COLABORACION.md](COLABORACION.md). Las prohibiciones sobre datos de locales y
+> secretos siguen vigentes también en privado.
 
 Guía para cualquier sesión de Codex que abra este repositorio. Léela entera antes de
 tocar algo: acá está lo que no sale en las pruebas y que ya rompió cajas de verdad.

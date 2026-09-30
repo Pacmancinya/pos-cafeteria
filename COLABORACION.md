@@ -8,7 +8,10 @@ como una copia nueva sin el historial anterior.
 ## Desarrollo separado de las cajas reales
 
 - `Pacmancinya/caja-clara`: colaboración privada. Subir código aquí no actualiza locales.
-- `Pacmancinya/pos-cafeteria`: distribución actual. Se mantiene sin cambios.
+- `Pacmancinya/pos-cafeteria`: el canal por el que las cajas instaladas reciben
+  actualizaciones. Nadie desarrolla ahí: solo Ruperto le sube algo, al publicar una versión
+  (ver «Dos repositorios» en `docs/PUBLICAR-ACTUALIZACIONES.md`). Todo el trabajo va en
+  `caja-clara`.
 - El código conserva las URLs originales de actualización por compatibilidad.
   No usar «Buscar actualizaciones» en la copia de desarrollo: podría reemplazar el
   trabajo local por la versión publicada. Nunca desarrollar sobre una instalación real.

@@ -121,7 +121,10 @@ def main() -> int:
     print(f"  Firmada la v{APP_VERSION}: {len(archivos)} archivos.")
     print("  Ahora:")
     print(f'    git add {MANIFIESTO} {FIRMA_ARCHIVO} && git commit -m "Firma de la v{APP_VERSION}"')
-    print(f"    git tag v{APP_VERSION} && git push && git push origin v{APP_VERSION}")
+    print("    git push origin main")
+    print(f"    git tag v{APP_VERSION} && git push canal v{APP_VERSION}   # la etiqueta ANTES que main")
+    print("    git push canal main")
+    print("  (origin = caja-clara, canal = pos-cafeteria: ver docs/PUBLICAR-ACTUALIZACIONES.md)")
     return 0
 
 
