@@ -1,4 +1,4 @@
-# CLAUDE.md — Caja Clara, el punto de venta
+# AGENTS.md — Caja Clara, el punto de venta
 
 > **Contexto de esta copia:** este repositorio es PRIVADO y de colaboración,
 > `Pacmancinya/caja-clara`. Las referencias de esta guía al repositorio público,
@@ -8,7 +8,7 @@
 > colaborativo. Leer [COLABORACION.md](COLABORACION.md). Las prohibiciones sobre datos
 > de locales y secretos siguen vigentes también en privado.
 
-Guía para cualquier sesión de Claude que abra este repositorio. Léela entera antes de
+Guía para cualquier sesión de Codex que abra este repositorio. Léela entera antes de
 tocar algo: acá está lo que no sale en las pruebas y que ya rompió cajas de verdad.
 
 > **Nombre.** Desde la 2.31 el producto se llama **Caja Clara** (hasta la 2.30, Kofe). Quedan

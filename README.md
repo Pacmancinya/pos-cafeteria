@@ -1,5 +1,9 @@
 # Caja Clara — punto de venta
 
+> **Repositorio privado de desarrollo compartido:** `Pacmancinya/caja-clara`.
+> Empieza por [COLABORACION.md](COLABORACION.md). Esta copia no publica
+> actualizaciones a los locales: el canal de distribución sigue en `Pacmancinya/pos-cafeteria`.
+
 > Hasta la 2.30 se llamó **Kofe**. En el código quedan nombres internos con ese nombre
 > (`Kofe.py`, `%USERPROFILE%\.kofe`, `Kofe-respaldos`) y las cajas instaladas antes
 > de la 2.31 abren con `Kofe.exe`: no se cambian, porque las cajas dependen de ellos.
