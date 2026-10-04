@@ -43,6 +43,22 @@ CARTA = [
         ("Alfajor", "Manjar casero y coco", 1900, "alfajor", False, "", "Hecho acá"),
         ("Torta del día", "Cambia cada mañana", 4200, "torta", True, "Hasta agotar", ""),
     ]),
+    ("Panadería", [
+        ("Ciabatta", "Corteza crujiente y miga con aire", 1900, "pan-ciabatta", False, "", ""),
+        ("Marraqueta", "Crujiente, del horno de las ocho", 600, "pan-marraqueta", False, "", "Recién hecha"),
+        ("Hallulla", "Aplanada y suave, para la mantequilla", 600, "pan-hallulla", False, "", ""),
+        ("Baguette", "Larga y de corteza fina", 1700, "pan-baguette", False, "", ""),
+        ("Pan amasado", "Casero, de miga tierna", 700, "pan-amasado", False, "", ""),
+        ("Pan integral", "Con semillas y avena", 2200, "pan-integral", False, "", "Sin azúcar"),
+        ("Frica", "Pan de hamburguesa con sésamo", 900, "pan-frica", False, "", ""),
+    ]),
+    ("Café en grano", [
+        # el último campo, opcional, es el color de la bolsa
+        ("Café en grano 250 g", "Tueste medio, notas de chocolate", 7900, "bolsa-cafe", False, "", "", "#2E5E4E"),
+        ("Café en grano tueste oscuro", "Cuerpo intenso, 250 g", 7900, "bolsa-cafe", False, "", "", "#A8382F"),
+        ("Café en grano 1 kg", "Para la casa y la oficina", 26900, "bolsa-cafe", False, "", "", "#2B2523"),
+        ("Café molido 250 g", "Listo para la cafetera", 7500, "bolsa-cafe-kraft", False, "", ""),
+    ]),
     ("Promos", [
         ("Desayuno de la casa", "Café mediano + croissant", 5200, "croissant", False, "", ""),
         ("Media tarde", "Latte + alfajor", 4700, "alfajor", False, "", ""),
@@ -72,11 +88,11 @@ def sembrar(forzar: bool = False) -> None:
             s.add(cat)
             s.commit()
             s.refresh(cat)
-            for j, (nom, desc, precio, dib, dest, badge, etiq) in enumerate(productos):
+            for j, (nom, desc, precio, dib, dest, badge, etiq, *resto) in enumerate(productos):
                 s.add(Producto(
                     categoria_id=cat.id, nombre=nom, descripcion=desc, precio=precio,
                     orden=j, dibujo=dib, destacado=dest, badge=badge, etiqueta=etiq,
-                    antes=ANTES.get(nom),
+                    antes=ANTES.get(nom), color=resto[0] if resto else "",
                 ))
             s.commit()
 

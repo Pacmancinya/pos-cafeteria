@@ -24,7 +24,7 @@ const c = { console, document: { activeElement: null },
   puedo: () => true, usarInventario: () => true,
   avisar: (...a) => avisos.push(a),
   dialogoProductoNuevoPorCodigo: () => assert.fail('No debe abrir producto nuevo'),
-  pintarTalCual() {}, pintarCodigos() {}, selectorDeDibujo: () => '<input id="fDibujo">',
+  pintarTalCual() {}, pintarCodigos() {}, selectorDeDibujo: () => '<input id="fDibujo">', colorParaGuardar: (p) => p.color || '',
   cargarCarta: async () => {}, estadoAfueraHTML: () => '', cargarAjustesDelLocal() {},
 };
 vm.createContext(c);

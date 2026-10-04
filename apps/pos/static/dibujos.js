@@ -202,63 +202,139 @@ function alfajor(o) {
 
 const MASA = "#D9A15B", MASA_OSC = "#B9813C", MASA_LUZ = "#F0C88A", MIGA = "#F6E7C8";
 
-function pan(o) {                 /* marraqueta, hallulla, amasado, baguette */
+/* ---------- colores a medida (la bolsa de café va del color que elija el dueño) ----------
+   El color viene de la base del local: se valida antes de pegarlo en el SVG, y
+   si no es un #hex válido se usa el de siempre. */
+const hexOk = (c, def) => {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c || "").trim());
+  if (!m) return def.toLowerCase();
+  const h = m[1].length === 3 ? m[1].split("").map((x) => x + x).join("") : m[1];
+  return "#" + h.toLowerCase();
+};
+const mezcla = (c, otro, t) => {
+  const a = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const b = [1, 3, 5].map((i) => parseInt(otro.slice(i, i + 2), 16));
+  return "#" + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, "0")).join("");
+};
+const oscuro = (c, t) => mezcla(c, "#000000", t);
+const claro = (c, t) => mezcla(c, "#FFFFFF", t);
+
+function pan(o) {                 /* marraqueta, hallulla, amasado, baguette, ciabatta, integral, frica */
   const t = o.tipo || "marraqueta";
+  const ENARINA = "#FFF6E2";
   if (t === "baguette") {
+    /* dos baguettes en diagonal: lo largo y los cortes son lo que la distingue */
+    const una = (dy) => `
+      <g transform="translate(0 ${dy})">
+        <path d="M24 146 Q28 124 56 124 H184 Q212 124 216 146 Q212 168 184 168 H56 Q28 168 24 146 Z" fill="${MASA}"/>
+        <path d="M24 148 Q28 168 56 168 H184 Q212 168 216 148 Q200 160 120 160 Q40 160 24 148 Z" fill="${MASA_OSC}" opacity=".4"/>
+        <path d="M40 133 H200" stroke="${MASA_LUZ}" stroke-width="7" stroke-linecap="round" opacity=".65"/>
+        ${[62, 96, 130, 164].map((x) => `
+          <ellipse cx="${x}" cy="141" rx="14" ry="5.6" fill="#F6DFA8" transform="rotate(62 ${x} 141)"/>
+          <ellipse cx="${x}" cy="141" rx="14" ry="5.6" fill="none" stroke="${MASA_OSC}" stroke-width="2.4" opacity=".8" transform="rotate(62 ${x} 141)"/>`).join("")}
+      </g>`;
     return `${SOMBRA}
-    <g transform="rotate(-16 120 140)">
-      <rect x="34" y="118" width="172" height="46" rx="23" fill="${MASA}"/>
-      <rect x="34" y="140" width="172" height="24" rx="12" fill="${MASA_OSC}" opacity=".35"/>
-      <rect x="44" y="124" width="150" height="14" rx="7" fill="${MASA_LUZ}" opacity=".65"/>
-      <g stroke="${MASA_OSC}" stroke-width="4.5" stroke-linecap="round" opacity=".75">
-        <path d="M66 128 l16 -10"/><path d="M100 128 l16 -10"/>
-        <path d="M134 128 l16 -10"/><path d="M166 128 l14 -9"/>
+    <g transform="rotate(-20 120 140) translate(0 -8)">${una(-24)}${una(14)}</g>`;
+  }
+  if (t === "hallulla") {
+    /* disco plano y pálido, picado con tenedor: se lee redondo y chato */
+    const puntos = [];
+    [[0, 0, 1], [26, 15, 6], [52, 30, 10]].forEach(([rx, ry, n]) => {
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * 2 * Math.PI + (rx ? .3 : 0);
+        puntos.push(`<circle cx="${(120 + Math.cos(a) * rx).toFixed(1)}" cy="${(138 + Math.sin(a) * ry).toFixed(1)}" r="3.4"/>`);
+      }
+    });
+    return `${SOMBRA}
+    <ellipse cx="120" cy="158" rx="86" ry="42" fill="#B9813C"/>
+    <path d="M34 150 V158 Q34 200 120 200 Q206 200 206 158 V150 Z" fill="#C48F4A"/>
+    <ellipse cx="120" cy="146" rx="86" ry="42" fill="#E6B567"/>
+    <ellipse cx="120" cy="140" rx="78" ry="36" fill="#EFC884"/>
+    <ellipse cx="104" cy="124" rx="40" ry="11" fill="#FBE3B0" opacity=".7"/>
+    <g fill="#A8742F" opacity=".75">${puntos.join("")}</g>`;
+  }
+  if (t === "amasado") {
+    /* bollo alto y redondo, enharinado, con la marca de la mano arriba */
+    return `${SOMBRA}
+    <path d="M44 172 C38 112 82 80 120 80 C158 80 202 112 196 172 Q196 198 120 198 Q44 198 44 172 Z" fill="#CF8F46"/>
+    <path d="M44 172 Q44 198 120 198 Q196 198 196 172 Q170 186 120 186 Q70 186 44 172 Z" fill="#9C6628" opacity=".45"/>
+    <path d="M56 150 C60 112 90 92 120 92 C150 92 180 112 184 150 C160 128 80 128 56 150 Z" fill="#E0A55B"/>
+    <path d="M78 122 Q120 104 162 122" fill="none" stroke="#A8742F" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+    <path d="M96 140 Q120 130 144 140" fill="none" stroke="#A8742F" stroke-width="4" stroke-linecap="round" opacity=".45"/>
+    <g fill="${ENARINA}" opacity=".7">
+      <ellipse cx="98" cy="108" rx="14" ry="6" transform="rotate(-24 98 108)"/>
+      <ellipse cx="142" cy="104" rx="10" ry="4.6" transform="rotate(20 142 104)"/>
+      <circle cx="128" cy="150" r="3"/><circle cx="82" cy="156" r="2.6"/><circle cx="160" cy="146" r="2.4"/>
+    </g>`;
+  }
+  if (t === "ciabatta") {
+    /* plana, alargada, con harina y burbujas grandes: la zapatilla */
+    return `${SOMBRA}
+    <g transform="rotate(-6 120 146)">
+      <path d="M26 156 Q22 120 62 114 Q120 104 184 114 Q220 122 214 156 Q210 196 168 198 Q110 204 62 198 Q28 192 26 156 Z" fill="#B88A4A"/>
+      <path d="M26 150 Q22 114 62 108 Q120 98 184 108 Q220 116 214 150 Q210 184 168 186 Q110 192 62 186 Q28 180 26 150 Z" fill="#E4BC78"/>
+      <path d="M40 130 Q70 114 120 112 Q170 112 200 128 Q150 120 100 124 Q60 128 40 130 Z" fill="#F6DEAC" opacity=".8"/>
+      <g fill="${ENARINA}" opacity=".75">
+        <ellipse cx="78" cy="140" rx="22" ry="9" transform="rotate(-8 78 140)"/>
+        <ellipse cx="150" cy="134" rx="26" ry="8" transform="rotate(6 150 134)"/>
+        <ellipse cx="116" cy="164" rx="30" ry="8" transform="rotate(-3 116 164)"/>
+        <ellipse cx="184" cy="156" rx="12" ry="6"/>
+      </g>
+      <g fill="#A6772F" opacity=".8">
+        <ellipse cx="62" cy="152" rx="6" ry="3.6"/><ellipse cx="102" cy="144" rx="7.4" ry="4"/>
+        <ellipse cx="132" cy="156" rx="5.4" ry="3.2"/><ellipse cx="168" cy="146" rx="6.6" ry="3.6"/>
+        <ellipse cx="92" cy="172" rx="5" ry="3"/><ellipse cx="148" cy="174" rx="6.4" ry="3.4"/>
       </g>
     </g>`;
   }
-  if (t === "hallulla") {
-    return `${SOMBRA}
-    <ellipse cx="120" cy="146" rx="76" ry="52" fill="${MASA}"/>
-    <ellipse cx="120" cy="156" rx="76" ry="42" fill="${MASA_OSC}" opacity=".3"/>
-    <ellipse cx="112" cy="126" rx="46" ry="22" fill="${MASA_LUZ}" opacity=".6"/>
-    <g fill="${MASA_OSC}" opacity=".55">
-      <circle cx="94" cy="140" r="4"/><circle cx="126" cy="132" r="4"/>
-      <circle cx="146" cy="152" r="4"/><circle cx="104" cy="164" r="4"/>
-    </g>`;
-  }
-  if (t === "amasado") {
-    return `${SOMBRA}
-    <ellipse cx="120" cy="144" rx="72" ry="56" fill="${MASA}"/>
-    <ellipse cx="120" cy="156" rx="72" ry="44" fill="${MASA_OSC}" opacity=".28"/>
-    <path d="M60 138 q60 -26 120 0" fill="none" stroke="${MASA_OSC}"
-          stroke-width="5" stroke-linecap="round" opacity=".6"/>
-    <ellipse cx="106" cy="120" rx="38" ry="17" fill="${MASA_LUZ}" opacity=".55"/>`;
-  }
   if (t === "integral") {
+    /* molde oscuro con una rebanada al frente y semillas */
+    const semillas = (x, y, s) => `<g fill="#F0DCBC" opacity=".9" transform="translate(${x} ${y}) scale(${s})">
+      <ellipse cx="0" cy="0" rx="5" ry="2.6" transform="rotate(-22)"/>
+      <ellipse cx="22" cy="-6" rx="5" ry="2.6" transform="rotate(14)"/>
+      <ellipse cx="44" cy="2" rx="5" ry="2.6" transform="rotate(-8)"/>
+      <ellipse cx="10" cy="14" rx="4.6" ry="2.4" transform="rotate(30)"/>
+      <ellipse cx="34" cy="14" rx="4.6" ry="2.4" transform="rotate(-26)"/></g>`;
     return `${SOMBRA}
-    <path d="M46 168 Q46 104 120 104 Q194 104 194 168 Z" fill="#A9743C"/>
-    <path d="M46 168 h148 v14 q0 10 -12 10 H58 q-12 0 -12 -10 Z" fill="#8E5F2E"/>
-    <path d="M62 140 Q120 120 178 140" fill="none" stroke="#7C5227"
-          stroke-width="4" stroke-linecap="round" opacity=".6"/>
-    <g fill="#F0DCBC" opacity=".8">
-      <ellipse cx="92" cy="126" rx="6" ry="3.4" transform="rotate(-16 92 126)"/>
-      <ellipse cx="128" cy="118" rx="6" ry="3.4" transform="rotate(10 128 118)"/>
-      <ellipse cx="156" cy="132" rx="5.4" ry="3" transform="rotate(-8 156 132)"/>
-    </g>`;
+    <g transform="translate(14 20) scale(.9)">
+    <path d="M30 186 V120 Q30 88 62 86 Q94 84 126 86 Q158 88 158 120 V186 Q158 198 146 198 H42 Q30 198 30 186 Z" fill="#7A4F26"/>
+    <path d="M30 150 V186 Q30 198 42 198 H146 Q158 198 158 186 V150 Q94 164 30 150 Z" fill="#5E3A19" opacity=".5"/>
+    <path d="M38 104 Q94 92 150 104" fill="none" stroke="#A9743C" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+    ${semillas(52, 108, 1.1)}
+    <path d="M118 198 V156 Q118 126 146 124 Q174 122 202 124 Q226 128 226 156 V198 Z" fill="#8E5F2E"/>
+    <path d="M126 198 V158 Q126 134 148 132 Q174 130 196 132 Q218 134 218 158 V198 Z" fill="#D4AB6C"/>
+    <path d="M126 168 Q172 178 218 168 V198 H126 Z" fill="#B88A4A" opacity=".45"/>
+    <g fill="#8B5E2A" opacity=".8">
+      <circle cx="146" cy="152" r="2.8"/><circle cx="170" cy="146" r="2.8"/><circle cx="194" cy="154" r="2.8"/>
+      <circle cx="158" cy="172" r="2.6"/><circle cx="184" cy="170" r="2.6"/><circle cx="204" cy="140" r="2.4"/>
+    </g></g>`;
   }
-  /* marraqueta: cuatro lomos con el corte en cruz */
+  if (t === "frica") {
+    /* pan de hamburguesa: tapa abovedada con sésamo y base más chata */
+    const ses = [[88, 106, -20], [112, 98, 10], [136, 104, -14], [158, 114, 24], [100, 124, 16],
+                 [126, 122, -26], [148, 130, 8], [76, 128, -8], [168, 136, -18], [114, 140, 20]];
+    return `${SOMBRA}
+    <path d="M52 160 H188 Q188 192 164 196 H76 Q52 192 52 160 Z" fill="#E0AB62"/>
+    <path d="M52 168 H188 Q186 190 164 194 H76 Q54 190 52 168 Z" fill="#B9813C" opacity=".4"/>
+    <path d="M48 156 H192 V166 Q120 176 48 166 Z" fill="${MIGA}"/>
+    <path d="M40 154 Q38 84 120 80 Q202 84 200 154 Q120 166 40 154 Z" fill="#D58F36"/>
+    <path d="M40 148 Q42 156 120 162 Q198 156 200 148 Q196 160 120 166 Q44 160 40 148 Z" fill="#A86A1F" opacity=".55"/>
+    <path d="M58 122 Q64 96 100 90" fill="none" stroke="#F3C676" stroke-width="9" stroke-linecap="round" opacity=".7"/>
+    <g fill="#FFF3D6">${ses.map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="5.6" ry="3" transform="rotate(${r} ${x} ${y})"/>`).join("")}</g>`;
+  }
+  /* marraqueta: cuatro gajos pegados (dos y dos), con la raya larga y la cruzada bien marcadas */
   const lomo = (x, y, rx, ry) => `
-    <ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${MASA}"/>
-    <ellipse cx="${x}" cy="${y + 8}" rx="${rx}" ry="${ry - 8}" fill="${MASA_OSC}" opacity=".3"/>
-    <ellipse cx="${x - 6}" cy="${y - 12}" rx="${rx * .55}" ry="${ry * .34}"
-             fill="${MASA_LUZ}" opacity=".6"/>`;
+    <ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="#C98F43"/>
+    <ellipse cx="${x}" cy="${y + 7}" rx="${rx}" ry="${ry - 8}" fill="#8E5A1E" opacity=".28"/>
+    <ellipse cx="${x - 6}" cy="${y - 12}" rx="${rx * .55}" ry="${ry * .34}" fill="${MASA_LUZ}" opacity=".7"/>`;
   return `${SOMBRA}
-  ${lomo(84, 152, 42, 40)}
-  ${lomo(156, 152, 42, 40)}
-  ${lomo(84, 118, 38, 34)}
-  ${lomo(156, 118, 38, 34)}
-  <path d="M120 84 V190" stroke="${MASA_OSC}" stroke-width="7" stroke-linecap="round" opacity=".8"/>
-  <path d="M46 134 H194" stroke="${MASA_OSC}" stroke-width="6" stroke-linecap="round" opacity=".55"/>`;
+  ${lomo(80, 156, 44, 38)}
+  ${lomo(160, 156, 44, 38)}
+  ${lomo(80, 120, 42, 34)}
+  ${lomo(160, 120, 42, 34)}
+  <path d="M120 84 V194" stroke="#7A4A16" stroke-width="8" stroke-linecap="round" opacity=".85"/>
+  <path d="M40 138 H200" stroke="#7A4A16" stroke-width="7" stroke-linecap="round" opacity=".65"/>
+  <g fill="${ENARINA}" opacity=".6"><circle cx="64" cy="112" r="2.6"/><circle cx="100" cy="104" r="2.2"/><circle cx="176" cy="108" r="2.6"/><circle cx="188" cy="160" r="2.2"/><circle cx="62" cy="168" r="2.2"/><circle cx="138" cy="172" r="2.4"/></g>`;
 }
 
 function sandwich(o) {            /* sándwich, churrasco, wrap, completo */
@@ -535,10 +611,55 @@ function pack(o) {                /* el six-pack: la unidad de venta de una boti
   <path d="M96 92 q24 -22 48 0" fill="none" stroke="#000000" stroke-opacity=".18" stroke-width="4"/>`;
 }
 
+function bolsa(o) {              /* bolsa de café stand-up: válvula y etiqueta en blanco, sin marca */
+  const id = uid();
+  const base = hexOk(o.col, o.kraft ? "#B98B5E" : "#2E5E4E");
+  const sombra = oscuro(base, .28), luz = claro(base, .22), borde = oscuro(base, .38);
+  const cuerpo = "M64 70 L55 176 Q53 196 76 199 Q120 205 164 199 Q187 196 185 176 L176 70 Z";
+  return `${SOMBRA}
+  <defs><linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0">
+    <stop offset="0" stop-color="${luz}"/><stop offset=".22" stop-color="${base}"/>
+    <stop offset=".72" stop-color="${base}"/><stop offset="1" stop-color="${sombra}"/>
+  </linearGradient></defs>
+  <path d="${cuerpo}" fill="url(#${id})" stroke="${borde}" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M55 176 Q53 196 76 199 Q120 205 164 199 Q187 196 185 176 Q120 188 55 176 Z" fill="${sombra}" opacity=".5"/>
+  <path d="M62 52 H178 V72 H62 Z" fill="${claro(base, .1)}" stroke="${borde}" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M62 58 H178 M62 64 H178" stroke="${borde}" stroke-width="1.8" opacity=".45"/>
+  <path d="M66 86 H174" stroke="${borde}" stroke-width="2" stroke-dasharray="3 3" opacity=".5"/>
+  <circle cx="120" cy="104" r="11" fill="${oscuro(base, .45)}"/>
+  <circle cx="120" cy="104" r="8" fill="${claro(base, .55)}"/>
+  <circle cx="120" cy="104" r="3.4" fill="${oscuro(base, .5)}"/>
+  <rect x="80" y="124" width="80" height="54" rx="7" fill="#F7EFDE" stroke="${borde}" stroke-opacity=".35" stroke-width="2"/>
+  <rect x="86" y="130" width="68" height="42" rx="4" fill="none" stroke="#C9B58F" stroke-width="1.6" opacity=".7"/>
+  <path d="M70 80 L63 176" stroke="#FFFFFF" stroke-opacity=".28" stroke-width="7" stroke-linecap="round"/>
+  ${o.kraft ? `<g stroke="${borde}" stroke-width="1.6" opacity=".28" stroke-linecap="round">
+    <path d="M72 100 l8 3 M160 96 l9 -3 M70 140 l7 2 M164 150 l8 3 M76 184 l9 1 M150 188 l10 1"/></g>` : ""}`;
+}
+
+function bolsaPapel(o) {         /* bolsa de papel de panadería, con las puntas de dos baguettes */
+  const base = hexOk(o.col, "#C9A06A");
+  const sombra = oscuro(base, .24), luz = claro(base, .25), borde = oscuro(base, .38);
+  return `${SOMBRA}
+  <g transform="rotate(-9 96 80)">
+    <rect x="76" y="44" width="30" height="62" rx="15" fill="${MASA}"/>
+    <path d="M82 66 l12 -6 M82 80 l12 -6" stroke="${MASA_OSC}" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+  </g>
+  <g transform="rotate(10 150 80)">
+    <rect x="134" y="48" width="30" height="58" rx="15" fill="#E6B567"/>
+    <path d="M140 70 l12 -6 M140 84 l12 -6" stroke="${MASA_OSC}" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+  </g>
+  <path d="M62 96 H178 L186 190 Q186 200 174 200 H66 Q54 200 54 190 Z" fill="${base}" stroke="${borde}" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M142 96 H178 L186 190 Q186 200 174 200 H150 Z" fill="${sombra}" opacity=".5"/>
+  <path d="M60 84 H180 L178 108 H62 Z" fill="${luz}" stroke="${borde}" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M120 108 V200" stroke="${borde}" stroke-width="2" opacity=".28"/>
+  <rect x="82" y="128" width="76" height="46" rx="6" fill="#F7EFDE" stroke="${borde}" stroke-opacity=".35" stroke-width="2"/>
+  <path d="M68 112 L62 194" stroke="#FFFFFF" stroke-opacity=".25" stroke-width="6" stroke-linecap="round"/>`;
+}
+
 const ART = { mug, taza, vaso, frappe, croissant, torta, brownie, alfajor,
               pan, sandwich, empanada, botella, lata, cajaJugo, vasoPapel,
               dona, muffin, galleta, bol, helado, tetera, porcion, plato,
-              combo, pack };
+              combo, pack, bolsa, bolsaPapel };
 /* ==========================================================
    Recetas: un nombre simple -> los parámetros del dibujo.
    Existen porque el punto de venta guarda UN campo (`dibujo`) y no toda la
@@ -572,6 +693,8 @@ const RECETAS = {
   "pan-amasado":         { k: "pan", tipo: "amasado" },
   "pan-baguette":        { k: "pan", tipo: "baguette" },
   "pan-integral":        { k: "pan", tipo: "integral" },
+  "pan-ciabatta":        { k: "pan", tipo: "ciabatta" },
+  "pan-frica":           { k: "pan", tipo: "frica" },
   "sandwich":            { k: "sandwich", relleno: "#C0304A" },
   "sandwich-queso":      { k: "sandwich", relleno: "#E0A15A", queso: 1 },
   "churrasco":           { k: "sandwich", relleno: "#8E5A3C", queso: 1 },
@@ -655,6 +778,15 @@ const RECETAS = {
   "ron":                 { k: "botella", liq: "#7A3E14", tapa: "#3A1B0C", vidrio: 1, etiqueta: "#5A2A0E" },
   "whisky":              { k: "botella", liq: "#A5601A", tapa: "#3A1B0C", vidrio: 1, etiqueta: "#6B4423" },
 
+  /* ---- bolsas: el color se elige en la ficha del producto (col) ---- */
+  "bolsa-cafe":          { k: "bolsa", col: "#2E5E4E" },
+  "bolsa-cafe-roja":     { k: "bolsa", col: "#A8382F" },
+  "bolsa-cafe-azul":     { k: "bolsa", col: "#2F5D8A" },
+  "bolsa-cafe-negra":    { k: "bolsa", col: "#2B2523" },
+  "bolsa-cafe-kraft":    { k: "bolsa", kraft: 1 },
+  "bolsa-papel":         { k: "bolsaPapel", col: "#C9A06A" },
+  "bolsa-papel-blanca":  { k: "bolsaPapel", col: "#F1EBDD" },
+
   "leche-caja":          { k: "cajaJugo", col2: "#3E6E8E" },
   "nectar-caja":         { k: "cajaJugo", col2: "#C0392B" },
 
@@ -665,6 +797,7 @@ const dibujo = (a) => {
   const receta = RECETAS[(a && a.k) || "mug"] || RECETAS.mug;
   const art = Object.assign({}, receta);
   if (a && a.col) art.col = a.col;          // el color elegido manda sobre la receta
+  if (a && a.kraft) { art.kraft = 1; if (!(a && a.col)) delete art.col; }   // bolsa de papel café
   // Recorte: el lienzo de 240 tiene mucho aire arriba y a los lados, y en un
   // azulejo chico eso hace que el dibujo se vea perdido. Mostramos solo la parte
   // donde realmente hay algo dibujado.

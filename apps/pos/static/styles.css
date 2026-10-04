@@ -1172,6 +1172,20 @@ html,body{overscroll-behavior:none}
 .dibujos__buscar:focus{outline:2px solid var(--clay);outline-offset:1px}
 .dibujos__seccion[hidden],.dibujo-op[hidden]{display:none!important}
 
+/* Color de las bolsas: aparece solo cuando el dibujo elegido es una bolsa. */
+.bolsa-color{margin-bottom:8px}
+.bolsa-color[hidden]{display:none!important}
+.bolsa-color__tit{display:block;font-size:11.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--suave);margin-bottom:6px}
+.bolsa-color__fila{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.bolsa-sw{width:40px;height:40px;border-radius:50%;border:2px solid var(--linea);padding:0;
+  display:inline-flex;align-items:center;justify-content:center;position:relative;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.bolsa-sw.is-on{border-color:var(--clay);box-shadow:0 0 0 3px #FBF1E7,0 0 0 5px var(--clay)}
+.bolsa-sw--otro{background:var(--tarjeta);color:var(--suave);font-weight:700;font-size:20px;overflow:hidden}
+.bolsa-sw--otro input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.bolsa-color__quitar{width:auto;min-height:40px;padding:0 12px}
+
 /* ---------- cobrar: en dos columnas ----------
    Apilado medía 711 px en una ventana de 660: había que scrollear 91 px para
    llegar a "Confirmar venta". Un botón de confirmar que queda abajo del corte,

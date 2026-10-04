@@ -1200,10 +1200,17 @@ const GRUPOS_DIBUJO = [
   ["Panadería", {
     "pan-marraqueta": "Marraqueta", "pan-hallulla": "Hallulla",
     "pan-amasado": "Pan amasado", "pan-baguette": "Baguette",
+    "pan-ciabatta": "Ciabatta", "pan-frica": "Frica (pan de hamburguesa)",
     "pan-integral": "Pan integral", "croissant": "Croissant",
     "croissant-almendras": "Croissant de almendras",
     "empanada": "Empanada", "empanada-queso": "Empanada de queso",
     "empanada-cruda": "Empanada cruda",
+  }],
+  ["Bolsas", {
+    "bolsa-cafe": "Bolsa de café", "bolsa-cafe-roja": "Bolsa de café roja",
+    "bolsa-cafe-azul": "Bolsa de café azul", "bolsa-cafe-negra": "Bolsa de café negra",
+    "bolsa-cafe-kraft": "Bolsa de café kraft", "bolsa-papel": "Bolsa de papel",
+    "bolsa-papel-blanca": "Bolsa de papel blanca",
   }],
   ["Sándwiches y comida", {
     "sandwich": "Sándwich", "sandwich-queso": "Sándwich de queso",
@@ -1268,12 +1275,67 @@ function filtrarDibujos(texto) {
   });
 }
 
-function selectorDeDibujo(elegido) {
+/* Las bolsas (de café, de papel) son del color que quiera el local: hay una fila
+   de colores que aparece solo cuando el dibujo elegido es una bolsa. El color se
+   guarda en el campo `color` del producto, el mismo que ya viaja a las pantallas. */
+const COLORES_BOLSA = [
+  ["#2E5E4E", "Verde"], ["#A8382F", "Rojo"], ["#2F5D8A", "Azul"], ["#2B2523", "Negro"],
+  ["#B98B5E", "Kraft"], ["#D9761F", "Naranja"], ["#E8C547", "Amarillo"], ["#6B3E8E", "Morado"],
+  ["#5FA8C8", "Celeste"], ["#D77FA1", "Rosado"], ["#6B1F2E", "Burdeo"], ["#F1EBDD", "Blanco"],
+];
+const esDibujoDeBolsa = (k) => String(k || "").startsWith("bolsa-");
+const colorBolsaOk = (c) => /^#[0-9a-f]{6}$/i.test(String(c || ""));
+
+/* Qué color queda guardado: el de la bolsa si es una bolsa; si no, el que el
+   producto ya tenía (y si antes era una bolsa, se limpia para no teñir el nuevo dibujo). */
+function colorParaGuardar(p) {
+  if (esDibujoDeBolsa($("#fDibujo").value)) {
+    const c = ($("#fColor") || {}).value;
+    return colorBolsaOk(c) ? c : "";
+  }
+  return esDibujoDeBolsa(p.dibujo) ? "" : (p.color || "");
+}
+
+function repintarBolsas() {
+  const col = ($("#fColor") || {}).value;
+  $$(".dibujo-op[data-dibujo^='bolsa-']").forEach((b) => {
+    const svg = b.querySelector("svg");
+    if (svg) svg.outerHTML = dibujo({ k: b.dataset.dibujo, col: colorBolsaOk(col) ? col : undefined });
+  });
+  $$("[data-color-bolsa]").forEach((s) =>
+    s.classList.toggle("is-on", !!col && s.dataset.colorBolsa.toLowerCase() === col.toLowerCase()));
+  const fila = $("#filaColorBolsa");
+  if (fila) fila.hidden = !esDibujoDeBolsa(($("#fDibujo") || {}).value);
+}
+
+function elegirColorBolsa(col) {
+  const ok = colorBolsaOk(col);
+  if ($("#fColor")) $("#fColor").value = ok ? col : "";
+  if (ok && $("#fColorLibre")) $("#fColorLibre").value = col;
+  repintarBolsas();
+}
+
+function selectorDeDibujo(elegido, color) {
+  const col = esDibujoDeBolsa(elegido) && colorBolsaOk(color) ? color : "";
   return `
     <div class="campo"><span>Dibujo en la pantalla</span>
       <input type="hidden" id="fDibujo" value="${esc(elegido || "mug")}">
+      <input type="hidden" id="fColor" value="${esc(col)}">
       <input id="buscarDibujo" class="dibujos__buscar" type="text" autocomplete="off"
              placeholder="Buscar dibujo: cerveza, torta, lata...">
+      <div class="bolsa-color" id="filaColorBolsa" ${esDibujoDeBolsa(elegido) ? "" : "hidden"}>
+        <span class="bolsa-color__tit">Color de la bolsa</span>
+        <div class="bolsa-color__fila">
+          ${COLORES_BOLSA.map(([hex, nombre]) => `
+            <button type="button" class="bolsa-sw ${col.toLowerCase() === hex.toLowerCase() ? "is-on" : ""}"
+                    data-color-bolsa="${hex}" title="${nombre}" aria-label="${nombre}"
+                    style="background:${hex}"></button>`).join("")}
+          <label class="bolsa-sw bolsa-sw--otro" title="Elegir otro color">+
+            <input type="color" id="fColorLibre" value="${col || "#2E5E4E"}"></label>
+          <button type="button" class="btn btn--fantasma bolsa-color__quitar"
+                  data-color-bolsa="">Color original</button>
+        </div>
+      </div>
       <div class="dibujos">
         ${GRUPOS_DIBUJO.map(([grupo, mapa]) => `
           <div class="dibujos__seccion" data-grupo="${esc(grupo)}">
@@ -1283,7 +1345,7 @@ function selectorDeDibujo(elegido) {
                 <button type="button" class="dibujo-op ${k === elegido ? "is-on" : ""}"
                         data-dibujo="${k}" data-busca="${esc(sinTildes(nombre + " " + grupo))}"
                         title="${esc(nombre)}">
-                  ${dibujo({ k })}<small>${esc(nombre)}</small>
+                  ${dibujo({ k, col: esDibujoDeBolsa(k) && col ? col : undefined })}<small>${esc(nombre)}</small>
                 </button>`).join("")}
             </div>
           </div>`).join("")}
@@ -1519,7 +1581,7 @@ function abrirFichaProducto(id, categoriaId) {
       </div>
 
       <div class="ficha__col">
-        ${selectorDeDibujo(p.dibujo)}
+        ${selectorDeDibujo(p.dibujo, p.color)}
         <div class="fila2">
           <label class="campo"><span>Etiqueta (opcional)</span>
             <input id="fEtiqueta" type="text" value="${esc(p.etiqueta)}"
@@ -1613,7 +1675,7 @@ function abrirFichaProducto(id, categoriaId) {
         antes: antes || null,
         etiqueta: $("#fEtiqueta").value.trim(),
         dibujo: $("#fDibujo").value,
-        color: p.color || "",
+        color: colorParaGuardar(p),
         ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked !== p.llevar_cuenta
           ? { llevar_cuenta: $("#fCuenta").checked } : {}),
         // El costo y la cantidad no son columnas del producto: el servidor se los
@@ -2931,6 +2993,7 @@ document.addEventListener("input", (e) => {
 // que se abre una ficha, y un oyente colgado del campo se perdería.
 document.addEventListener("input", (e) => {
   if (e.target && e.target.id === "buscarDibujo") filtrarDibujos(e.target.value);
+  if (e.target && e.target.id === "fColorLibre") elegirColorBolsa(e.target.value);
 });
 
 /* ---------------- bodega ----------------
@@ -4952,7 +5015,11 @@ document.addEventListener("click", (e) => {
     const b = cerca("data-dibujo");
     $("#fDibujo").value = b.dataset.dibujo;
     $$(".dibujo-op").forEach((x) => x.classList.toggle("is-on", x === b));
+    repintarBolsas();
     return;
+  }
+  if (cerca("data-color-bolsa")) {
+    return elegirColorBolsa(cerca("data-color-bolsa").dataset.colorBolsa);
   }
   if (cerca("data-guia")) return pintarGuias(cerca("data-guia").dataset.guia);
   if (t.id === "versionAyuda") return dialogoNovedades();

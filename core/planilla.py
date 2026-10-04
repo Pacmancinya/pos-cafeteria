@@ -267,6 +267,19 @@ def _mapear(encabezado: list[str]) -> dict:
 # adivinanza a propósito: es mucho más rápido corregir tres dibujos que elegir
 # cuarenta.
 DIBUJOS = [
+    # Lo nuevo va primero (café en grano antes que «cafe», pan antes que «leche»).
+    # Las palabras que empiezan con espacio se buscan como palabra entera:
+    # «frica» no puede salir de «África».
+    ((" bolsa de papel ", " bolsa papel "), "bolsa-papel"),
+    (("cafe en grano", "cafe de grano", "cafe molido", "cafe tostado", "bolsa de cafe",
+      "bolsa cafe", " granos de cafe "), "bolsa-cafe"),
+    ((" ciabatta ", " ciabata "), "pan-ciabatta"),
+    ((" frica ", " fricas ", "pan de hamburguesa", "pan hamburguesa"), "pan-frica"),
+    ((" marraqueta ", " marraquetas "), "pan-marraqueta"),
+    ((" hallulla ", " hallullas "), "pan-hallulla"),
+    ((" baguette ", " baguete ", " baguettes "), "pan-baguette"),
+    (("pan integral", "pan multigrano", "pan de centeno"), "pan-integral"),
+    (("pan amasado", " amasado ", " amasados "), "pan-amasado"),
     (("capuchino", "cappu", "latte", "mocha", "moka", "americano", "chocolate caliente"), "mug"),
     (("espresso", "expreso", "ristretto", "cortado", "macchiato"), "taza"),
     (("frappe", "frapp", "smoothie", "batido", "milkshake"), "frappe"),
@@ -278,14 +291,16 @@ DIBUJOS = [
     (("brownie",), "brownie"),
     (("alfajor", "galleta", "cookie"), "alfajor"),
     (("torta", "tarta", "kuchen", "pie", "cheesecake", "queque", "pastel"), "torta"),
+    ((" pan ", " panes "), "pan-marraqueta"),
     (("cafe",), "mug"),
 ]
 
 
 def adivinar_dibujo(nombre: str, categoria: str = "") -> str:
     texto = sin_tildes(nombre + " " + categoria)
+    entero = " " + " ".join(re.findall(r"\w+", texto)) + " "
     for palabras, dibujo in DIBUJOS:
-        if any(p in texto for p in palabras):
+        if any(p in (entero if p.startswith(" ") else texto) for p in palabras):
             return dibujo
     return "mug"
 
