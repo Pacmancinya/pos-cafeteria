@@ -6,7 +6,7 @@ precios, así que un cambio acá se ve en las dos partes.
 
 ## Para empezar
 
-Doble clic en **`CajaTersa.exe`** (en las cajas instaladas antes se llama `CajaClara.exe`, o `Kofe.exe` si son de antes de la 2.31). Se abre como cualquier aplicación, con su ventana propia.
+Doble clic en **`Gespoint.exe`** (en las cajas instaladas antes se llama `CajaClara.exe`, o `Kofe.exe` si son de antes de la 2.31). Se abre como cualquier aplicación, con su ventana propia.
 Para cerrarla, la cierras con la X.
 
 > La primera vez, Windows puede mostrar un aviso azul que dice *“Windows protegió tu PC”*.

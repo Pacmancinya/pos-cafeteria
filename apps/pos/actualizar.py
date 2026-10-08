@@ -138,7 +138,7 @@ def _pedir(url: str, espera: int, tope: int | None = None) -> bytes:
     return datos
 
 
-_MENSAJE_MUDADA = ("Esta caja se mudó a la aplicación Caja Tersa y ya no se actualiza "
+_MENSAJE_MUDADA = ("Esta caja se mudó a la aplicación Gespoint y ya no se actualiza "
                    "desde esta carpeta.")
 
 
@@ -205,14 +205,14 @@ def _origen_confiable(url: str) -> bool:
 def _problema_de_firma(contenido: dict, manifiesto: bytes | None, firma_hex: str | None,
                        version_esperada: str | None) -> str | None:
     if manifiesto is None or not firma_hex:
-        return ("Este paquete no viene firmado por Caja Tersa, así que no se instala. "
+        return ("Este paquete no viene firmado por Gespoint, así que no se instala. "
                 "Tu caja quedó como estaba.")
     try:
         sello = bytes.fromhex(firma_hex)
     except ValueError:
         return "La firma del paquete está rota. No se instala nada."
     if not any(firma.verificar(bytes.fromhex(k), manifiesto, sello) for k in LLAVES_PUBLICAS):
-        return ("La firma del paquete no es la de Caja Tersa. No se instala nada: puede ser "
+        return ("La firma del paquete no es la de Gespoint. No se instala nada: puede ser "
                 "un paquete adulterado. Avísale a soporte.")
     try:
         datos = json.loads(manifiesto.decode("utf-8"))

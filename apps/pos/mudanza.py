@@ -1,6 +1,6 @@
 """Pasar una caja instalada con zip (carpeta suelta) a la aplicación instalada.
 
-El instalador (despliegue/instalador/caja-tersa.iss) NO copia la base: solo deja en la
+El instalador (despliegue/instalador/gespoint.iss) NO copia la base: solo deja en la
 carpeta de la aplicación un archivo, `mudar-desde.txt`, con la ruta de la caja vieja. Al
 abrir, `main.py` llama a `ejecutar()` ANTES de que nada abra o cree la base, y acá se hace
 el traslado con el mecanismo de respaldo de SQLite (`Connection.backup`), nunca copiando
@@ -494,12 +494,12 @@ def _texto_marca(raiz_nueva: str, fecha: str) -> str:
         "ESTA CAJA SE MUDO\r\n"
         "=================\r\n\r\n"
         f"El {fecha} las ventas, los usuarios y los ajustes de esta carpeta se pasaron (o se\r\n"
-        "estan pasando) a la aplicacion Caja Tersa, que ahora vive en:\r\n\r\n"
+        "estan pasando) a la aplicacion Gespoint, que ahora vive en:\r\n\r\n"
         f"    {raiz_nueva}\r\n\r\n"
-        "Para vender, abre Caja Tersa desde el icono del escritorio. Esta carpeta ya no\r\n"
+        "Para vender, abre Gespoint desde el icono del escritorio. Esta carpeta ya no\r\n"
         "abre la caja: si la abres, solo muestra un aviso.\r\n\r\n"
         "NO SE BORRO NADA. Todo lo de esta carpeta sigue exactamente como estaba.\r\n\r\n"
-        "Cuando abras Caja Tersa y compruebes que estan las ventas de hoy y de ayer y tus\r\n"
+        "Cuando abras Gespoint y compruebes que estan las ventas de hoy y de ayer y tus\r\n"
         "usuarios, puedes borrar esta carpeta completa. Hazlo despues de comprobar, no antes.\r\n\r\n"
         "SI LA APLICACION NUEVA NO ABRE (salida de emergencia):\r\n"
         "borra SOLO este archivo (ESTA-CAJA-SE-MUDO.txt) y esta caja vieja vuelve a\r\n"
@@ -863,7 +863,7 @@ PAGINA_MUDADA = """<!doctype html>
 </style></head>
 <body><main>
   <h1>Esta caja se mudó</h1>
-  <p>Ahora se usa la aplicación <b>Caja Tersa</b>.<br>Ábrela desde el ícono del escritorio.</p>
+  <p>Ahora se usa la aplicación <b>Gespoint</b>.<br>Ábrela desde el ícono del escritorio.</p>
   <p>Tus ventas, usuarios y ajustes ya están allá.</p>
   <small>Si la aplicación nueva no abre, borra el archivo
     <b>ESTA-CAJA-SE-MUDO.txt</b> de esta carpeta y esta caja vuelve a funcionar como antes.</small>

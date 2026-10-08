@@ -39,13 +39,13 @@ MARCA = os.path.join(RAIZ, ".acceso-directo")
 
 
 def _nombre() -> str:
-    """«Caja Tersa» en las instalaciones nuevas (CajaTersa.exe). Las instaladas antes
+    """«Gespoint» en las instalaciones nuevas (Gespoint.exe). Las instaladas antes
     conservan su nombre («Caja Clara» con CajaClara.exe desde la 2.31, «<local> - Punto de
     venta» con Kofe.exe): renombrarlo les dejaría dos iconos en el escritorio."""
     if getattr(sys, "frozen", False):
         exe = os.path.basename(sys.executable).lower()
-        if exe == "cajatersa.exe":
-            return "Caja Tersa"
+        if exe == "gespoint.exe":
+            return "Gespoint"
         if exe == "cajaclara.exe":
             return "Caja Clara"
     return f"{NOMBRE_LOCAL} - Punto de venta"
@@ -67,14 +67,14 @@ def _destino() -> tuple[str, str]:
     dejaría un icono que no abre nada, que es peor que no tener icono.
     """
     if getattr(sys, "frozen", False):
-        # El ejecutable de las instalaciones nuevas es CajaTersa.exe; las instaladas antes
+        # El ejecutable de las instalaciones nuevas es Gespoint.exe; las instaladas antes
         # siguen con CajaClara.exe (2.31) o Kofe.exe (una actualización no cambia el exe).
         # El que está corriendo es el que sirve en este computador.
         yo = os.path.abspath(sys.executable)
-        if (os.path.basename(yo).lower() in ("cajatersa.exe", "cajaclara.exe", "kofe.exe")
+        if (os.path.basename(yo).lower() in ("gespoint.exe", "cajaclara.exe", "kofe.exe")
                 and os.path.exists(yo)):
             return yo, ""
-        for nombre in ("CajaTersa.exe", "CajaClara.exe", "Kofe.exe"):
+        for nombre in ("Gespoint.exe", "CajaClara.exe", "Kofe.exe"):
             exe = os.path.join(RAIZ, nombre)
             if os.path.exists(exe):
                 return exe, ""
@@ -161,10 +161,10 @@ def _escribir(lnk: str, destino: str, args: str) -> bool:
     sobre uno que ya existe lo abre con sus propiedades y `.Save()` lo pisa, así
     que no hay que borrarlo antes.
     """
-    # caja-tersa.ico llega con las instalaciones nuevas; el actualizador no copia .ico,
+    # gespoint.ico llega con las instalaciones nuevas; el actualizador no copia .ico,
     # así que una caja instalada antes sigue con caja-clara.ico (2.31) o kofe.ico.
     icono = next((r for r in (os.path.join(RAIZ, "despliegue", "icono", n)
-                              for n in ("caja-tersa.ico", "caja-clara.ico", "kofe.ico"))
+                              for n in ("gespoint.ico", "caja-clara.ico", "kofe.ico"))
                   if os.path.exists(r)), destino)
 
     orden = (

@@ -1,10 +1,10 @@
-﻿; Instalador de Caja Tersa (Inno Setup 6).
+﻿; Instalador de Gespoint (Inno Setup 6).
 ;
 ; Se arma con `python -m despliegue.construir_instalador`, que le pasa por la linea de
 ; comandos lo que cambia en cada version:
 ;     /DVersionApp=2.31    la version, leida de core/config.py (APP_VERSION)
-;     /DOrigen=<ruta>      la carpeta despliegue\CajaTersa que deja construir_exe.py
-;     /DSalida=<ruta>      donde queda CajaTersa-Instalar-vX.Y.exe
+;     /DOrigen=<ruta>      la carpeta despliegue\Gespoint que deja construir_exe.py
+;     /DSalida=<ruta>      donde queda Gespoint-Instalar-vX.Y.exe
 ; La version NO se escribe a mano aqui: asi no se puede olvidar de subirla.
 ;
 ; CODIFICACION. Este archivo es el unico del repositorio que lleva BOM (UTF-8 con marca):
@@ -12,7 +12,7 @@
 ; quedarian mal en la pantalla del instalador. No se lo quites al guardar.
 ;
 ; DONDE SE INSTALA. Por usuario, sin pedir administrador, en
-; %LOCALAPPDATA%\Programs\CajaTersa. No es capricho: el actualizador de la caja
+; %LOCALAPPDATA%\Programs\Gespoint. No es capricho: el actualizador de la caja
 ; (apps/pos/actualizar.py) reemplaza codigo dentro de esa carpeta y pos.db vive ahi
 ; mismo; en "Archivos de programa" una cuenta normal no podria escribir.
 ; Un computador que ya tenia la caja instalada de antes (Caja Clara, carpeta CajaClara)
@@ -23,7 +23,7 @@
   #error Falta /DVersionApp=X.Y (usa: python -m despliegue.construir_instalador)
 #endif
 #ifndef Origen
-  #error Falta /DOrigen=<carpeta despliegue\CajaTersa>
+  #error Falta /DOrigen=<carpeta despliegue\Gespoint>
 #endif
 #ifndef Salida
   #define Salida "."
@@ -34,12 +34,13 @@
 ; instalacion nueva es la MISMA aplicacion: instalar encima actualiza y conserva los
 ; datos del local. Si cambia, cada instalacion queda como un programa distinto.
 AppId={{A6409110-0F01-4DF9-8EA1-BE63F8ACDCE9}
-AppName=Caja Tersa
+AppName=Gespoint
 AppVersion={#VersionApp}
-AppVerName=Caja Tersa {#VersionApp}
-AppPublisher=Tersa
-DefaultDirName={autopf}\CajaTersa
-DefaultGroupName=Caja Tersa
+AppVerName=Gespoint {#VersionApp}
+AppPublisher=Gespoint
+AppPublisherURL=https://gespoint.site
+DefaultDirName={autopf}\Gespoint
+DefaultGroupName=Gespoint
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 UsePreviousAppDir=yes
@@ -52,10 +53,10 @@ AppMutex=Kofe-punto-de-venta-8090
 CloseApplications=no
 RestartApplications=no
 OutputDir={#Salida}
-OutputBaseFilename=CajaTersa-Instalar-v{#VersionApp}
-SetupIconFile=..\icono\caja-tersa.ico
-UninstallDisplayIcon={app}\CajaTersa.exe
-UninstallDisplayName=Caja Tersa
+OutputBaseFilename=Gespoint-Instalar-v{#VersionApp}
+SetupIconFile=..\icono\gespoint.ico
+UninstallDisplayIcon={app}\Gespoint.exe
+UninstallDisplayName=Gespoint
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
@@ -65,11 +66,11 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
 ; Apagada por defecto: no todos los locales quieren que la caja se abra sola.
-Name: "inicio"; Description: "Abrir Caja Tersa al prender el computador"; Flags: unchecked
+Name: "inicio"; Description: "Abrir Gespoint al prender el computador"; Flags: unchecked
 
 [Files]
 ; La misma carpeta que va dentro del zip de instalacion. Los Excludes son una red de
-; seguridad: si alguien probo CajaTersa.exe dentro de la carpeta de armado, su pos.db
+; seguridad: si alguien probo Gespoint.exe dentro de la carpeta de armado, su pos.db
 ; (ventas ajenas), su .secreto o sus respaldos NO viajan en el instalador.
 Source: "{#Origen}\*"; DestDir: "{app}"; \
   Excludes: "pos.db,pos.db-wal,pos.db-shm,.secreto,.env,.acceso-directo,problema-ventana.txt,respaldos\*,registros\*,datos-ventana\*,_version_anterior\*"; \
@@ -78,15 +79,15 @@ Source: "{#Origen}\*"; DestDir: "{app}"; \
 [Icons]
 ; El escritorio se crea solo en la primera instalacion: si el dueno lo borro, al
 ; actualizar no se vuelve a poner (la propia caja tambien respeta eso).
-Name: "{autodesktop}\Caja Tersa"; Filename: "{app}\CajaTersa.exe"; WorkingDir: "{app}"; \
-  IconFilename: "{app}\despliegue\icono\caja-tersa.ico"; Check: not YaEstabaInstalada
-Name: "{autoprograms}\Caja Tersa"; Filename: "{app}\CajaTersa.exe"; WorkingDir: "{app}"; \
-  IconFilename: "{app}\despliegue\icono\caja-tersa.ico"
-Name: "{userstartup}\Caja Tersa"; Filename: "{app}\CajaTersa.exe"; WorkingDir: "{app}"; \
-  IconFilename: "{app}\despliegue\icono\caja-tersa.ico"; Tasks: inicio
+Name: "{autodesktop}\Gespoint"; Filename: "{app}\Gespoint.exe"; WorkingDir: "{app}"; \
+  IconFilename: "{app}\despliegue\icono\gespoint.ico"; Check: not YaEstabaInstalada
+Name: "{autoprograms}\Gespoint"; Filename: "{app}\Gespoint.exe"; WorkingDir: "{app}"; \
+  IconFilename: "{app}\despliegue\icono\gespoint.ico"
+Name: "{userstartup}\Gespoint"; Filename: "{app}\Gespoint.exe"; WorkingDir: "{app}"; \
+  IconFilename: "{app}\despliegue\icono\gespoint.ico"; Tasks: inicio
 
 [Run]
-Filename: "{app}\CajaTersa.exe"; Description: "Abrir Caja Tersa"; WorkingDir: "{app}"; \
+Filename: "{app}\Gespoint.exe"; Description: "Abrir Gespoint"; WorkingDir: "{app}"; \
   Flags: nowait postinstall skipifsilent
 
 ; ---------------------------------------------------------------------------
@@ -186,7 +187,7 @@ var
   N: String;
 begin
   N := Lowercase(ExtractFileName(Ruta));
-  Result := (N = 'kofe.exe') or (N = 'cajaclara.exe') or (N = 'cajatersa.exe');
+  Result := (N = 'kofe.exe') or (N = 'cajaclara.exe') or (N = 'gespoint.exe');
 end;
 
 { La caja vieja trae el bloqueo de la mudanza (la version que ya sabe avisar «esta caja se
@@ -206,7 +207,7 @@ begin
   Result := DirExists(Carpeta) and FileExists(AddBackslash(Carpeta) + 'pos.db') and
     (FileExists(AddBackslash(Carpeta) + 'Kofe.exe') or
      FileExists(AddBackslash(Carpeta) + 'CajaClara.exe') or
-     FileExists(AddBackslash(Carpeta) + 'CajaTersa.exe'));
+     FileExists(AddBackslash(Carpeta) + 'Gespoint.exe'));
 end;
 
 { Carpeta esta igual o dentro de Raiz. }
@@ -477,7 +478,7 @@ begin
   Instalada := VersionDelCodigoInstalado;
   if (Instalada <> '') and (CompararVersiones(Instalada, '{#VersionApp}') > 0) then
     Result := SuppressibleMsgBox(
-      'Este computador ya tiene Caja Tersa ' + Instalada + ', mas nueva que la ' +
+      'Este computador ya tiene Gespoint ' + Instalada + ', mas nueva que la ' +
       '{#VersionApp} de este instalador.' + #13#10#13#10 +
       'Seguir la dejaria en una version anterior (las ventas y los datos se conservan). ' +
       'Quieres seguir de todos modos?',
@@ -488,7 +489,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usDone then
     SuppressibleMsgBox(
-      'Caja Tersa se quito de este computador.' + #13#10#13#10 +
+      'Gespoint se quito de este computador.' + #13#10#13#10 +
       'Las ventas y los datos del local NO se borraron: siguen en ' +
       ExpandConstant('{app}') + '. Si algun dia la vuelves a instalar, aparecen tal como estaban.',
       mbInformation, MB_OK, IDOK);

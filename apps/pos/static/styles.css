@@ -784,14 +784,14 @@ html,body{overscroll-behavior:none}
 .cara b{font-size:17px;color:var(--tinta)}
 .candado__nota{color:var(--suave);font-size:13.5px;line-height:1.6;margin-top:18px}
 .candado__caja .campo{text-align:left}
-/* La marca del producto (Caja Tersa) arriba de la pantalla de entrada. El nombre del local
+/* La marca del producto (Gespoint) arriba de la pantalla de entrada. El nombre del local
    sigue siendo el titular; esto es solo el sello, chico, para no robar alto en pantallas
-   de 543 px. Los colores son los de la marca Tersa y no cambian la paleta de la caja. */
-.sello-tersa{
+   de 543 px. Los colores son los de la marca Gespoint y no cambian la paleta de la caja. */
+.sello-marca{
   display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;
   font:700 13.5px/1 var(--f);letter-spacing:.02em;color:var(--suave);
 }
-.sello-tersa svg{width:24px;height:24px;flex:none;display:block}
+.sello-marca svg{width:24px;height:24px;flex:none;display:block}
 /* El PIN malo sacude la caja en vez de sacar de la pantalla. */
 .candado--mal{animation:sacudir .4s}
 @keyframes sacudir{

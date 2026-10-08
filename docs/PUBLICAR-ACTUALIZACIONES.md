@@ -105,7 +105,7 @@ qué se coló.
    `version-piloto.json` a `version.json`, commit y push: ahí les llega a todos. No hay que
    volver a firmar: el zip de la etiqueta es el mismo.
 
-> **El instalador de Windows no es parte de la actualización.** `CajaTersa-Instalar-vX.Y.exe`
+> **El instalador de Windows no es parte de la actualización.** `Gespoint-Instalar-vX.Y.exe`
 > es para locales nuevos (o para instalar encima, que actualiza): se arma aparte con
 > `python -m despliegue.construir_exe` y después `python -m despliegue.construir_instalador`
 > (necesita Inno Setup 6), y no lo toca el actualizador ni las firmas. Ver `docs/INSTALACION.md`.
@@ -154,7 +154,7 @@ actualizaciones a nadie, en este orden:
 
 1. Crea una clave por local en GitHub (*fine-grained token*, solo lectura de *Contents* de
    este repositorio). Una por local: si una se filtra, se revoca esa sola.
-2. En cada caja, pon la clave en la variable `POS_CLAVE_DESCARGA` (CajaTersa.exe, CajaClara.exe o Kofe.exe la lee al
+2. En cada caja, pon la clave en la variable `POS_CLAVE_DESCARGA` (Gespoint.exe, CajaClara.exe o Kofe.exe la lee al
    arrancar). Con clave, la caja baja el zip por la API de GitHub, que sí la acepta.
 3. Comprueba que UN local actualiza con su clave.
 4. Recién ahí, pasa el repositorio a privado.

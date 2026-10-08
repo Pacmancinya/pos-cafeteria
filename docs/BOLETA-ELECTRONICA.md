@@ -242,7 +242,7 @@ puede enviar: se avisará de pendientes antes del cierre de la jornada.
 ## 6. Certificado, secretos y recuperación
 
 Los secretos vivirán **fuera del árbol que actualiza la caja**, por ejemplo en
-`%LOCALAPPDATA%\CajaTersa\Fiscal`, con permisos para el usuario que ejecuta el POS.
+`%LOCALAPPDATA%\Gespoint\Fiscal`, con permisos para el usuario que ejecuta el POS.
 PFX, contraseña y CAF originales se protegerán con **DPAPI `CurrentUser`**. SQLite
 guardará identificadores y metadatos, no llaves privadas ni contraseñas en texto claro.
 

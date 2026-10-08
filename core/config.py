@@ -250,7 +250,7 @@ REDONDEO_PRECIO = 50
 # táctil se prende acá y vuelve entero.
 TECLADO_EN_PANTALLA = False
 
-# Sigue siendo «Kofe» a propósito, aunque el producto se llame Caja Tersa: esto lo usa el
+# Sigue siendo «Kofe» a propósito, aunque el producto se llame Gespoint: esto lo usa el
 # Kofe.py congelado de las cajas instaladas para el título de la ventana y el nombre del
 # acceso directo. Cambiarlo acá renombraría la ventana y el icono de un local que ya
 # existe. El nombre que se ve en la caja, el comprobante y los televisores sale de la

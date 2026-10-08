@@ -1,7 +1,7 @@
 """El modo demo: una caja que abre lista para mostrar, con carta, gente y ventas de ejemplo.
 
 Lo prende SOLO un archivo `MODO-DEMO.txt` en la raíz de la instalación (al lado del
-.exe; ver core.config.modo_demo). Viene en el paquete CajaTersa-demo-vX.Y.zip y en
+.exe; ver core.config.modo_demo). Viene en el paquete Gespoint-demo-vX.Y.zip y en
 ningún otro: una caja de un local nunca lo tiene, y sin él esto no hace nada.
 
 Con la marca, al arrancar y SOLO si la base está vacía (sin productos, ventas, gente ni

@@ -1,4 +1,4 @@
-# Trabajar juntos en Caja Tersa
+# Trabajar juntos en Gespoint
 
 Este repositorio privado contiene el proyecto completo para desarrollar: código,
 pruebas, documentación, recursos gráficos y scripts para construir el instalador.

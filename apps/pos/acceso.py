@@ -110,12 +110,11 @@ PAGINA = """<!doctype html>
 </style></head>
 <body>
 <form method="post" action="/entrar">
-  <div class="sello-tersa"><svg viewBox="0 0 100 100" aria-hidden="true">
-    <rect width="100" height="100" rx="22" fill="#0E3A2D"/>
-    <g transform="translate(25 19) scale(.5)">
-      <path d="M50 6C50 6 84 54 84 76A34 34 0 1 1 16 76C16 54 50 6 50 6Z" fill="#46D2A5"/>
-      <path d="M34 66a16 20 0 0 0 4 26" fill="none" stroke="#0E3A2D" stroke-width="6" stroke-linecap="round" opacity=".5"/>
-    </g></svg><span>Caja Tersa</span></div>
+  <div class="sello-marca"><svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect width="100" height="100" rx="24" fill="#18181B"/>
+    <path d="M30 22h40v56l-6.7-5-6.6 5-6.7-5-6.7 5-6.6-5-6.7 5z" fill="#fff"/>
+    <path d="M58 40A10 10 0 1 0 60 50H51" fill="none" stroke="#18181B" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="61" cy="35" r="3.6" fill="#F97316"/></svg><span>Gespoint</span></div>
   <h1>Caja de __LOCAL__</h1>
   <p>Estás entrando desde otro equipo de la red.<br>Escribe el PIN de red de la caja.</p>
   <input name="pin" type="password" inputmode="numeric" autocomplete="off" autofocus placeholder="••••••">

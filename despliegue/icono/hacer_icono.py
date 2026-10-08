@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Convierte caja-tersa.svg en caja-tersa.ico (el icono de la aplicación en Windows).
+"""Convierte gespoint.svg en gespoint.ico (el icono de la aplicación en Windows).
 
-Sin argumentos hace el de Caja Tersa; con un nombre (`caja-clara`, `kofe`) rehace el de
+Sin argumentos hace el de Gespoint; con un nombre (`caja-clara`, `kofe`) rehace el de
 antes a partir de su .svg, que se conserva porque las cajas instaladas lo usan.
 
 No usa Pillow ni nada externo: un .ico es una cabecera de 6 bytes, una entrada
@@ -22,7 +22,7 @@ import sys
 import tempfile
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-BASE = sys.argv[1] if len(sys.argv) > 1 else "caja-tersa"
+BASE = sys.argv[1] if len(sys.argv) > 1 else "gespoint"
 SVG = os.path.join(AQUI, BASE + ".svg")
 ICO = os.path.join(AQUI, BASE + ".ico")
 
@@ -45,6 +45,14 @@ def navegador() -> str:
     raise SystemExit("No encontré Chrome ni Edge para dibujar el icono.")
 
 
+def svg_para(tam: int) -> str:
+    """En 16-32 px la G no se lee: si existe `<base>-chico.svg` (solo la boleta), se usa ese."""
+    chico = os.path.join(AQUI, BASE + "-chico.svg")
+    if tam <= 32 and os.path.exists(chico):
+        return chico
+    return SVG
+
+
 def png_de(tam: int, carpeta: str, exe: str) -> bytes:
     destino = os.path.join(carpeta, f"{tam}.png")
     subprocess.run([
@@ -54,7 +62,7 @@ def png_de(tam: int, carpeta: str, exe: str) -> bytes:
         "--default-background-color=00000000",
         f"--window-size={tam},{tam}",
         f"--screenshot={destino}",
-        "file:///" + SVG.replace("\\", "/"),
+        "file:///" + svg_para(tam).replace("\\", "/"),
     ], capture_output=True, check=False)
     if not os.path.exists(destino):
         raise SystemExit(f"No se pudo dibujar el tamaño {tam}")

@@ -1,4 +1,4 @@
-# Caja Tersa — punto de venta
+# Gespoint — punto de venta
 
 > **Repositorio privado de desarrollo compartido:** `Pacmancinya/caja-clara`.
 > Empieza por [COLABORACION.md](COLABORACION.md). Esta copia no publica
@@ -79,11 +79,11 @@ pos-cafeteria/
 │
 ├── Kofe.py                ← el lanzador: abre la ventana y levanta el servidor
 ├── despliegue/
-│   ├── construir_exe.py   ← arma CajaTersa.exe, la carpeta que se entrega y la demo
-│   ├── construir_instalador.py ← arma CajaTersa-Instalar-vX.Y.exe con Inno Setup (instalador/)
+│   ├── construir_exe.py   ← arma Gespoint.exe, la carpeta que se entrega y la demo
+│   ├── construir_instalador.py ← arma Gespoint-Instalar-vX.Y.exe con Inno Setup (instalador/)
 │   ├── empaquetar.py      ← arma el ZIP de ACTUALIZACIÓN (~170 KB)
 │   ├── ordenar_carpeta.py ← arma D:\Kofe, todo ordenado para una persona
-│   └── icono/             ← caja-tersa.svg y el .ico que usa el ejecutable
+│   └── icono/             ← gespoint.svg y el .ico que usa el ejecutable
 ├── tools/
 │   ├── demo/seed.py       ← carta de ejemplo (la misma de las pantallas)
 │   ├── demo/ventas.py     ← ventas de ejemplo para mostrar los informes
@@ -245,7 +245,7 @@ lo más vendido, historial por fecha, apertura y cierre de turno con arqueo por 
 y cierre imprimibles en 80 mm, respaldo automático de la base, exportación a Excel para el
 contador, importación de la carta desde Excel/CSV con previsualización, candado de red con PIN,
 actualización desde la misma caja, aplicación de Windows
-propia (`CajaTersa.exe`, sin instalar Python) y el endpoint de carta que alimenta las pantallas
+propia (`Gespoint.exe`, sin instalar Python) y el endpoint de carta que alimenta las pantallas
 del local. **175 tests en verde.**
 
 **No hace (a propósito, ver CONTRATO sección 6):** boleta electrónica, cobro de tarjetas,

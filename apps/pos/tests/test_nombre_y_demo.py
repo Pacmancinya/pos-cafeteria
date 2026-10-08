@@ -1,4 +1,4 @@
-"""El producto se llama Caja Tersa (antes Caja Clara, desde la 2.31; antes Kofe) sin tocar el
+"""El producto se llama Gespoint (antes Caja Clara, desde la 2.31; antes Kofe) sin tocar el
 nombre de ningún local ni los identificadores de las cajas instaladas, y el modo demo
 (MODO-DEMO.txt) siembra una caja de muestra sin poder tocar una de verdad."""
 from __future__ import annotations
@@ -78,9 +78,9 @@ def test_el_titulo_y_el_acceso_directo_de_las_cajas_instaladas_no_cambian():
 
 
 # ---------------------------------------------------------------------------
-# El ejecutable nuevo (CajaTersa.exe) y los de las cajas instaladas (CajaClara.exe, Kofe.exe)
+# El ejecutable nuevo (Gespoint.exe) y los de las cajas instaladas (CajaClara.exe, Kofe.exe)
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("nombre", ["CajaTersa.exe", "CajaClara.exe", "Kofe.exe"])
+@pytest.mark.parametrize("nombre", ["Gespoint.exe", "CajaClara.exe", "Kofe.exe"])
 def test_el_acceso_directo_apunta_al_exe_que_esta_corriendo(tmp_path, monkeypatch, nombre):
     from tools import acceso_directo
     exe = tmp_path / nombre
@@ -90,14 +90,14 @@ def test_el_acceso_directo_apunta_al_exe_que_esta_corriendo(tmp_path, monkeypatc
     assert acceso_directo._destino() == (str(exe), "")
 
 
-def test_sin_exe_conocido_busca_primero_cajatersa_en_la_carpeta(tmp_path, monkeypatch):
+def test_sin_exe_conocido_busca_primero_gespoint_en_la_carpeta(tmp_path, monkeypatch):
     from tools import acceso_directo
-    for n in ("CajaTersa.exe", "CajaClara.exe", "Kofe.exe"):
+    for n in ("Gespoint.exe", "CajaClara.exe", "Kofe.exe"):
         (tmp_path / n).write_bytes(b"MZ")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(tmp_path / "otro.exe"))
     monkeypatch.setattr(acceso_directo, "RAIZ", str(tmp_path))
-    assert acceso_directo._destino() == (str(tmp_path / "CajaTersa.exe"), "")
+    assert acceso_directo._destino() == (str(tmp_path / "Gespoint.exe"), "")
 
 
 @pytest.mark.parametrize("presentes,esperado", [(("CajaClara.exe", "Kofe.exe"), "CajaClara.exe"),
@@ -113,7 +113,7 @@ def test_una_caja_instalada_antes_sigue_encontrando_su_exe(tmp_path, monkeypatch
     assert acceso_directo._destino() == (str(tmp_path / esperado), "")
 
 
-@pytest.mark.parametrize("exe,esperado", [("CajaTersa.exe", "Caja Tersa"),
+@pytest.mark.parametrize("exe,esperado", [("Gespoint.exe", "Gespoint"),
                                           ("CajaClara.exe", "Caja Clara"),
                                           ("Kofe.exe", "Kofe - Punto de venta")])
 def test_el_acceso_directo_se_llama_como_siempre_salvo_en_instalaciones_nuevas(
@@ -128,15 +128,15 @@ def test_el_acceso_directo_se_llama_como_siempre_salvo_en_instalaciones_nuevas(
 def test_la_ventana_nueva_se_busca_con_el_mismo_titulo_con_que_se_crea():
     texto = (RAIZ / "Kofe.py").read_text(encoding="utf-8")
     assert texto.count("_titulo()") >= 2          # al crearla y al traerla al frente
-    assert 'return "Caja Tersa"' in texto
+    assert 'return "Gespoint"' in texto
 
 
-def test_el_instalador_nuevo_se_llama_caja_tersa():
+def test_el_instalador_nuevo_se_llama_gespoint():
     texto = (RAIZ / "despliegue" / "construir_exe.py").read_text(encoding="utf-8")
-    assert 'NOMBRE = "CajaTersa"' in texto
-    assert '"caja-tersa.ico"' in texto
-    assert (RAIZ / "despliegue" / "icono" / "caja-tersa.svg").exists()
-    assert (RAIZ / "despliegue" / "icono" / "caja-tersa.ico").exists()
+    assert 'NOMBRE = "Gespoint"' in texto
+    assert '"gespoint.ico"' in texto
+    assert (RAIZ / "despliegue" / "icono" / "gespoint.svg").exists()
+    assert (RAIZ / "despliegue" / "icono" / "gespoint.ico").exists()
 
 
 def test_los_iconos_de_antes_se_conservan_para_las_cajas_instaladas():
@@ -145,20 +145,24 @@ def test_los_iconos_de_antes_se_conservan_para_las_cajas_instaladas():
         assert (icono / n).exists(), n
 
 
-def test_el_icono_es_la_gota_de_tersa():
-    svg = (RAIZ / "despliegue" / "icono" / "caja-tersa.svg").read_text(encoding="utf-8")
-    assert "#0E3A2D" in svg and "#46D2A5" in svg
+def test_el_icono_es_la_boleta_con_la_g():
+    icono = RAIZ / "despliegue" / "icono"
+    svg = (icono / "gespoint.svg").read_text(encoding="utf-8")
+    assert "#18181B" in svg and "#F97316" in svg and 'd="M58 40A10 10 0 1 0 60 50H51"' in svg
+    # En 16-32 px se usa la boleta sola (sin la G, que no se lee).
+    chico = (icono / "gespoint-chico.svg").read_text(encoding="utf-8")
+    assert "#18181B" in chico and "M58 40" not in chico and "circle" not in chico
 
 
-def test_el_producto_se_llama_caja_tersa_donde_lo_ve_una_persona():
+def test_el_producto_se_llama_gespoint_donde_lo_ve_una_persona():
     # El nombre del PRODUCTO sale en el candado; el titular sigue siendo el del local.
     app = (RAIZ / "apps" / "pos" / "static" / "app.js").read_text(encoding="utf-8")
-    assert "SELLO_TERSA" in app and "<span>Caja Tersa</span>" in app
-    assert "Caja Tersa" in (RAIZ / "apps" / "pos" / "static" / "index.html").read_text(encoding="utf-8")
+    assert "SELLO_MARCA" in app and "<span>Gespoint</span>" in app
+    assert "Gespoint" in (RAIZ / "apps" / "pos" / "static" / "index.html").read_text(encoding="utf-8")
     from apps.pos import acceso
-    assert "Caja Tersa" in acceso.PAGINA
+    assert "Gespoint" in acceso.PAGINA
     assert "Caja Clara" not in (RAIZ / "apps/pos/impresion_windows.py").read_text(encoding="utf-8")
-    assert "Comprobante interno Caja Tersa" in (RAIZ / "apps/pos/impresion_windows.py").read_text(encoding="utf-8")
+    assert "Comprobante interno Gespoint" in (RAIZ / "apps/pos/impresion_windows.py").read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +242,7 @@ def test_reiniciar_demo_se_niega_fuera_de_una_demo():
     assert texto.index('if not exist "MODO-DEMO.txt" goto no_es_demo') < primer_peligro
     assert texto.index('if not defined EXE goto no_es_demo') < primer_peligro
     # Reconoce el exe nuevo y los de antes.
-    for exe in ("CajaTersa.exe", "CajaClara.exe", "Kofe.exe"):
+    for exe in ("Gespoint.exe", "CajaClara.exe", "Kofe.exe"):
         assert f'if exist "{exe}"' in texto, exe
     assert 'cd /d "%~dp0."' in texto
 

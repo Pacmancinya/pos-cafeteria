@@ -7,7 +7,7 @@
 
 ## Lo que recibes
 
-Un archivo **`CajaTersa-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación completa,
+Un archivo **`Gespoint-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación completa,
 **no hay que instalar Python ni nada más**.
 
 ## Lo que necesitas
@@ -20,21 +20,21 @@ Un archivo **`CajaTersa-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación
 
 ## La forma fácil: el instalador
 
-1. **Haz doble clic** en `CajaTersa-Instalar-vX.Y.exe`.
+1. **Haz doble clic** en `Gespoint-Instalar-vX.Y.exe`.
 2. Si sale una pantalla azul que dice **«Windows protegió su PC»**: toca **Más información** y
    después **Ejecutar de todas formas**. Pasa una sola vez, es normal (ver el paso 4 más abajo).
 3. Elige el idioma si te lo pide y toca **Siguiente**. Hay una casilla, apagada, que dice
-   **«Abrir Caja Tersa al prender el computador»**: márcala solo si quieres que la caja se
+   **«Abrir Gespoint al prender el computador»**: márcala solo si quieres que la caja se
    abra sola cada mañana.
-4. Toca **Instalar** y, al terminar, **Finalizar** (deja marcado «Abrir Caja Tersa»).
+4. Toca **Instalar** y, al terminar, **Finalizar** (deja marcado «Abrir Gespoint»).
 
-Listo: queda un icono **Caja Tersa** en el Escritorio y en el menú Inicio. Sigue en el
+Listo: queda un icono **Gespoint** en el Escritorio y en el menú Inicio. Sigue en el
 **paso 5** («Los datos del local y tu usuario»).
 
 - **Si ya estaba instalada, instalar de nuevo es actualizar**: ejecuta el instalador nuevo y
   listo. No se pierde nada: las ventas, los usuarios y los precios se quedan como estaban.
   Si la caja está abierta, el instalador te pide cerrarla primero.
-- **Para quitarla**: Configuración de Windows → **Aplicaciones** → **Caja Tersa** → Desinstalar.
+- **Para quitarla**: Configuración de Windows → **Aplicaciones** → **Gespoint** → Desinstalar.
   Las ventas y los datos **no se borran**: quedan en la carpeta del programa, por si la
   vuelves a instalar.
 
@@ -56,7 +56,7 @@ Sus ventas, usuarios y ajustes se **copian**; la carpeta vieja **no se toca ni s
    la última versión; después vuelve a correr este instalador») y no sigue con la mudanza.
 2. **Cierra la caja** (la ventana). El instalador no sigue si está abierta, y la mudanza
    tampoco: la aplicación comprueba que la caja vieja esté cerrada de verdad.
-3. Abre **`CajaTersa-Instalar-vX.Y.exe`**. Después de la bienvenida aparece
+3. Abre **`Gespoint-Instalar-vX.Y.exe`**. Después de la bienvenida aparece
    **«¿Este computador ya tenía la caja?»**. El instalador la busca solo por los accesos
    directos del Escritorio, del menú Inicio y de Inicio. Déjala marcada en
    **«Sí, traer las ventas, usuarios y ajustes de la caja anterior»**. Si encontró otra carpeta
@@ -65,7 +65,7 @@ Sus ventas, usuarios y ajustes se **copian**; la carpeta vieja **no se toca ni s
 4. **Siguiente… Instalar… Finalizar.** El instalador borra los accesos directos de la caja
    vieja (solo esos), para que nadie la abra por costumbre; si la vieja se abría sola al prender el
    computador, la nueva queda marcada para hacerlo (puedes desmarcarlo).
-5. **Abre Caja Tersa.** La primera vez trae los datos (unos segundos) y muestra un aviso:
+5. **Abre Gespoint.** La primera vez trae los datos (unos segundos) y muestra un aviso:
    «Se trajeron las ventas y ajustes desde …». En Ayuda → Ajustes queda la línea «Esta caja se
    mudó desde … el …».
 6. **Revisa**: las ventas de hoy y de ayer, el cierre de la caja anterior, los usuarios y sus
@@ -80,7 +80,7 @@ Qué pasa con lo demás:
   caja nueva esté abierta, funcionan como siempre; no hay que tocarlos.
 - **Equipos de la red** (tablets, celulares): siguen entrando sin pedir de nuevo el PIN de
   red, porque la llave de las sesiones (`.secreto`) también se copia.
-- **Acceso directo**: el de la caja vieja se borra y queda el de Caja Tersa en el
+- **Acceso directo**: el de la caja vieja se borra y queda el de Gespoint en el
   Escritorio. Si tenías la caja anclada a la barra de tareas, desancla la vieja a mano.
 - **Respaldos**: antes de traer nada se saca un respaldo completo
   (`respaldos\antes-de-mudar-<fecha>.db` en la aplicación nueva, que la poda nunca borra).
@@ -105,17 +105,17 @@ Qué pasa con lo demás:
   **borra solo el archivo `ESTA-CAJA-SE-MUDO.txt`**. La caja vieja vuelve a funcionar igual
   que antes. (Lo que se haya vendido en la nueva después de mudarse no está en la vieja.)
 
-Para instalar sin pantallas (pruebas): `CajaTersa-Instalar-vX.Y.exe /VERYSILENT
+Para instalar sin pantallas (pruebas): `Gespoint-Instalar-vX.Y.exe /VERYSILENT
 /MUDARDESDE="C:\ruta\de\la\caja"`.
 
 ## La otra forma: el ZIP
 
-Si ya tienes **`CajaTersa-instalar-vX.Y.zip`** (unos 29 MB), también sirve: se extrae y se
+Si ya tienes **`Gespoint-instalar-vX.Y.zip`** (unos 29 MB), también sirve: se extrae y se
 abre. Estos son los pasos.
 
 ### 1. Desbloquea el ZIP ANTES de extraerlo
 
-Clic derecho sobre `CajaTersa-instalar-vX.Y.zip` → **Propiedades** → abajo de todo, si aparece una
+Clic derecho sobre `Gespoint-instalar-vX.Y.zip` → **Propiedades** → abajo de todo, si aparece una
 casilla que dice **Desbloquear**, márcala y dale **Aceptar**.
 
 > **Por qué.** Windows le pone una marca de "bajado de internet" a todo lo que sale de un
@@ -129,19 +129,19 @@ casilla que dice **Desbloquear**, márcala y dale **Aceptar**.
 
 ### 2. Descomprime el ZIP donde quieras dejarlo
 
-Clic derecho sobre `CajaTersa-instalar-vX.Y.zip` → **Extraer todo**. Recomendado: dejar la carpeta
-en el **Escritorio** o en `C:\CajaTersa`.
+Clic derecho sobre `Gespoint-instalar-vX.Y.zip` → **Extraer todo**. Recomendado: dejar la carpeta
+en el **Escritorio** o en `C:\Gespoint`.
 
 > ⚠️ **No lo dejes dentro del ZIP.** Si haces doble clic sin extraer, Windows lo abre en
 > una carpeta temporal y se pierde todo cada vez, ventas incluidas.
 
-### 3. Doble clic en `CajaTersa.exe`
+### 3. Doble clic en `Gespoint.exe`
 
 Se abre la aplicación, con su ventana y su icono de gota. La primera vez demora unos
 segundos más porque prepara la base de datos.
 
 > Dentro de la carpeta hay otras cosas (`_internal`, `apps`, `core`…). **No se tocan.**
-> Lo único que se abre es `CajaTersa.exe` (en las cajas instaladas antes se llama `CajaClara.exe`, o `Kofe.exe` si son de antes de la 2.31).
+> Lo único que se abre es `Gespoint.exe` (en las cajas instaladas antes se llama `CajaClara.exe`, o `Kofe.exe` si son de antes de la 2.31).
 
 ### 4. Si Windows muestra un aviso azul (con el instalador o con el ZIP)
 
@@ -192,7 +192,7 @@ Guárdala.
 ### Que se abra con un clic desde el Escritorio
 
 **No hay que hacer nada.** La primera vez que arranca, la caja deja sola un icono
-«Caja Tersa» en el escritorio (en las cajas instaladas antes conserva su nombre: «Caja Clara», o «Kofe - Punto de venta» si son de antes de la 2.31), apuntando al lanzador que de verdad sirve en
+«Gespoint» en el escritorio (en las cajas instaladas antes conserva su nombre: «Caja Clara», o «Kofe - Punto de venta» si son de antes de la 2.31), apuntando al lanzador que de verdad sirve en
 ese equipo. Si el dueño lo borra, no se vuelve a crear: se entiende que no lo quiere.
 
 No lo crees a mano con **Enviar a → Escritorio**: eso apunta al archivo sobre el que
@@ -248,12 +248,12 @@ en unos segundos.
 
 Las actualizaciones pesan unos **120 KB**, no 29 MB: solo viaja el programa, no el motor.
 
-**Si prefieres a mano:** ejecuta el instalador de la versión nueva (`CajaTersa-Instalar-vX.Y.exe`)
+**Si prefieres a mano:** ejecuta el instalador de la versión nueva (`Gespoint-Instalar-vX.Y.exe`)
 encima, o bien:
 
 1. Cierra la aplicación.
 2. Descomprime el ZIP de actualización **encima** de la carpeta, aceptando reemplazar.
-3. Vuelve a abrir `CajaTersa.exe` (o `CajaClara.exe` / `Kofe.exe`, el que tenga la carpeta).
+3. Vuelve a abrir `Gespoint.exe` (o `CajaClara.exe` / `Kofe.exe`, el que tenga la carpeta).
 
 **No se pierden las ventas, los usuarios ni los precios**: `pos.db` no viene en el ZIP, así
 que tu base se queda como está. Y si la versión nueva agrega campos, el programa se los
@@ -284,10 +284,10 @@ agrega solo a la base al arrancar.
 ## Para el que arma el instalador
 
 Después de `python -m despliegue.construir_exe`, corre `python -m despliegue.construir_instalador`:
-deja `despliegue/CajaTersa-Instalar-vX.Y.exe` junto a los zips. Necesita Inno Setup 6, que es
+deja `despliegue/Gespoint-Instalar-vX.Y.exe` junto a los zips. Necesita Inno Setup 6, que es
 gratis (`winget install --id JRSoftware.InnoSetup -e`). La versión sale de `core/config.py`.
-El script es `despliegue/instalador/caja-tersa.iss`. Instala por usuario en
-`%LOCALAPPDATA%\Programs\CajaTersa` (el actualizador escribe ahí; si el computador ya tenía
+El script es `despliegue/instalador/gespoint.iss`. Instala por usuario en
+`%LOCALAPPDATA%\Programs\Gespoint` (el actualizador escribe ahí; si el computador ya tenía
 una instalación de antes, el instalador la reutiliza en su carpeta vieja) y jamás borra `pos.db`,
 `respaldos\`, `registros\`, `.secreto` ni `datos-ventana\`, ni al reinstalar ni al desinstalar.
 En una mudanza desde una caja vieja solo borra accesos directos (`.lnk`) de esa caja; los datos
@@ -297,4 +297,4 @@ los copia la aplicación al abrir (`apps/pos/mudanza.py`), no el instalador.
 
 La carpeta también trae `INICIAR-POS.bat`, que hace lo mismo pero usando el Python del
 computador (y lo instala si falta). Sirve para probar cambios en el código sin volver a
-construir el ejecutable. Para el local no hace falta: `CajaTersa.exe` es más simple.
+construir el ejecutable. Para el local no hace falta: `Gespoint.exe` es más simple.

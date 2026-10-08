@@ -174,7 +174,7 @@ async def caja_mudada(request: Request, call_next):
     if mudanza.bloqueada():
         if request.url.path.startswith("/api/"):
             return JSONResponse(
-                {"detail": "Esta caja se mudó a la aplicación Caja Tersa. "
+                {"detail": "Esta caja se mudó a la aplicación Gespoint. "
                            "Ábrela desde el ícono del escritorio."},
                 status_code=410)
         return HTMLResponse(mudanza.PAGINA_MUDADA,
