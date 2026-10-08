@@ -4252,6 +4252,8 @@ function pintarAjustes() {
         confianza y, si anda bien, días después a todos.</p>
     </div>
 
+    <div class="ajuste" id="ajMudanza" hidden></div>
+
     <div class="ajuste">
       <h4>Si algo falla</h4>
       <p class="ayuda" style="margin:0">Baja un archivo con el registro de errores y el estado
@@ -4300,6 +4302,11 @@ async function cargarAjustesDelLocal() {
     $("#ajLocalNombre").value = d.nombre || "";
     $("#ajLocalRut").value = d.rut || "";
     $("#ajLocalDireccion").value = d.direccion || "";
+  } catch (e) { }
+  try {
+    const linea = lineaDeMudanza(await api("/mudanza"));
+    const caja = $("#ajMudanza");
+    if (caja && linea) { caja.innerHTML = "<h4>Mudanza</h4>" + linea; caja.hidden = false; }
   } catch (e) { }
   try { pintarRed(await api("/red")); }
   catch (e) { $("#ajRed").innerHTML = `<h4>PIN de red</h4><p class="ayuda">${esc(e.message)}</p>`; }
@@ -4408,6 +4415,70 @@ async function guardarTeclado(prendido) {
       body: JSON.stringify({ teclado_en_pantalla: AJUSTES.teclado_en_pantalla }) });
     avisar(prendido ? "Teclado en pantalla prendido" : "Teclado en pantalla apagado");
   } catch (e) { avisar(e.message, true); }
+}
+
+/* ---- Mudanza desde una caja instalada con zip ----
+   La primera vez después de mudarse, un aviso que se cierra con el botón. Si la mudanza
+   quedó pendiente (falló), el aviso vuelve cada vez hasta que se arregle. */
+function fechaMudanza(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? "" : d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+async function avisoDeMudanza() {
+  let m;
+  try { m = await api("/mudanza"); } catch (e) { return; }
+  if (!m || m.estado === "ninguna" || m.estado === "pendiente") return;
+  if (m.estado !== "error" && m.aviso_visto) return;
+  let html;
+  const incompleta = m.estado === "hecha" && m.completo === false;
+  if (incompleta) {
+    // Faltó copiar algo: NO se recomienda borrar la carpeta vieja hasta que esté todo.
+    html = `Se trajeron las ventas y ajustes desde <b>${esc(m.desde)}</b>, pero
+      <b>faltó copiar</b>: ${(m.faltan || []).map((f) => esc(f)).join(", ") || "algunos archivos"}.
+      <b>No borres esa carpeta todavía.</b>`;
+  } else if (m.estado === "hecha") {
+    html = `Se trajeron las ventas y ajustes desde <b>${esc(m.desde)}</b>. Cuando confirmes que
+      está todo, puedes borrar esa carpeta.`;
+  } else if (m.estado === "no_hecha") {
+    html = `Esta caja ya tenía datos propios, así que <b>no se trajo nada</b> desde
+      <b>${esc(m.desde)}</b> para no pisarlos.`;
+  } else {
+    html = `<b>No se pudieron traer las ventas de la caja anterior.</b> ${esc(m.mensaje || "")}
+      No se perdió nada: la caja anterior sigue como estaba. Cierra y vuelve a abrir esta caja
+      para reintentar, o avisa a soporte.`;
+  }
+  const b = document.createElement("div");
+  b.className = "aviso-mudanza" + (m.estado === "hecha" && !incompleta ? "" : " aviso-mudanza--malo");
+  b.setAttribute("role", "status");
+  const boton = incompleta
+    ? '<button class="btn" type="button" data-reintentar-copia>Reintentar copia</button>'
+    : (m.estado === "error" ? "" :
+      '<button class="btn" type="button" data-cerrar-mudanza>Entendido</button>');
+  b.innerHTML = `<div>${html}</div>${boton}`;
+  document.body.appendChild(b);
+  const x = b.querySelector("[data-cerrar-mudanza]");
+  if (x) x.onclick = () => {
+    b.remove();
+    api("/mudanza/visto", { method: "POST" }).catch(() => { });
+  };
+  const r = b.querySelector("[data-reintentar-copia]");
+  if (r) r.onclick = async () => {
+    r.disabled = true;
+    try { await api("/mudanza/reintentar", { method: "POST" }); } catch (e) { }
+    b.remove();
+    avisoDeMudanza();
+  };
+}
+
+function lineaDeMudanza(m) {
+  if (!m || m.estado !== "hecha") return "";
+  const cierre = m.completo === false
+    ? `<b>Faltó copiar: ${(m.faltan || []).map((f) => esc(f)).join(", ")}.</b> No borres esa carpeta todavía.`
+    : "Esa carpeta se puede borrar cuando confirmes que está todo.";
+  return `<p class="ayuda" style="margin:0">Esta caja se mudó desde <b>${esc(m.desde)}</b>
+    el ${esc(fechaMudanza(m.fecha))}${m.ventas != null ? ` (${m.ventas} ventas, ${m.usuarios} usuarios)` : ""}.
+    ${cierre}</p>`;
 }
 
 async function pintarVersionAyuda() {
@@ -5211,4 +5282,5 @@ document.addEventListener("keydown", (e) => {
   pintarAjustes();
   pintarCarrito();
   verVista(vistaDelHash(), false);
+  avisoDeMudanza();
 })();

@@ -138,6 +138,15 @@ def _pedir(url: str, espera: int, tope: int | None = None) -> bytes:
     return datos
 
 
+_MENSAJE_MUDADA = ("Esta caja se mudó a la aplicación Caja Tersa y ya no se actualiza "
+                   "desde esta carpeta.")
+
+
+def _se_mudo() -> bool:
+    from apps.pos import mudanza
+    return mudanza.bloqueada()
+
+
 def url_del_canal(canal: str) -> str:
     if canal == "piloto":
         return (os.getenv("POS_URL_VERSION_PILOTO")
@@ -147,6 +156,8 @@ def url_del_canal(canal: str) -> str:
 
 def revisar() -> dict:
     """¿Hay una versión nueva publicada en el canal de este local?"""
+    if _se_mudo():
+        return {"error": _MENSAJE_MUDADA}
     try:
         from apps.pos import local
         canal = local.canal()
@@ -229,6 +240,8 @@ def _problema_de_firma(contenido: dict, manifiesto: bytes | None, firma_hex: str
 
 def aplicar(url_zip: str, version_esperada: str | None = None) -> dict:
     """Descarga el paquete, revisa la firma y reemplaza SOLO el código."""
+    if _se_mudo():
+        return {"error": _MENSAJE_MUDADA}
     if not _origen_confiable(url_zip):
         return {"error": "La dirección de descarga no es segura (tiene que ser https)."}
     try:

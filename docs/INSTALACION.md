@@ -40,7 +40,73 @@ Listo: queda un icono **Caja Tersa** en el Escritorio y en el menú Inicio. Sigu
 
 > Las cajas que ya se instalaron (con el ZIP, o cuando se llamaba Caja Clara o Kofe) siguen
 > como están; no hay que cambiarlas. Se siguen actualizando solas desde el botón de la
-> versión, y conservan su ejecutable y su icono de antes.
+> versión, y conservan su ejecutable y su icono de antes. Si quieres pasarlas a la
+> aplicación instalada, sigue la sección de abajo.
+
+## Pasar una caja instalada con ZIP a la aplicación
+
+Para un local que hoy usa la caja desde una carpeta (en el Escritorio, en Documentos…, con
+`Kofe.exe` o `CajaClara.exe`) y quiere pasar a la aplicación instalada **sin perder nada**.
+Sus ventas, usuarios y ajustes se **copian**; la carpeta vieja **no se toca ni se borra sola**.
+
+1. **Actualiza la caja vieja a la última versión** desde el botón de la versión (es
+   obligatorio). Así, cuando se mude, la carpeta vieja sabrá avisar «esta caja se mudó» y
+   nadie podrá vender en ella; sin eso, las ventas de las dos cajas se separarían. Si no está
+   actualizada, el instalador lo dice («Primero abre la caja vieja y deja que se actualice a
+   la última versión; después vuelve a correr este instalador») y no sigue con la mudanza.
+2. **Cierra la caja** (la ventana). El instalador no sigue si está abierta, y la mudanza
+   tampoco: la aplicación comprueba que la caja vieja esté cerrada de verdad.
+3. Abre **`CajaTersa-Instalar-vX.Y.exe`**. Después de la bienvenida aparece
+   **«¿Este computador ya tenía la caja?»**. El instalador la busca solo por los accesos
+   directos del Escritorio, del menú Inicio y de Inicio. Déjala marcada en
+   **«Sí, traer las ventas, usuarios y ajustes de la caja anterior»**. Si encontró otra carpeta
+   que no es, o ninguna, usa **«Elegir otra carpeta…»** (tiene que ser la que tiene
+   `pos.db` y el programa). Si es una caja nueva, marca **«No, es una caja nueva»**.
+4. **Siguiente… Instalar… Finalizar.** El instalador borra los accesos directos de la caja
+   vieja (solo esos), para que nadie la abra por costumbre; si la vieja se abría sola al prender el
+   computador, la nueva queda marcada para hacerlo (puedes desmarcarlo).
+5. **Abre Caja Tersa.** La primera vez trae los datos (unos segundos) y muestra un aviso:
+   «Se trajeron las ventas y ajustes desde …». En Ayuda → Ajustes queda la línea «Esta caja se
+   mudó desde … el …».
+6. **Revisa**: las ventas de hoy y de ayer, el cierre de la caja anterior, los usuarios y sus
+   PIN, el nombre del local y los productos.
+7. **Recién ahí**, si todo está, borra la carpeta vieja. Nunca antes.
+
+Qué pasa con lo demás:
+
+- **Impresora y balanza**: se configuran en la caja (Ayuda → Ajustes), así que viajan con los
+  ajustes. La impresora «Kofe Tickets» es de Windows y sigue ahí.
+- **Televisores**: siguen apuntando al mismo puerto (8090) de este computador. Mientras la
+  caja nueva esté abierta, funcionan como siempre; no hay que tocarlos.
+- **Equipos de la red** (tablets, celulares): siguen entrando sin pedir de nuevo el PIN de
+  red, porque la llave de las sesiones (`.secreto`) también se copia.
+- **Acceso directo**: el de la caja vieja se borra y queda el de Caja Tersa en el
+  Escritorio. Si tenías la caja anclada a la barra de tareas, desancla la vieja a mano.
+- **Respaldos**: antes de traer nada se saca un respaldo completo
+  (`respaldos\antes-de-mudar-<fecha>.db` en la aplicación nueva, que la poda nunca borra).
+  Si ese respaldo falla o algo no queda idéntico, **no se muda nada**.
+  `Kofe-respaldos` y `%USERPROFILE%\.kofe` no se tocan.
+
+**Si algo sale mal**
+
+- Mientras la mudanza no termine de traer las ventas, **la caja nueva no abre para vender**:
+  muestra una pantalla con el motivo en palabras simples (por ejemplo «Cierra la caja vieja
+  para terminar la mudanza») y dos botones: **Reintentar** y **Esta caja es nueva, no traer
+  nada** (pide confirmación; la caja vieja queda como estaba y la nueva abre normal). Así no
+  se pueden crear usuarios ni ventas nuevas que separen los historiales.
+- Si se corta la luz o se cierra a la mitad, al abrir de nuevo **se retoma** donde iba.
+- Si las ventas se trajeron pero no se pudo copiar algo menor (respaldos, registros, la llave
+  de las sesiones), la caja abre y avisa **qué faltó**, con el botón **Reintentar copia**. El
+  aviso solo dice que se puede borrar la carpeta vieja cuando todo se copió y se comprobó.
+  Si sigue fallando, manda el diagnóstico (Ayuda → Ajustes).
+- Si la caja nueva ya tenía ventas o usuarios propios, **no se trae nada** y lo avisa, para
+  no pisarlos.
+- **Salida de emergencia**: si la aplicación nueva no abre, entra a la carpeta vieja y
+  **borra solo el archivo `ESTA-CAJA-SE-MUDO.txt`**. La caja vieja vuelve a funcionar igual
+  que antes. (Lo que se haya vendido en la nueva después de mudarse no está en la vieja.)
+
+Para instalar sin pantallas (pruebas): `CajaTersa-Instalar-vX.Y.exe /VERYSILENT
+/MUDARDESDE="C:\ruta\de\la\caja"`.
 
 ## La otra forma: el ZIP
 
@@ -224,6 +290,8 @@ El script es `despliegue/instalador/caja-tersa.iss`. Instala por usuario en
 `%LOCALAPPDATA%\Programs\CajaTersa` (el actualizador escribe ahí; si el computador ya tenía
 una instalación de antes, el instalador la reutiliza en su carpeta vieja) y jamás borra `pos.db`,
 `respaldos\`, `registros\`, `.secreto` ni `datos-ventana\`, ni al reinstalar ni al desinstalar.
+En una mudanza desde una caja vieja solo borra accesos directos (`.lnk`) de esa caja; los datos
+los copia la aplicación al abrir (`apps/pos/mudanza.py`), no el instalador.
 
 ## Para el que instala: la versión sin `.exe`
 

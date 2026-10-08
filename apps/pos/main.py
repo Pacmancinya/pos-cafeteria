@@ -15,11 +15,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
-from apps.pos import acceso, diagnostico, freno, local
+from apps.pos import acceso, diagnostico, freno, local, mudanza
 from apps.pos.api import (actualizaciones, ajustes, catalogo, codigos, datos,
                           impresion, importar, inventario, turnos, usuarios,
                           ventas)
 from apps.pos.api import diagnostico as api_diagnostico
+from apps.pos.api import mudanza as api_mudanza
 from apps.pos.db.models import Turno
 from apps.pos.db.session import crear_tablas, engine
 from core.config import HOST, NOMBRE_LOCAL, PUERTO, VERSION, ip_en_la_red, modo_demo
@@ -31,8 +32,29 @@ ESTATICOS = os.path.join(AQUI, "static")
 # justo eso es lo que hay que poder leer después.
 diagnostico.preparar()
 
+# Si el instalador dejó `mudar-desde.txt`, se traen las ventas de la caja anterior AHORA,
+# antes de que nada abra o cree la base. Nunca impide abrir: si falla, queda pendiente y
+# la pantalla lo avisa (ver apps/pos/mudanza.py).
+try:
+    mudanza.ejecutar(puerto=PUERTO)
+except Exception:
+    diagnostico.log.exception("Mudanza: no se pudo ni intentar")
+
+
 @asynccontextmanager
 async def ciclo(app: FastAPI):
+    if mudanza.bloqueada():
+        # Esta carpeta es una caja que se mudó: no se abre su base, no se hacen
+        # respaldos ni se recrea el acceso directo del escritorio hacia ella.
+        diagnostico.log.warning("Esta caja se mudó (%s): no vende.", mudanza.MARCA_VIEJA)
+        yield
+        return
+    if mudanza.pendiente():
+        # Falta traer la caja anterior: NO se toca la base (ni se crea) ni se siembra
+        # nada. Con datos nuevos aquí, los historiales quedarían separados.
+        diagnostico.log.warning("Mudanza pendiente: la caja no abre hasta terminarla.")
+        yield
+        return
     crear_tablas()
     # Modo demo: sin la marca MODO-DEMO.txt no hace nada. Si fallara, la caja abre
     # igual: una demostración no puede dejar una caja sin arrancar.
@@ -127,6 +149,39 @@ async def error_inesperado(request: Request, exc: Exception):
         {"detail": "Algo falló en la caja. Quedó anotado en el registro para revisarlo."},
         status_code=500)
 
+@app.middleware("http")
+async def caja_mudada(request: Request, call_next):
+    """Una carpeta con ESTA-CAJA-SE-MUDO.txt no vende ni toca nada: todo, hasta la
+    carta y las pantallas, responde «esta caja se mudó». Va al final de los
+    middlewares a propósito: así es el primero que corre. Borrar ese archivo la
+    devuelve a la normalidad (la salida de emergencia).
+
+    Lo mismo, con otra pantalla, si hay una mudanza PENDIENTE (falta traer la caja
+    anterior): la caja no vende ni deja crear nada hasta terminarla o descartarla."""
+    if not mudanza.bloqueada() and mudanza.pendiente():
+        ruta = request.url.path
+        if ruta.startswith("/api/v1/mudanza"):
+            return await call_next(request)
+        if ruta.startswith("/static/") or ruta == "/favicon.ico":
+            return await call_next(request)
+        if ruta.startswith("/api/"):
+            return JSONResponse(
+                {"detail": "Falta terminar de traer la caja anterior. Abre la caja y "
+                           "sigue las instrucciones de la pantalla."},
+                status_code=423)
+        return HTMLResponse(mudanza.pagina_recuperacion(),
+                            headers={"Cache-Control": "no-store, must-revalidate"})
+    if mudanza.bloqueada():
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(
+                {"detail": "Esta caja se mudó a la aplicación Caja Tersa. "
+                           "Ábrela desde el ícono del escritorio."},
+                status_code=410)
+        return HTMLResponse(mudanza.PAGINA_MUDADA,
+                            headers={"Cache-Control": "no-store, must-revalidate"})
+    return await call_next(request)
+
+
 app.include_router(catalogo.router)
 app.include_router(ventas.router)
 app.include_router(turnos.router)
@@ -139,6 +194,7 @@ app.include_router(importar.router)
 app.include_router(ajustes.router)
 app.include_router(codigos.router)
 app.include_router(api_diagnostico.router)
+app.include_router(api_mudanza.router)
 
 
 @app.get("/api/v1/salud")

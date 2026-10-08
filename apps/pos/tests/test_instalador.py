@@ -73,14 +73,39 @@ def test_no_hay_instrucciones_que_borren_los_datos_del_local():
     assert "uninstalldelete" not in secciones
     assert "installdelete" not in secciones
     codigo = _sin_comentarios(secciones.get("code", "")).lower()
-    for peligro in ("deletefile", "deltree", "removedir", "renamefile"):
+    for peligro in ("deltree", "removedir", "renamefile", "filecopy", "delstring"):
         assert peligro not in codigo
-    # Los datos solo pueden aparecer en las exclusiones de [Files] (para que NO viajen).
+    # Lo UNICO que el instalador borra son accesos directos de la caja vieja (.lnk): el
+    # DeleteFile vive en una sola funcion, que solo toca archivos .lnk.
+    assert codigo.count("deletefile(") == 1
+    assert "'.lnk'" in codigo and "deletefile(ruta)" in codigo
+    # Los datos solo pueden aparecer en las exclusiones de [Files] (para que NO viajen) o
+    # para comprobar que una carpeta es una caja (FileExists, solo lectura).
     sin_comentarios = _sin_comentarios(texto)
     for nombre in DATOS:
         for linea in sin_comentarios.splitlines():
             if nombre in linea:
-                assert "Excludes:" in linea, f"{nombre} aparece fuera de Excludes: {linea}"
+                assert "Excludes:" in linea or "FileExists(" in linea, \
+                    f"{nombre} aparece fuera de Excludes: {linea}"
+
+
+def test_la_mudanza_desde_una_caja_vieja_no_copia_la_base_y_acepta_el_parametro():
+    texto = _iss()
+    codigo = _sin_comentarios(_secciones(texto)["code"])
+    # El instalador solo anota de donde traer los datos; los trae la aplicacion.
+    assert "mudar-desde.txt" in codigo
+    assert "FileCopy" not in codigo and "CopyFile" not in codigo
+    assert "{param:MUDARDESDE|}" in codigo
+    # La pagina no sale al reinstalar ni en instalacion silenciosa.
+    assert "YaEstabaInstalada or (ExpandConstant('{param:MUDARDESDE|}') <> '')" in codigo
+    # Detecta por los accesos directos del usuario y los publicos.
+    for carpeta in ("{userdesktop}", "{userprograms}", "{userstartup}", "{commondesktop}"):
+        assert carpeta in codigo
+    for exe in ("kofe.exe", "cajaclara.exe", "cajatersa.exe"):
+        assert exe in codigo.lower()
+    assert "WScript.Shell" in codigo
+    # Y nunca se aplica sobre la carpeta de la aplicacion nueva.
+    assert "EstaDentro(Carpeta, WizardDirValue)" in codigo
 
 
 def test_los_datos_del_local_no_viajan_dentro_del_instalador():
@@ -138,3 +163,33 @@ def test_sin_inno_setup_falla_con_un_mensaje_claro(monkeypatch, tmp_path):
         assert "Inno Setup" in str(e) and "winget" in str(e)
     else:
         raise AssertionError("tenia que avisar que falta Inno Setup")
+
+
+def _codigo() -> str:
+    return _sin_comentarios(_secciones(_iss())["code"])
+
+
+def test_si_habia_instalacion_previa_se_fija_antes_de_instalar_y_no_se_vuelve_a_preguntar():
+    codigo = _codigo()
+    # La clave de desinstalacion solo se consulta en InitializeSetup (antes de instalar);
+    # despues de instalar Inno ya la creo y siempre diria que si.
+    assert codigo.count("RegKeyExists(HKCU, ClaveDesinstalar)") == 1
+    inicio = codigo.index("function InitializeSetup")
+    assert codigo.index("HabiaInstalacionPrevia := RegKeyExists(HKCU, ClaveDesinstalar)") > inicio
+    cuerpo = codigo[codigo.index("function YaEstabaInstalada"):]
+    assert cuerpo.lstrip().startswith("function YaEstabaInstalada: Boolean;\r\nbegin\r\n  Result := HabiaInstalacionPrevia;") \
+        or "Result := HabiaInstalacionPrevia;" in cuerpo[:200]
+    # QuiereMudar (se usa en ssPostInstall) usa el valor estable, no el registro.
+    quiere = codigo[codigo.index("function QuiereMudar"):codigo.index("procedure PrepararMudanza")]
+    assert "HabiaInstalacionPrevia" in quiere and "RegKeyExists" not in quiere
+    assert "YaEstabaInstalada" not in quiere
+
+
+def test_solo_se_muda_desde_una_caja_que_ya_trae_el_bloqueo():
+    codigo = _codigo()
+    assert "apps\\pos\\mudanza.py" in codigo
+    assert "Primero abre la caja vieja y deja que se actualice a la ultima version" in codigo
+    # Tanto el parametro silencioso como la pagina lo exigen.
+    assert codigo.count("TieneElBloqueo(") >= 5
+    quiere = codigo[codigo.index("function QuiereMudar"):codigo.index("procedure PrepararMudanza")]
+    assert "TieneElBloqueo" in quiere
