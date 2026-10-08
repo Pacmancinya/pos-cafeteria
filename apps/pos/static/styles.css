@@ -23,7 +23,7 @@
   --toque-alto:56px;   /* lo que se toca todo el día */
   --toque-rey:64px;    /* cobrar, medios de pago, +/− del pedido */
   --tecla:56px;        /* teclado numérico en pantalla (panel de los campos) */
-  --tecla-mult:46px;   /* teclado fijo de la pantalla de venta */
+  --tecla-mult:60px;   /* teclado fijo de la pantalla de venta (columna del pedido) */
   --ancho-teclado:224px; /* ancho del panel que flota a la izquierda */
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -88,12 +88,7 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- rail de categorías ---------- */
 .rail{
   width:186px;flex:none;background:var(--tarjeta);border-right:1px solid var(--linea);
-  padding:12px 10px;display:flex;flex-direction:column;gap:4px;overflow:hidden;
-}
-/* Las categorías se desplazan solas dentro de la columna: así el teclado de
-   multiplicar (.mult) que va debajo nunca se corta ni se va con el scroll. */
-.rail__lista{
-  flex:1;min-height:0;display:flex;flex-direction:column;gap:inherit;overflow:auto;
+  padding:12px 10px;display:flex;flex-direction:column;gap:4px;overflow:auto;
 }
 .rail__cat{
   display:flex;align-items:center;gap:10px;width:100%;
@@ -477,10 +472,9 @@ button{font-family:inherit;cursor:pointer}
    Esas pantallas usan las tres columnas apretadas del final de esta hoja. */
 @media (max-width:760px){
   .rail{
-    width:100%;flex-direction:row;padding:9px 10px;
+    width:100%;flex-direction:row;overflow-x:auto;padding:9px 10px;
     border-right:0;border-bottom:1px solid var(--linea);
   }
-  .rail__lista{flex-direction:row;overflow-x:auto;overflow-y:hidden}
   .mult{display:none !important}      /* en un celular no hay lugar para multiplicar */
   .rail__cat{width:auto;flex:none;padding:9px 14px;white-space:nowrap}
   .rail__cat.is-on::before{display:none}
@@ -549,28 +543,42 @@ button{font-family:inherit;cursor:pointer}
 .capa.con-teclado{padding-left:calc(var(--ancho-teclado) + 24px)}
 @media (max-width:620px){.capa.con-teclado{padding-left:var(--capa-pad)}}   /* celular: no hay de dónde */
 
-/* El teclado FIJO de la pantalla de venta, debajo de las categorías: sirve para
+/* El teclado FIJO de la pantalla de venta, entre la lista del pedido y el Total: sirve para
    multiplicar («2 ✱» y tocar el producto). Solo existe con el modo táctil. */
-.mult{flex:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--linea)}
+.mult{flex:none;padding:10px 16px 12px;border-top:1px solid var(--linea)}
 .mult[hidden]{display:none}
 .mult__visor{
-  display:block;height:34px;line-height:32px;padding:0 10px;margin-bottom:6px;
-  text-align:right;font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;
-  color:var(--tinta);background:var(--papel);border:1px solid var(--linea);border-radius:10px;
+  display:block;height:44px;line-height:42px;padding:0 14px;margin-bottom:8px;
+  text-align:right;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;
+  color:var(--tinta);background:var(--papel);border:1px solid var(--linea);border-radius:11px;
   white-space:nowrap;overflow:hidden;
 }
-.mult__visor--vacio{font-size:12.5px;font-weight:600;color:#B0A08E;letter-spacing:.04em}
+.mult__visor--vacio{font-size:14px;font-weight:600;color:#B0A08E;letter-spacing:.04em}
 .mult__visor--armado{
   background:color-mix(in srgb, var(--clay) 13%, white);
   border-color:var(--clay);color:var(--clay-osc);
 }
-.mult__grilla{grid-auto-rows:var(--tecla-mult);gap:6px}
-.mult .teclado__t{border-radius:11px;font-size:21px}
-.mult .teclado__t--acc{font-size:21px}
+.mult__grilla{grid-auto-rows:var(--tecla-mult);gap:8px}
+.mult .teclado__t{border-radius:12px;font-size:30px}
+.mult .teclado__t--acc{font-size:28px}
+/* Pantallas bajas: las teclas bajan para que la lista del pedido conserve al
+   menos un par de líneas a la vista (Total y Cobrar no se negocian). */
+@media (max-height:760px){
+  :root{--tecla-mult:52px}
+}
 @media (max-height:620px){
-  :root{--tecla-mult:44px}
-  .mult{margin-top:6px;padding-top:6px}
-  .mult__grilla{gap:5px}
+  :root{--tecla-mult:40px}
+  .mult{padding:6px 12px 6px}
+  .mult__visor{height:30px;line-height:28px;font-size:21px;margin-bottom:4px}
+  .mult__grilla{gap:4px}
+  .mult .teclado__t{font-size:22px}
+}
+/* 543 px de alto útil (768 al 125 %): con teclas de 40 la lista quedaba en 96 px,
+   menos de dos líneas. */
+@media (max-height:560px){
+  :root{--tecla-mult:34px}
+  .mult__visor{height:26px;line-height:24px;font-size:19px}
+  .mult .teclado__t{font-size:20px}
 }
 
 /* ---------- esconder la barra de arriba ---------- */
@@ -707,11 +715,11 @@ body.barra-oculta .barra{display:none}
 
 /* --- 6. scroll, inercia y doble tap --- */
 html,body{overscroll-behavior:none}
-.grilla,.lineas,.rail,.rail__lista,.capa,.tabla-wrap,.novedades,
+.grilla,.lineas,.rail,.capa,.tabla-wrap,.novedades,
 .vista[data-vista="dia"],.vista[data-vista="carta"],.vista[data-vista="inventario"]{
   overscroll-behavior:contain;scroll-behavior:smooth;
 }
-.grilla,.lineas,.capa,.rail,.rail__lista{touch-action:pan-y}
+.grilla,.lineas,.capa,.rail{touch-action:pan-y}
 .tabla-wrap{touch-action:pan-x pan-y}
 ::-webkit-scrollbar{width:12px;height:12px}
 ::-webkit-scrollbar-thumb{background:#DCCDB8;border-radius:99px;border:3px solid var(--tarjeta)}
@@ -733,8 +741,7 @@ html,body{overscroll-behavior:none}
 
 /* --- 8. media queries: ajustar las existentes (L373 y L385) --- */
 @media (max-width:760px){
-  .rail__lista{touch-action:pan-x;scroll-snap-type:x proximity}
-  .rail{width:100%}
+  .rail{width:100%;touch-action:pan-x;scroll-snap-type:x proximity}
   .rail__cat{min-height:var(--toque-alto);padding:0 18px;scroll-snap-align:start}
 }
 @media (max-width:900px){

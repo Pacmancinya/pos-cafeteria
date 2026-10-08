@@ -53,12 +53,7 @@
 
 <!-- ══════════ CAJA ══════════ -->
 <main class="vista is-on" data-vista="caja">
-  <!-- La lista de categorías (#railLista) se desplaza sola; debajo, con el modo
-       táctil prendido, va el teclado fijo para multiplicar (#mult, teclado.js). -->
-  <nav class="rail" id="rail">
-    <div class="rail__lista" id="railLista"></div>
-    <div class="mult" id="mult" hidden></div>
-  </nav>
+  <nav class="rail" id="rail"></nav>
 
   <section class="productos">
     <div class="buscador">
@@ -80,6 +75,9 @@
     <div class="lineas" id="lineas">
       <p class="vacio">Toca un producto para empezar</p>
     </div>
+    <!-- Con el modo táctil prendido, el teclado fijo para multiplicar (teclado.js)
+         va entre la lista y el Total: la lista se desplaza, esto nunca se corta. -->
+    <div class="mult" id="mult" hidden></div>
     <div class="pedido__pie">
       <div class="total">
         <span>Total</span>

@@ -235,7 +235,7 @@ async function cargarCarta() {
   if (!catActiva || !conProductos.find((c) => c.id === catActiva)) {
     catActiva = conProductos.length ? conProductos[0].id : null;
   }
-  $("#railLista").innerHTML = conProductos.map((c) => {
+  $("#rail").innerHTML = conProductos.map((c) => {
     const n = c.productos.filter((p) => p.activo).length;
     return `<button class="rail__cat${c.id === catActiva && !busqueda ? " is-on" : ""}"
               data-cat="${c.id}" style="--c:${colorDeCat(c.id)}">
