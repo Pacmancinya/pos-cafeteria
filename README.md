@@ -80,6 +80,7 @@ pos-cafeteria/
 ├── Kofe.py                ← el lanzador: abre la ventana y levanta el servidor
 ├── despliegue/
 │   ├── construir_exe.py   ← arma CajaClara.exe, la carpeta que se entrega y la demo
+│   ├── construir_instalador.py ← arma CajaClara-Instalar-vX.Y.exe con Inno Setup (instalador/)
 │   ├── empaquetar.py      ← arma el ZIP de ACTUALIZACIÓN (~170 KB)
 │   ├── ordenar_carpeta.py ← arma D:\Kofe, todo ordenado para una persona
 │   └── icono/             ← caja-clara.svg y el .ico que usa el ejecutable

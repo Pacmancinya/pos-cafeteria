@@ -47,3 +47,4 @@ despliegue/_construccion/
 *.zip
 .tmp-pytest-*/
 auditoria-pantallas/
+despliegue/CajaClara-Instalar-*.exe
