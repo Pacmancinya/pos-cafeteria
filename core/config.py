@@ -128,7 +128,7 @@ CATALOGO_DE_PERMISOS = (
     ("turno_cerrar_ajeno", "Cerrar la caja de otro"),
     ("caja_retirar", "Sacar plata del cajón"),
     ("cobrar_varios", "Cobrar un monto a mano"),
-    ("ver_dia", "Ver El día"),
+    ("ver_dia", "Ver Ventas"),
     ("ver_informes", "Ver los informes"),
     ("editar_carta", "Editar la carta y los precios"),
     ("inventario", "Ver la bodega"),

@@ -94,7 +94,7 @@ async function imprimir(ruta) {
     const comprobante = /^\/comprobante\/(\d+)$/.exec(ruta);
     const tipo = tipoImpresion();
     if (tipo !== "navegador" && comprobante) {
-      if (!IMPRESION.impresora) throw Error("Elige una impresora en Configurar.");
+      if (!IMPRESION.impresora) throw Error("Elige una impresora en Config.");
       const prefijo = tipo === "termica" ? "crudo/" : "";
       await api(`/impresion/${prefijo}comprobante/${comprobante[1]}`, { method: "POST",
         body: JSON.stringify({ impresora: IMPRESION.impresora, papel: IMPRESION.papel }),
@@ -237,14 +237,72 @@ async function cargarCarta() {
   }
   $("#rail").innerHTML = conProductos.map((c) => {
     const n = c.productos.filter((p) => p.activo).length;
+    // La columna es angosta: el conteo no cabe a la vista, queda en el title.
     return `<button class="rail__cat${c.id === catActiva && !busqueda ? " is-on" : ""}"
-              data-cat="${c.id}" style="--c:${colorDeCat(c.id)}">
-              <span class="rail__punto"></span>${esc(c.nombre)}<span class="rail__n">${n}</span>
+              data-cat="${c.id}" style="--c:${colorDeCat(c.id)}"
+              title="${esc(c.nombre)} · ${n} ${n === 1 ? "producto" : "productos"}">
+              <span class="rail__ico">${dibujo({ k: dibujoDeCategoria(c) })}</span>
+              <span class="rail__txt">${esc(c.nombre)}</span>
             </button>`;
   }).join("");
+  avisarRail();
+  verCategoriaActiva();
   pintarGrilla();
   pintarEditorCarta();
   limpiarCarritoDeBorrados();
+}
+
+/* El ícono de una categoría en la columna angosta: el dibujo que más se repite entre
+   sus productos a la venta (el empate lo gana el primero). Si ninguno tiene dibujo
+   asignado, el plato genérico: «lo que no calza en nada». */
+function dibujoDeCategoria(c) {
+  const veces = {};
+  let mejor = null;
+  (c.productos || []).forEach((p) => {
+    if (!p.activo || !p.dibujo) return;
+    veces[p.dibujo] = (veces[p.dibujo] || 0) + 1;
+    if (!mejor || veces[p.dibujo] > veces[mejor]) mejor = p.dibujo;
+  });
+  return mejor || "plato";
+}
+
+/* La columna de categorías se desplaza cuando no caben todas. Los avisos «▴» y
+   «más ▾» (en el HTML, dentro de #railWrap) se ven mientras haya más para ese lado:
+   el degradado y la flechita los pone la hoja de estilos según estas dos clases. */
+function avisarRail() {
+  const rail = $("#rail"), envoltura = $("#railWrap");
+  if (!rail || !envoltura) return;
+  const abajo = rail.scrollHeight - rail.scrollTop - rail.clientHeight > 4;
+  const arriba = rail.scrollTop > 4;
+  envoltura.classList.toggle("hay-mas-abajo", abajo);
+  envoltura.classList.toggle("hay-mas-arriba", arriba);
+}
+
+/* Al elegir una categoría, que quede a la vista aunque esté al fondo de la columna. */
+function verCategoriaActiva() {
+  const rail = $("#rail");
+  const activa = rail && rail.querySelector(".rail__cat.is-on");
+  if (activa && activa.scrollIntoView) {
+    activa.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }
+}
+
+/* El alto de los azulejos lo decide el espacio que deja la zona de productos, para que
+   siempre se vean al menos dos filas completas (con el teclado de multiplicar abajo la
+   grilla es más baja, y con la barra escondida más alta). Solo en pantallas de
+   escritorio: en un celular la grilla se estira y la página se desplaza. */
+function acomodarGrilla() {
+  const grilla = $("#grilla");
+  if (!grilla || !grilla.clientHeight) return;
+  if (window.matchMedia && window.matchMedia("(max-width:760px)").matches) {
+    grilla.style.removeProperty("--fila");
+    return;
+  }
+  const hueco = parseFloat(getComputedStyle(grilla).rowGap) || 10;
+  const alto = grilla.clientHeight;
+  const filas = Math.max(2, Math.round((alto + hueco) / (175 + hueco)));
+  const fila = Math.max(100, Math.floor((alto + hueco) / filas - hueco));
+  grilla.style.setProperty("--fila", fila + "px");
 }
 
 /* Un producto borrado no puede quedar en un pedido a medio armar: al cobrar, el
@@ -300,7 +358,8 @@ function pintarGrilla() {
     grilla.innerHTML = hallados.length
       ? hallados.map(([p, cid]) => azulejo(p, cid, true)).join("")
       : `<p class="sin-resultados">No hay ningún producto que se llame así.<br>
-         Revisa cómo está escrito, o agrégalo en la pestaña <b>Carta</b>.</p>`;
+         Revisa cómo está escrito, o agrégalo en <b>Inventario → Carta</b>.</p>`;
+    acomodarGrilla();
     return;
   }
 
@@ -309,6 +368,7 @@ function pintarGrilla() {
   grilla.innerHTML = prods.length
     ? prods.map((p) => azulejo(p, c.id)).join("")
     : `<p class="sin-resultados">Esta categoría todavía no tiene productos a la venta.</p>`;
+  acomodarGrilla();
 }
 
 function buscar(texto) {
@@ -410,8 +470,8 @@ function sumarAlPedido(p, cuantos = 1) {
   const stock = tope ? tope.stock : p.stock;
   if (usarInventario() && stock != null && pide > stock) {
     avisar(stock > 0
-      ? `Solo quedan ${stock} de ${p.nombre}. Si llegó más, anótalo en Bodega.`
-      : `${p.nombre} está en cero. Anota la mercadería en Bodega para venderlo.`, true);
+      ? `Solo quedan ${stock} de ${p.nombre}. Si llegó más, anótalo en Inventario → Bodega.`
+      : `${p.nombre} está en cero. Anota la mercadería en Inventario → Bodega para venderlo.`, true);
     return;
   }
 
@@ -2522,7 +2582,7 @@ async function cargarSesion() {
 
 function pintarQuien() {
   const configurar = $("#btnConfigurar");
-  if (configurar) configurar.textContent = puedo("config") ? "Configurar" : "Ayuda";
+  if (configurar) configurar.textContent = puedo("config") ? "Config" : "Ayuda";
   $("#btnVarios").hidden = !puedo("cobrar_varios");
   const chip = $("#quienEsta");
   const equipo = $("#verEquipo");
@@ -3745,7 +3805,7 @@ function conectarTarjetas(tu) {
           <b>La caja no registró ninguna venta en ${esc(m.nombre.toLowerCase())} este turno.</b>
           <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Si la máquina dice que
             sí hubo, esa venta quedó cobrada de otra forma —casi siempre efectivo—.
-            Búscala en <b>El día</b>, anúlala y vuelve a cobrarla como corresponde: si no,
+            Búscala en <b>Ventas</b>, anúlala y vuelve a cobrarla como corresponde: si no,
             el cajón va a aparecer con plata de más y la máquina con plata de menos.</p>
         </div>`;
         return;
@@ -3759,7 +3819,7 @@ function conectarTarjetas(tu) {
                                    : "Estas calzan justo con la diferencia:"}</b>
           ${calzan.map((grupo) => listaDeVentas(grupo, [grupo])).join("")}
           <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Si la máquina la
-            rechazó y quedó registrada igual, anúlala en <b>El día</b>. Si se pagó de
+            rechazó y quedó registrada igual, anúlala en <b>Ventas</b>. Si se pagó de
             otra forma, anúlala y vuelve a cobrarla como corresponde.</p>
         </div>` : `<div class="pista">
           <b>Ninguna venta sola explica la diferencia.</b>
@@ -4616,13 +4676,14 @@ function usarInventario() {
 
 function aplicarInventario() {
   const activo = usarInventario();
-  $(".tab[data-vista='inventario']").hidden = !activo;
   const interruptor = $("#ajInventario");
   if (interruptor) interruptor.checked = activo;
   if (!activo) {
     if ($(".vista.is-on")?.dataset.vista === "inventario") verVista("caja");
     ["#capaBodega", "#capaInsumo"].forEach((id) => $(id).classList.remove("is-on"));
   }
+  // Sin bodega, Inventario queda solo con la Carta: se esconde la selección Carta | Bodega.
+  pintarSubInventario();
   const zona = $("#zonaTalCual");
   if (zona) {
     zona.style.display = activo ? "" : "none";
@@ -4763,6 +4824,10 @@ function reloj() {
 /* Ruteo por hash: refrescar la página no devuelve al cajero a la caja sin
    avisar, y se puede dejar "El día" abierto en otra pestaña. */
 const VISTAS = ["caja", "dia", "carta", "inventario", "guias"];
+/* La pestaña «Inventario» de la barra («stock» en el HTML) junta dos de esas vistas, las
+   de siempre: Carta y Bodega. Cada una conserva su nombre en la dirección (#/carta,
+   #/inventario), así que nada de lo que apunta a ellas cambió. */
+const GRUPO_INVENTARIO = ["carta", "inventario"];
 
 /* En Windows el contenido web no puede quitar el marco de la aplicación.
    El puente usa la ventana nativa; en navegador usamos su API de pantalla completa. */
@@ -4829,11 +4894,41 @@ function ponerBarra(oculta) {
 window.addEventListener("pywebviewready", sincronizarPantallaCompleta);
 document.addEventListener("fullscreenchange", pintarPantallaCompleta);
 
+/* Cuál de las dos (Carta o Bodega) abre la pestaña Inventario: la que se miró por
+   última vez en este equipo. Sin bodega en el local, siempre la Carta. */
+let subInventario = null;
+function destinoInventario() {
+  let sub = subInventario;
+  if (!sub) {
+    try { sub = localStorage.getItem("pos.sub_inventario"); } catch (e) { sub = null; }
+  }
+  return sub === "inventario" && usarInventario() ? "inventario" : "carta";
+}
+
+/* La selección «Carta | Bodega» de arriba de Inventario. */
+function pintarSubInventario(actual) {
+  const barra = $("#subInventario");
+  if (!barra) return;
+  actual = actual || $(".vista.is-on")?.dataset.vista;
+  const bodega = usarInventario();
+  barra.hidden = !(GRUPO_INVENTARIO.includes(actual) && bodega);
+  const boton = $(".subtab[data-vista='inventario']");
+  if (boton) boton.hidden = !bodega;
+  $$(".subtab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === actual));
+}
+
 function verVista(nombre, empujarHash = true) {
+  if (nombre === "stock") nombre = destinoInventario();
   if (!VISTAS.includes(nombre)) nombre = "caja";
   if (nombre === "inventario" && !usarInventario()) nombre = "caja";
-  $$(".tab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === nombre));
+  const pestana = GRUPO_INVENTARIO.includes(nombre) ? "stock" : nombre;
+  $$(".tab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === pestana));
   $$(".vista").forEach((v) => v.classList.toggle("is-on", v.dataset.vista === nombre));
+  if (GRUPO_INVENTARIO.includes(nombre)) {
+    subInventario = nombre;
+    try { localStorage.setItem("pos.sub_inventario", nombre); } catch (e) {}
+  }
+  pintarSubInventario(nombre);
   if (empujarHash) location.hash = "#/" + nombre;
   if (nombre === "dia") { periodoQueCorresponde(); cargarDia(); }
   if (nombre === "inventario") cargarBodega();
@@ -4853,13 +4948,14 @@ document.addEventListener("click", (e) => {
   // El <main> de cada vista también lo lleva, y con `cerca("data-vista")` este
   // primer if se tragaba TODOS los clics de adentro: no se podía ni agregar un
   // producto al pedido.
-  const pestana = t.closest(".tab[data-vista]");
+  const pestana = t.closest(".tab[data-vista], .subtab[data-vista]");
   if (pestana) return verVista(pestana.dataset.vista);
   if (cerca("data-cat")) {
     catActiva = +cerca("data-cat").dataset.cat;
     try { localStorage.setItem("pos.categoria", catActiva); } catch (e) {}
     $("#buscar").value = "";
-    return buscar("");
+    buscar("");
+    return verCategoriaActiva();
   }
   if (cerca("data-prod")) {
     // tomar() devuelve lo armado con ✱ (o 1) y deja el visor limpio, haya entrado
@@ -4969,7 +5065,7 @@ document.addEventListener("click", (e) => {
   if (t.id === "btnCobrar") return abrirCobro();
   if (t.id === "btnVarios") return dialogoVarios();
   if (t.id === "agregarVarios") return agregarVarios();
-  if (t.id === "btnLimpiar") { carrito = []; olvidarAvisos(); return pintarCarrito(); }
+  if (t.closest("#btnLimpiar")) { carrito = []; olvidarAvisos(); return pintarCarrito(); }
   if (t.id === "cobroCancelar") return $("#capaCobro").classList.remove("is-on");
   if (t.id === "cobroConfirmar") return confirmarVenta();
   if (t.id === "turnoEstado") return dialogoTurno();
@@ -5239,6 +5335,16 @@ document.addEventListener("keydown", (e) => {
 
 (async function iniciar() {
   ponerBarra(barraGuardada());
+  // La columna de categorías avisa si hay más para desplazar; la grilla reparte su alto
+  // en filas cada vez que cambia su espacio (ventana, barra escondida, teclado de
+  // multiplicar que aparece o se va).
+  $("#rail").addEventListener("scroll", avisarRail, { passive: true });
+  addEventListener("resize", () => { avisarRail(); acomodarGrilla(); });
+  if (window.ResizeObserver) {
+    const observador = new ResizeObserver(() => { avisarRail(); acomodarGrilla(); });
+    observador.observe($("#grilla"));
+    observador.observe($("#rail"));
+  }
   sincronizarPantallaCompleta();
   reloj();
   setInterval(reloj, 20000);

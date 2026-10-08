@@ -21,7 +21,7 @@ window.GUIAS = [
       <li><b>Crea a tu gente.</b> Tú ya eres el dueño. Agrega a cada cajero con
           su propio PIN: así la caja sabe quién hizo cada cosa.</li>
       <li><b>Arregla la carta.</b> Los productos que vienen son de ejemplo.
-          Cámbialos por los tuyos en la pestaña <b>Carta</b>. Si ya tienes la
+          Cámbialos por los tuyos en <b>Inventario → Carta</b>. Si ya tienes la
           lista en un Excel, no la copies a mano: mira la guía
           <i>Traer la carta de un Excel</i>.</li>
       <li><b>Vende.</b> Con eso ya funciona. Todo lo demás es opcional.</li>
@@ -36,7 +36,7 @@ window.GUIAS = [
   titulo: "Vender sin llevar inventario",
   resumen: "Si solo necesitas la caja para cobrar.",
   html: `
-    <p>Si no llevas la cuenta de lo que queda, entra como dueño a <b>Ayuda →
+    <p>Si no llevas la cuenta de lo que queda, entra como dueño a <b>Config →
        Ajustes</b> y apaga <b>Llevar inventario en este local</b>.</p>
     <p>Al agregar un producto, basta con su nombre, precio y categoría. Puedes
        vender aunque no tengas existencias anotadas.</p>
@@ -54,7 +54,7 @@ window.GUIAS = [
 
     <h3>Cambiar un precio</h3>
     <ol>
-      <li>Pestaña <b>Carta</b>.</li>
+      <li>Pestaña <b>Inventario</b>, opción <b>Carta</b>.</li>
       <li>Escribe el precio nuevo y aprieta <b>Guardar</b>.</li>
     </ol>
     <p>El precio va sin puntos: escribes <b>3400</b> y en la pantalla sale
@@ -63,7 +63,7 @@ window.GUIAS = [
 
     <h3>Agregar uno nuevo</h3>
     <ol>
-      <li>Pestaña <b>Carta</b> → botón <b>+ Producto</b> en la categoría que
+      <li>Pestaña <b>Inventario</b> → <b>Carta</b> → botón <b>+ Producto</b> en la categoría que
           corresponda.</li>
       <li>Ponle nombre y precio.</li>
       <li>Elige el <b>dibujo</b>: hay más de 60 y se eligen viéndolos, no por el
@@ -80,7 +80,7 @@ window.GUIAS = [
   titulo: "Traer la carta de un Excel",
   resumen: "Si ya tienes tu lista escrita, no la copies a mano.",
   html: `
-    <p>Pestaña <b>Carta</b> → <b>Traer la carta de un archivo</b>.</p>
+    <p>Pestaña <b>Inventario</b> → <b>Carta</b> → <b>Traer la carta de un archivo</b>.</p>
     <ol>
       <li>Sube el Excel o el CSV, <b>o pega la lista</b> copiada de donde la
           tengas: un Excel, un Word, un correo.</li>
@@ -104,15 +104,15 @@ window.GUIAS = [
   titulo: "Compré pasteles: ¿dónde los pongo?",
   resumen: "En un solo lugar. Ya no hay que escribirlo dos veces.",
   html: `
-    <p>En <b>Carta ? + Producto</b>, escribe el nombre y el precio y marca
+    <p>En <b>Inventario → Carta → + Producto</b>, escribe el nombre y el precio y marca
        <b>Llevar la cuenta de este</b>. La casilla empieza apagada.</p>
-    <p>Despu?s abre <b>Bodega</b>, busca el pastel por nombre o c?digo de barras,
+    <p>Después abre <b>Inventario → Bodega</b>, busca el pastel por nombre o c?digo de barras,
        t?calo y escribe cu?ntas unidades hay. Tambi?n puedes usar + y ?.</p>
     <p>Toca <b>Guardar</b> y elige el motivo: <b>Lleg?</b>, <b>Se perdi?</b>,
        <b>Conteo</b> o <b>Ajuste</b>. El cambio queda en <b>Ver movimientos</b>,
        con la fecha y la persona que lo guard?.</p>
     <p>Cada venta descuenta las unidades. Si no quedan, actualiza la cantidad
-       real en Bodega antes de volver a cobrar.</p>
+       real en Inventario → Bodega antes de volver a cobrar.</p>
     <p>Para preparaciones como panes, caf? o leche, deja la casilla apagada.
        Solo llevas la cuenta de los productos que eliges.</p>`,
 },
@@ -175,10 +175,10 @@ window.GUIAS = [
   titulo: "Que el stock baje solo al vender",
   resumen: "Para lo que preparas: café, jugos, sándwiches.",
   html: `
-    <p>En <b>Bodega</b> busca por nombre o pasa el c?digo por el lector.
+    <p>En <b>Inventario → Bodega</b> busca por nombre o pasa el código por el lector.
        Toca el producto para cambiar la cantidad, guarda y elige el motivo.</p>
     <p>Solo aparecen los productos que llevan cuenta por unidades. Puedes marcar
-       o desmarcar <b>Llevar la cuenta de este</b> en su ficha de la Carta.</p>
+       o desmarcar <b>Llevar la cuenta de este</b> en su ficha de <b>Inventario → Carta</b>.</p>
     <p>Las cuentas anteriores se conservan. En <b>Avanzado: insumos y recetas
        anteriores</b> puedes consultar sus medidas, recetas y movimientos.</p>
     <p><b>Ver movimientos</b> muestra por qu? cambi? cada saldo, cu?ndo y qui?n
@@ -188,7 +188,7 @@ window.GUIAS = [
        registrar la cantidad real. Las recetas anteriores siguen descontando
        sus ingredientes mientras no desmarques la cuenta del producto.</p>
     <p>Los motivos <b>Conteo</b> y <b>Ajuste</b> requieren permiso para corregir
-       el stock. Si apagas <b>Llevar inventario en este local</b>, se oculta Bodega.</p>`,
+       el stock. Si apagas <b>Llevar inventario en este local</b>, se oculta la opción Bodega de Inventario.</p>`,
 },
 {
   id: "abrir-cerrar-caja",
@@ -283,7 +283,7 @@ window.GUIAS = [
     <div class="ayuda"><b>El caso que más se repite en tarjeta:</b> el sistema
       tiene más de lo que hay en la vida real. Una venta se cobró como débito,
       la máquina la rechazó, y quedó registrada igual. O se pagó en efectivo y
-      se marcó como tarjeta. En los dos casos: <b>anúlala</b> en El día, y si
+      se marcó como tarjeta. En los dos casos: <b>anúlala</b> en Ventas, y si
       corresponde vúlvela a cobrar como fue de verdad.</div>
 
     <h3>3. Lo demás</h3>
@@ -361,7 +361,7 @@ window.GUIAS = [
 
     <h3>Conectar un televisor</h3>
     <ol>
-      <li>Pestaña <b>Carta</b>: ahí están las direcciones, con su botón de
+      <li>Pestaña <b>Inventario</b> → <b>Carta</b>: ahí están las direcciones, con su botón de
           copiar.</li>
       <li>En el televisor, abre el navegador y entra a la que le toca:
         <ul>
@@ -375,7 +375,7 @@ window.GUIAS = [
     <h3>Dos televisores: uno con la vitrina y otro con la carta</h3>
     <p>Si los dos se van turnando, es que en los dos se abrió la dirección de
        «las dos turnándose». No hace falta cambiarla: en cada televisor mueve el
-       mouse (o aprieta una tecla del control), entra a <b>Configurar →
+       mouse (o aprieta una tecla del control), entra a <b>Config →
        Pantallas</b> y elige <b>Solo la vitrina</b> en uno y <b>Solo la carta</b>
        en el otro. Queda guardado en cada televisor.</p>
 
@@ -444,7 +444,7 @@ window.GUIAS = [
           guardado para la próxima vez.</li>
       <li>El sugerido siempre <b>sube</b> al múltiplo de $50 más cercano hacia
           arriba: nadie cobra $2.437.</li>
-      <li data-con-inventario>Si el producto lleva la cuenta en Bodega, el costo
+      <li data-con-inventario>Si el producto lleva la cuenta en Inventario → Bodega, el costo
           queda guardado ahí —es el mismo con el que se valoriza lo que te
           queda— y la próxima vez que abras la ficha ya está escrito.</li>
     </ul>
@@ -493,7 +493,7 @@ window.GUIAS = [
        programa. Se guardan las últimas 30.</p>
 
     <h3>Para el contador</h3>
-    <p>Pestaña <b>El día</b> → <b>Descargar para el contador</b>. Baja dos
+    <p>Pestaña <b>Ventas</b> → <b>Descargar para el contador</b>. Baja dos
        archivos que se abren con Excel: el resumen de ventas y el detalle por
        producto. Puedes elegir día, semana o mes.</p>
 

@@ -16,10 +16,9 @@
   </div>
   <nav class="tabs">
     <button class="tab is-on" data-vista="caja">Caja</button>
-    <button class="tab" data-vista="dia">El día</button>
-    <button class="tab" data-vista="carta">Carta</button>
-    <button class="tab" data-vista="inventario">Bodega</button>
-    <button class="tab" data-vista="guias" id="btnConfigurar">Configurar</button>
+    <button class="tab" data-vista="stock" id="tabInventario">Inventario</button>
+    <button class="tab" data-vista="dia">Ventas</button>
+    <button class="tab" data-vista="guias" id="btnConfigurar">Config</button>
   </nav>
   <div class="barra__der">
     <button class="quien" id="quienEsta" hidden>
@@ -51,33 +50,54 @@
   <button class="btn" data-recargar>Recargar</button>
 </div>
 
+<!-- Inventario junta dos pantallas de siempre: Carta y Bodega. Esta selección va solo
+     cuando se mira una de las dos y el local lleva bodega; sin bodega queda solo la
+     Carta (lo decide pintarSubInventario() en app.js). -->
+<div class="sub-tabs" id="subInventario" role="tablist" aria-label="Inventario" hidden>
+  <button type="button" class="subtab is-on" role="tab" data-vista="carta">Carta</button>
+  <button type="button" class="subtab" role="tab" data-vista="inventario">Bodega</button>
+</div>
+
 <!-- ══════════ CAJA ══════════ -->
 <main class="vista is-on" data-vista="caja">
-  <nav class="rail" id="rail"></nav>
+  <!-- Columna angosta de categorías: ícono + nombre. Si no caben se desplaza, y los
+       avisos «▴» / «más ▾» (los maneja avisarRail() en app.js) dicen que hay más. -->
+  <div class="rail-wrap" id="railWrap">
+    <span class="rail__mas rail__mas--arriba" aria-hidden="true">▴</span>
+    <nav class="rail" id="rail" aria-label="Categorías"></nav>
+    <span class="rail__mas rail__mas--abajo" aria-hidden="true">más ▾</span>
+  </div>
 
   <section class="productos">
-    <div class="buscador">
-      <svg class="buscador__lupa" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>
-      </svg>
-      <input id="buscar" type="text" placeholder="Buscar producto…" autocomplete="off" spellcheck="false">
-      <button class="buscador__x" id="limpiarBuscar" hidden aria-label="Limpiar">✕</button>
+    <div class="fila-busca">
+      <div class="buscador">
+        <svg class="buscador__lupa" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>
+        </svg>
+        <input id="buscar" type="text" placeholder="Buscar producto…" autocomplete="off" spellcheck="false">
+        <button class="buscador__x" id="limpiarBuscar" hidden aria-label="Limpiar">✕</button>
+      </div>
+      <button type="button" class="btn btn--varios" id="btnVarios" hidden
+              title="Productos varios: cobrar un monto a mano">+ Varios</button>
     </div>
-    <div><button type="button" class="btn" id="btnVarios" hidden>+ Productos varios</button></div>
     <div class="grilla" id="grilla"></div>
+    <!-- Con el modo táctil prendido, el teclado fijo para multiplicar (teclado.js)
+         va en su propia franja, abajo a la derecha de la zona central: la grilla de
+         arriba se desplaza sola y sus productos nunca pasan por debajo del teclado. -->
+    <div class="mult" id="mult" hidden></div>
   </section>
 
   <aside class="pedido">
     <div class="pedido__top">
       <h2>Pedido</h2>
-      <button class="btn btn--fantasma" id="btnLimpiar">Limpiar</button>
+      <button type="button" class="basurero" id="btnLimpiar"
+              aria-label="Vaciar pedido" title="Vaciar pedido">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
+      </button>
     </div>
     <div class="lineas" id="lineas">
       <p class="vacio">Toca un producto para empezar</p>
     </div>
-    <!-- Con el modo táctil prendido, el teclado fijo para multiplicar (teclado.js)
-         va entre la lista y el Total: la lista se desplaza, esto nunca se corta. -->
-    <div class="mult" id="mult" hidden></div>
     <div class="pedido__pie">
       <div class="total">
         <span>Total</span>

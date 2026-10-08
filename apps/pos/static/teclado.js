@@ -21,7 +21,8 @@
      a la derecha, ver .capa.con-teclado) ni el botón de confirmar. Sin botón
      "Listo": el valor ya se escribe en el campo en vivo. Acá ✱ vale "000" en
      el modo monto y está apagada en los demás.
-   · El teclado FIJO de la pantalla de venta (#mult, bajo las categorías):
+   · El teclado FIJO de la pantalla de venta (#mult, en su franja de abajo a la
+     derecha de la zona de productos):
      sirve para multiplicar. Se escribe un número, se toca ✱ y luego un
      producto: entran esa cantidad de una vez. Ver `multiplicador` más abajo.
 
@@ -297,7 +298,10 @@
     multCaja = document.getElementById("mult");
     if (!multCaja) return;                   // la página del PIN no lo tiene
     multCaja.innerHTML =
-      '<output class="mult__visor" aria-live="polite"></output>' +
+      '<div class="mult__lado">' +
+        '<output class="mult__visor" aria-live="polite"></output>' +
+        '<p class="mult__ayuda">Escribe un número, toca ✱ y luego el producto.</p>' +
+      "</div>" +
       '<div class="mult__grilla">' + grillaHTML(null) + "</div>";
     multVisor = multCaja.querySelector(".mult__visor");
     enlazar(multCaja, (k) => multiplicador.tecla(k), () => multiplicador.tecla("limpiar"));

@@ -23,7 +23,8 @@
   --toque-alto:56px;   /* lo que se toca todo el día */
   --toque-rey:64px;    /* cobrar, medios de pago, +/− del pedido */
   --tecla:56px;        /* teclado numérico en pantalla (panel de los campos) */
-  --tecla-mult:60px;   /* teclado fijo de la pantalla de venta (columna del pedido) */
+  --tecla-mult:54px;   /* alto de las teclas del teclado fijo de la pantalla de venta */
+  --ancho-tecla-mult:68px; /* y su ancho: la franja de abajo a la derecha de la zona central */
   --ancho-teclado:224px; /* ancho del panel que flota a la izquierda */
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -85,15 +86,45 @@ button{font-family:inherit;cursor:pointer}
 .vista[data-vista="inventario"].is-on,.vista[data-vista="guias"].is-on{display:block}
 .panel{padding:18px;max-width:1200px;margin:0 auto}
 
-/* ---------- rail de categorías ---------- */
-.rail{
-  width:186px;flex:none;background:var(--tarjeta);border-right:1px solid var(--linea);
-  padding:12px 10px;display:flex;flex-direction:column;gap:4px;overflow:auto;
+/* Inventario = Carta | Bodega: la selección de dos que va arriba de esas pantallas. */
+.sub-tabs{
+  flex:none;display:flex;justify-content:center;gap:6px;padding:8px 16px;
+  background:var(--tarjeta);border-bottom:1px solid var(--linea);
 }
+.sub-tabs[hidden]{display:none}
+.subtab{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:130px;min-height:var(--toque);padding:0 22px;border-radius:11px;
+  border:1px solid var(--linea);background:transparent;color:var(--suave);
+  font-size:16px;font-weight:600;touch-action:manipulation;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.subtab[hidden]{display:none}
+.subtab.is-on{background:var(--clay);border-color:var(--clay);color:#fff}
+.subtab:active{transform:scale(.97)}
+
+/* ---------- rail de categorías ---------- */
+/* Columna ANGOSTA: cada categoría es un ícono con su nombre debajo. Si no caben todas
+   la columna se desplaza, y la envoltura (.rail-wrap) pone un degradado con «más ▾»
+   abajo —y «▴» arriba una vez que se bajó— mientras haya más para ese lado
+   (avisarRail() en app.js prende .hay-mas-abajo / .hay-mas-arriba). */
+.rail-wrap{
+  position:relative;width:88px;flex:none;min-height:0;
+  background:var(--tarjeta);border-right:1px solid var(--linea);
+  display:flex;flex-direction:column;
+}
+.rail{
+  flex:1;min-height:0;padding:8px 6px;display:flex;flex-direction:column;gap:4px;
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:none;
+  /* Al llevar una categoría a la vista no queda tapada por el degradado de los avisos. */
+  scroll-padding:34px 0 44px;
+}
+.rail::-webkit-scrollbar{display:none}
 .rail__cat{
-  display:flex;align-items:center;gap:10px;width:100%;
-  border:0;background:transparent;border-radius:11px;padding:12px 12px;
-  font:600 15px/1.25 var(--f);color:var(--suave);text-align:left;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  width:100%;flex:none;min-height:72px;
+  border:0;background:transparent;border-radius:12px;padding:7px 4px 6px;
+  font:600 12px/1.15 var(--f);color:var(--suave);text-align:center;cursor:pointer;
   position:relative;
 }
 .rail__cat:hover{background:#F6EFE4;color:var(--tinta)}
@@ -102,14 +133,36 @@ button{font-family:inherit;cursor:pointer}
   color:var(--tinta);
 }
 .rail__cat.is-on::before{
-  content:"";position:absolute;left:0;top:9px;bottom:9px;width:4px;
+  content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;
   border-radius:0 4px 4px 0;background:var(--c);
 }
-.rail__punto{width:11px;height:11px;border-radius:50%;background:var(--c);flex:none}
-.rail__n{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--suave);opacity:.75}
+.rail__ico{width:44px;height:40px;display:grid;place-items:center;flex:none;pointer-events:none}
+.rail__ico svg{width:100%;height:100%;display:block}
+.rail__txt{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
+.rail__mas{
+  position:absolute;left:0;right:0;z-index:2;display:none;
+  align-items:flex-end;justify-content:center;pointer-events:none;
+  font:700 11.5px/1 var(--f);color:var(--suave);letter-spacing:.02em;
+}
+.rail__mas--abajo{
+  bottom:0;height:40px;padding-bottom:5px;
+  background:linear-gradient(to bottom,rgba(255,255,255,0),var(--tarjeta) 70%);
+}
+.rail__mas--arriba{
+  top:0;height:30px;padding-top:4px;align-items:flex-start;
+  background:linear-gradient(to top,rgba(255,255,255,0),var(--tarjeta) 70%);
+}
+.rail-wrap.hay-mas-abajo .rail__mas--abajo,
+.rail-wrap.hay-mas-arriba .rail__mas--arriba{display:flex}
 
 /* ---------- productos ---------- */
-.productos{flex:1;display:flex;flex-direction:column;min-width:0;padding:14px 16px}
+.productos{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;padding:14px 16px}
+
+/* Una sola fila arriba: el buscador y, a su derecha, «+ Varios». */
+.fila-busca{display:flex;gap:10px;align-items:stretch;flex:none;margin-bottom:14px}
+.fila-busca .buscador{flex:1;min-width:0;margin-bottom:0}
+.btn--varios{flex:none;white-space:nowrap;box-shadow:var(--sombra);border-radius:12px}
+.btn--varios[hidden]{display:none}
 
 .buscador{position:relative;margin-bottom:14px;flex:none}
 .buscador input{
@@ -130,6 +183,7 @@ button{font-family:inherit;cursor:pointer}
   color:var(--suave);font-size:14px;line-height:1;cursor:pointer;
 }
 .buscador__x:hover{background:#E3D4C0;color:var(--tinta)}
+.buscador__x[hidden]{display:none}   /* la capa táctil le pone display:inline-flex y pisaba el hidden */
 
 .grilla{
   flex:1;overflow:auto;display:grid;gap:12px;align-content:start;
@@ -146,7 +200,8 @@ button{font-family:inherit;cursor:pointer}
      Con dos o tres productos casi no se notaba; con 30 en una categoría se veían
      todos superpuestos, y así lo reportó el local. Con la fila definida acá el
      azulejo la llena (`height:100%`) y no hay nada que adivinar. */
-  grid-auto-rows:minmax(158px,auto);
+  grid-auto-rows:var(--fila, minmax(158px,auto));   /* --fila: acomodarGrilla() en app.js */
+  min-height:0;
 }
 .prod{
   height:100%;position:relative;overflow:hidden;
@@ -198,10 +253,21 @@ button{font-family:inherit;cursor:pointer}
 }
 .pedido__top{
   display:flex;align-items:center;justify-content:space-between;
-  padding:14px 16px 10px;border-bottom:1px solid var(--linea);
+  padding:14px 16px 10px;border-bottom:1px solid var(--linea);flex:none;
 }
 .pedido__top h2{font-size:17px}
-.lineas{flex:1;overflow:auto;padding:8px 10px}
+/* Vaciar el pedido: un basurero, no el texto «Limpiar». */
+.basurero{
+  width:var(--toque);height:var(--toque);flex:none;margin:-6px -6px -6px 0;
+  border:1px solid transparent;background:transparent;border-radius:10px;
+  display:grid;place-items:center;color:var(--suave);
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.basurero svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.basurero:active{color:#A52A23;background:#FBECEA}
+@media (hover:hover){.basurero:hover{color:#A52A23;background:#FBECEA}}
+.lineas{flex:1;overflow:auto;padding:8px 10px;min-height:0}
 .vacio{color:var(--suave);font-size:14px;text-align:center;padding:34px 12px;line-height:1.5}
 .linea{
   display:grid;grid-template-columns:minmax(0,1fr) auto var(--toque);gap:10px;align-items:center;
@@ -471,14 +537,17 @@ button{font-family:inherit;cursor:pointer}
    todos los productos, fuera de la pantalla. Así lo vio el dueño en un local.
    Esas pantallas usan las tres columnas apretadas del final de esta hoja. */
 @media (max-width:760px){
+  .rail-wrap{width:100%;border-right:0;border-bottom:1px solid var(--linea)}
   .rail{
-    width:100%;flex-direction:row;overflow-x:auto;padding:9px 10px;
-    border-right:0;border-bottom:1px solid var(--linea);
+    flex-direction:row;overflow-x:auto;overflow-y:hidden;padding:9px 10px;
   }
   .mult{display:none !important}      /* en un celular no hay lugar para multiplicar */
-  .rail__cat{width:auto;flex:none;padding:9px 14px;white-space:nowrap}
+  /* En un celular las categorías van en fila y solo con el nombre, como siempre. */
+  .rail__cat{width:auto;flex:none;flex-direction:row;min-height:0;padding:9px 14px;
+    font-size:15px;white-space:nowrap}
   .rail__cat.is-on::before{display:none}
-  .rail__n{display:none}
+  .rail__ico,.rail__mas{display:none !important}
+  .rail__txt{max-width:none;overflow:visible}
   .vista[data-vista="caja"]{flex-wrap:wrap}
   .productos{flex:1 1 100%;order:2}
   .pedido{order:3}
@@ -543,42 +612,58 @@ button{font-family:inherit;cursor:pointer}
 .capa.con-teclado{padding-left:calc(var(--ancho-teclado) + 24px)}
 @media (max-width:620px){.capa.con-teclado{padding-left:var(--capa-pad)}}   /* celular: no hay de dónde */
 
-/* El teclado FIJO de la pantalla de venta, entre la lista del pedido y el Total: sirve para
-   multiplicar («2 ✱» y tocar el producto). Solo existe con el modo táctil. */
-.mult{flex:none;padding:10px 16px 12px;border-top:1px solid var(--linea)}
+/* El teclado FIJO de la pantalla de venta: sirve para multiplicar («2 ✱» y tocar el
+   producto). Solo existe con el modo táctil. Va en su propia franja, abajo a la derecha
+   de la zona central: la grilla de productos queda ARRIBA, con su propio desplazamiento,
+   y sus productos nunca pasan por debajo del teclado. A la izquierda de las teclas, el
+   visor «Cantidad» / «2 ×»; a la izquierda de todo, espacio libre. */
+.mult{
+  flex:none;align-self:flex-end;display:flex;gap:10px;margin-top:10px;padding:10px;
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:16px;
+  box-shadow:var(--sombra);
+}
 .mult[hidden]{display:none}
+.mult__lado{display:flex;flex-direction:column;gap:8px;width:116px;flex:none}
 .mult__visor{
-  display:block;height:44px;line-height:42px;padding:0 14px;margin-bottom:8px;
+  display:flex;align-items:center;justify-content:flex-end;
+  height:var(--tecla-mult);flex:none;padding:0 12px;
   text-align:right;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;
-  color:var(--tinta);background:var(--papel);border:1px solid var(--linea);border-radius:11px;
+  color:var(--tinta);background:var(--papel);border:1px solid var(--linea);border-radius:12px;
   white-space:nowrap;overflow:hidden;
 }
-.mult__visor--vacio{font-size:14px;font-weight:600;color:#B0A08E;letter-spacing:.04em}
+.mult .mult__visor--vacio{font-size:14px;font-weight:600;color:#B0A08E;letter-spacing:0}
+.mult__ayuda{font-size:12px;line-height:1.3;color:var(--suave)}
 .mult__visor--armado{
   background:color-mix(in srgb, var(--clay) 13%, white);
   border-color:var(--clay);color:var(--clay-osc);
 }
-.mult__grilla{grid-auto-rows:var(--tecla-mult);gap:8px}
-.mult .teclado__t{border-radius:12px;font-size:30px}
-.mult .teclado__t--acc{font-size:28px}
-/* Pantallas bajas: las teclas bajan para que la lista del pedido conserve al
-   menos un par de líneas a la vista (Total y Cobrar no se negocian). */
+.mult__grilla{
+  grid-template-columns:repeat(3,var(--ancho-tecla-mult));
+  grid-auto-rows:var(--tecla-mult);gap:6px;flex:none;
+}
+.mult .teclado__t{border-radius:12px;font-size:28px}
+.mult .teclado__t--acc{font-size:26px}
+.mult .teclado__t svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+/* Pantallas bajas: las teclas bajan para que la grilla de arriba conserve al menos
+   dos filas de productos a la vista. */
 @media (max-height:760px){
-  :root{--tecla-mult:52px}
+  :root{--tecla-mult:48px}
 }
 @media (max-height:620px){
-  :root{--tecla-mult:40px}
-  .mult{padding:6px 12px 6px}
-  .mult__visor{height:30px;line-height:28px;font-size:21px;margin-bottom:4px}
+  :root{--tecla-mult:42px;--ancho-tecla-mult:62px}
+  .mult{padding:6px 8px;margin-top:6px;gap:8px}
+  .mult__lado{width:104px}
+  .mult__visor{flex:1;height:auto;font-size:24px}
+  .mult__ayuda{display:none}
   .mult__grilla{gap:4px}
-  .mult .teclado__t{font-size:22px}
+  .mult .teclado__t{font-size:24px}
 }
-/* 543 px de alto útil (768 al 125 %): con teclas de 40 la lista quedaba en 96 px,
-   menos de dos líneas. */
+/* 543 px de alto útil (768 al 125 %). */
 @media (max-height:560px){
-  :root{--tecla-mult:34px}
-  .mult__visor{height:26px;line-height:24px;font-size:19px}
-  .mult .teclado__t{font-size:20px}
+  :root{--tecla-mult:36px;--ancho-tecla-mult:58px}
+  .mult .teclado__t{font-size:21px}
+  .mult .teclado__t svg{width:22px;height:22px}
 }
 
 /* ---------- esconder la barra de arriba ---------- */
@@ -620,10 +705,10 @@ body.barra-oculta .barra{display:none}
 /* --- 3. tamaños --- */
 .tab{font-size:16px;padding:0 22px;min-height:var(--toque-alto);border-radius:11px}
 .tabs{gap:8px}
-.rail{width:210px;gap:6px;padding:12px 10px}
-.rail__cat{min-height:60px;padding:0 14px;font:600 16px/1.25 var(--f);justify-content:flex-start}
-.rail__cat.is-on::before{top:12px;bottom:12px;width:5px}
-.rail__n{font-size:14px}
+.rail-wrap{width:92px}
+.rail{gap:5px;padding:8px 6px}
+.rail__cat{min-height:76px;font-size:13px}
+.rail__cat.is-on::before{width:5px}
 .turno{min-height:var(--toque);padding:0 16px;font-size:15px;border-radius:10px}
 .pantalla-completa,.esconder-barra{width:var(--toque);padding:0;font-size:26px;flex:none}
 .esconder-barra{font-size:24px;padding-bottom:6px}   /* el ⌃ queda alto en su línea */
@@ -638,7 +723,7 @@ body.barra-oculta .barra{display:none}
    tiene que ser más alto, o el dibujo queda achatado. Ver el comentario largo
    de .grilla más arriba: el alto lo manda la grilla, nunca el azulejo. */
 .grilla{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px;
-        grid-auto-rows:minmax(168px,auto)}
+        grid-auto-rows:var(--fila, minmax(168px,auto))}
 
 .pedido{width:420px}
 .linea{min-height:64px;gap:8px;padding:8px 4px}
@@ -741,8 +826,9 @@ html,body{overscroll-behavior:none}
 
 /* --- 8. media queries: ajustar las existentes (L373 y L385) --- */
 @media (max-width:760px){
-  .rail{width:100%;touch-action:pan-x;scroll-snap-type:x proximity}
-  .rail__cat{min-height:var(--toque-alto);padding:0 18px;scroll-snap-align:start}
+  .rail-wrap{width:100%}
+  .rail{touch-action:pan-x;scroll-snap-type:x proximity;padding:9px 10px;gap:4px}
+  .rail__cat{min-height:var(--toque-alto);padding:0 18px;font-size:15px;scroll-snap-align:start}
 }
 @media (max-width:900px){
   .pedido{width:360px}
@@ -1499,12 +1585,13 @@ html,body{overscroll-behavior:none}
   .barra__marca b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .quien{min-width:0;white-space:nowrap}
   .quien b{overflow:hidden;text-overflow:ellipsis;max-width:110px}
-  .rail{width:158px;padding:10px 8px}
-  .rail__cat{min-height:52px;padding:0 10px;font-size:15px;gap:8px}
+  .rail-wrap{width:84px}
+  .rail__cat{min-height:70px;font-size:12px}
+  .rail__ico{width:40px;height:36px}
   .pedido{width:340px}
   .productos{padding:12px}
-  .grilla{grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px;
-          grid-auto-rows:minmax(146px,auto)}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;
+          grid-auto-rows:var(--fila, minmax(146px,auto))}
 }
 /* Entre 1181 y 1440 —1280 es un 1920 al 150%, y 1366 el notebook de siempre— la
    barra también se doblaba en dos filas con un nombre de local o de cajero largo:
@@ -1525,11 +1612,10 @@ html,body{overscroll-behavior:none}
   .reloj{display:none}                   /* la hora ya está en la barra de Windows */
   .tab{padding:0 11px}
   #turnoEstado{max-width:120px}
-  .rail{width:124px;padding:8px 6px}
-  .rail__cat{padding:0 8px;font-size:14px;gap:6px}
-  .rail__n{display:none}
+  .rail-wrap{width:78px}
+  .rail__cat{font-size:11.5px}
   .pedido{width:300px}
-  .grilla{grid-template-columns:repeat(auto-fill,minmax(124px,1fr));grid-auto-rows:minmax(128px,auto)}
+  .grilla{grid-template-columns:repeat(auto-fill,minmax(124px,1fr));grid-auto-rows:var(--fila, minmax(128px,auto))}
 }
 
 /* --- el día: las dos tablas una bajo la otra antes de apretarlas ---
@@ -1553,7 +1639,9 @@ html,body{overscroll-behavior:none}
   .total b{font-size:26px}
   .linea{min-height:56px;padding:5px 4px}
   .cant button{width:var(--toque);height:var(--toque);font-size:22px}
-  .rail__cat{min-height:var(--toque)}
+  .rail__cat{min-height:64px}
+  .rail__ico{width:36px;height:30px}
+  .fila-busca{margin-bottom:8px}
   .buscador{margin-bottom:8px}
   .buscador input{height:var(--toque)}
 }
@@ -1627,4 +1715,9 @@ html,body{overscroll-behavior:none}
     position:sticky;bottom:0;z-index:5;
   }
   .pedido__pie{box-shadow:0 -10px 24px rgba(42,21,11,.10)}
+}
+/* Pantallas grandes: la columna de categorías respira un poco más. */
+@media (min-width:1600px){
+  .rail-wrap{width:100px}
+  .rail__ico{width:48px;height:44px}
 }

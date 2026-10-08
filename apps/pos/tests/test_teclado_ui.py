@@ -19,8 +19,11 @@ def test_el_teclado_y_el_multiplicador_en_node():
 
 def test_el_teclado_fijo_y_la_barra_escondible_estan_en_la_pagina():
     html = (ESTATICOS / "index.html").read_text(encoding="utf-8")
-    # El teclado fijo va en la columna del pedido, entre la lista y el Total.
-    assert html.index('id="lineas"') < html.index('id="mult"') < html.index('class="pedido__pie"')
+    # El teclado fijo va en la zona central, abajo de la grilla (su propia franja): ya no
+    # está en la columna del pedido.
+    assert html.index('id="grilla"') < html.index('id="mult"') < html.index('class="pedido"')
+    pedido = html[html.index('class="pedido"'):html.index('class="pedido__pie"')]
+    assert 'id="mult"' not in pedido
     assert 'id="railLista"' not in html
     assert 'id="btnEsconderBarra"' in html and 'id="btnMostrarBarra"' in html
     # Sin archivos nuevos: todo vive en teclado.js, que ya se pide con ?v=__VERSION__.

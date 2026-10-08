@@ -706,7 +706,8 @@ def test_el_modo_sin_inventario_llega_al_carrito_los_formularios_y_la_ayuda(tmp_
                  "function cambiarCantidad(", "function productoDeLaCarta(",
                  "async function dialogoProductoNuevoPorCodigo(",
                  "async function guardarProductoDelCodigo(", "async function pintarTalCual(",
-                 "function pintarGuias(", "function verVista(", "function aplicarInventario("]
+                 "function pintarGuias(", "function verVista(", "function aplicarInventario(",
+                 "function destinoInventario(", "function pintarSubInventario("]
     prueba = "\n".join(_cuerpo_de(js, firma) + "\n}" for firma in funciones)
     prueba += "\nconst window = {};\n" + io.open(ESTATICOS / "guias.js", encoding="utf-8").read()
     prueba += r"""
@@ -726,14 +727,16 @@ const $ = (s) => datos.get(s) || null;
 const $$ = () => [];
 for (const id of ['#dialogoCodigo', '#capaCodigo', '#zonaTalCual', '#listaGuias',
                   '#textoGuia', '#capaBodega', '#capaInsumo', '#ajInventario',
-                  ".tab[data-vista='inventario']"]) datos.set(id, elemento());
+                  '#subInventario', ".subtab[data-vista='inventario']"]) datos.set(id, elemento());
 let AJUSTES = {};
 let carrito = [];
 let guiaAbierta = null;
 const p = { id: 1, nombre: 'Queso', precio: 1500, stock: 0 };
 const CATEGORIAS = [{ id: 1, nombre: 'Fiambres', activa: true, productos: [p] }];
 let catActiva = 1;
-const VISTAS = ['caja', 'inventario', 'guias'];
+const VISTAS = ['caja', 'carta', 'inventario', 'guias'];
+const GRUPO_INVENTARIO = ['carta', 'inventario'];
+let subInventario = null;
 const location = {};
 let pedidos = [];
 let cargarBodega = () => { throw Error('No debe cargar Bodega'); };
@@ -789,12 +792,29 @@ let api = async (ruta, opciones) => { pedidos.push([ruta, JSON.parse(opciones.bo
   assert.equal($('#listaGuias').innerHTML.includes('data-guia="compre-pasteles"'), false);
   assert.equal($('#textoGuia').innerHTML.includes('Por comprar'), false);
   aplicarInventario();
-  assert.equal($(".tab[data-vista='inventario']").hidden, true);
+  // Sin bodega: la opción Bodega no existe y la selección Carta | Bodega se esconde.
+  assert.equal($(".subtab[data-vista='inventario']").hidden, true);
+  verVista('carta');
+  assert.equal($('#subInventario').hidden, true, 'sin bodega, Inventario es solo la Carta');
+  assert.equal(location.hash, '#/carta');
   verVista('inventario');
   assert.equal(location.hash, '#/caja');
+  subInventario = 'inventario';
+  assert.equal(destinoInventario(), 'carta', 'la pestaña Inventario abre la Carta si no hay bodega');
+  verVista('stock');
+  assert.equal(location.hash, '#/carta');
   AJUSTES.usar_inventario = 1;
+  datos.set('.vista.is-on', { dataset: { vista: 'carta' } });   // se está mirando la Carta
   aplicarInventario();
-  assert.equal($(".tab[data-vista='inventario']").hidden, false);
+  assert.equal($(".subtab[data-vista='inventario']").hidden, false);
+  assert.equal($('#subInventario').hidden, false, 'con bodega se ve Carta | Bodega');
+  subInventario = 'inventario';
+  assert.equal(destinoInventario(), 'inventario', 'la pestaña Inventario abre la última que se miró');
+  cargarBodega = () => {};             // con bodega prendida sí se carga
+  verVista('stock');
+  assert.equal(location.hash, '#/inventario');
+  verVista('caja');
+  assert.equal($('#subInventario').hidden, true, 'fuera de Inventario no se ve la selección');
   assert.equal($('#listaGuias').innerHTML.includes('data-guia="descuento-automatico"'), true);
 })().catch((e) => { console.error(e); process.exitCode = 1; });
 """
