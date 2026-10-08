@@ -1,6 +1,6 @@
 {
-  "version": "2.31",
-  "nombre": "Se llama Caja Clara",
-  "novedades": "El programa cambia de nombre: desde ahora se llama Caja Clara. En tu caja no cambia nada de lo que importa: tus ventas, tu carta, tu gente y el nombre de tu local quedan exactamente igual, en la pantalla, en el comprobante y en los televisores. Los computadores que se instalen desde ahora traen el ícono nuevo, una boleta con un visto bueno. Además, la caja se puede abrir en modo demostración, con una carta y ventas de ejemplo, para mostrársela a alguien sin tocar un local de verdad.",
-  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.31.zip"
+  "version": "2.32",
+  "nombre": "Se llama Gespoint",
+  "novedades": "El programa pasa a llamarse Gespoint. En tu caja no cambia nada de lo que importa: tus ventas, tu carta, tu gente y el nombre de tu local quedan igual, y tu caja conserva su ícono y su acceso directo de siempre; el ícono nuevo, una boleta con una G, lo traen solo los computadores que se instalen desde ahora. En la caja y en los televisores cada pan tiene su propio dibujo, y las bolsas de café salen del color que se elija en la caja. En una pantalla táctil aparece junto al pedido un teclado grande para multiplicar: se toca «2 ✱» y después un producto, y entran dos de una vez; y la barra de arriba se puede esconder para que el pedido tenga más lugar. Para los locales nuevos hay un instalador de Windows, y una caja que se instaló con zip puede pasarse a la aplicación instalada sin perder nada: ventas, turnos, respaldos y ajustes se mudan con ella.",
+  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.32.zip"
 }
