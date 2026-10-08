@@ -105,6 +105,11 @@ qué se coló.
    `version-piloto.json` a `version.json`, commit y push: ahí les llega a todos. No hay que
    volver a firmar: el zip de la etiqueta es el mismo.
 
+> **El instalador de Windows no es parte de la actualización.** `CajaClara-Instalar-vX.Y.exe`
+> es para locales nuevos (o para instalar encima, que actualiza): se arma aparte con
+> `python -m despliegue.construir_exe` y después `python -m despliegue.construir_instalador`
+> (necesita Inno Setup 6), y no lo toca el actualizador ni las firmas. Ver `docs/INSTALACION.md`.
+
 > GitHub cachea los `version*.json` unos minutos. Si acabas de publicar y no aparece,
 > espera un poco: no está roto.
 

@@ -7,17 +7,44 @@
 
 ## Lo que recibes
 
-Un archivo **`CajaClara-instalar-vX.Y.zip`** de unos 29 MB. Adentro va la aplicación completa:
-**no hay que instalar Python ni nada más**. Se extrae y se abre.
+Un archivo **`CajaClara-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación completa,
+**no hay que instalar Python ni nada más**.
 
 ## Lo que necesitas
 
 - Un **notebook o computador con Windows 10 u 11**. No hace falta que sea potente.
 - 5 minutos. No necesita internet para instalarse.
+- **No pide administrador**: se instala solo para el usuario que lo abre.
 
 ---
 
-## Paso a paso
+## La forma fácil: el instalador
+
+1. **Haz doble clic** en `CajaClara-Instalar-vX.Y.exe`.
+2. Si sale una pantalla azul que dice **«Windows protegió su PC»**: toca **Más información** y
+   después **Ejecutar de todas formas**. Pasa una sola vez, es normal (ver el paso 4 más abajo).
+3. Elige el idioma si te lo pide y toca **Siguiente**. Hay una casilla, apagada, que dice
+   **«Abrir Caja Clara al prender el computador»**: márcala solo si quieres que la caja se
+   abra sola cada mañana.
+4. Toca **Instalar** y, al terminar, **Finalizar** (deja marcado «Abrir Caja Clara»).
+
+Listo: queda un icono **Caja Clara** en el Escritorio y en el menú Inicio. Sigue en el
+**paso 5** («Los datos del local y tu usuario»).
+
+- **Si ya estaba instalada, instalar de nuevo es actualizar**: ejecuta el instalador nuevo y
+  listo. No se pierde nada: las ventas, los usuarios y los precios se quedan como estaban.
+  Si la caja está abierta, el instalador te pide cerrarla primero.
+- **Para quitarla**: Configuración de Windows → **Aplicaciones** → **Caja Clara** → Desinstalar.
+  Las ventas y los datos **no se borran**: quedan en la carpeta del programa, por si la
+  vuelves a instalar.
+
+> Las cajas que ya se instalaron con el ZIP siguen como están; no hay que cambiarlas. Se
+> siguen actualizando solas desde el botón de la versión.
+
+## La otra forma: el ZIP
+
+Si ya tienes **`CajaClara-instalar-vX.Y.zip`** (unos 29 MB), también sirve: se extrae y se
+abre. Estos son los pasos.
 
 ### 1. Desbloquea el ZIP ANTES de extraerlo
 
@@ -49,7 +76,7 @@ segundos más porque prepara la base de datos.
 > Dentro de la carpeta hay otras cosas (`_internal`, `apps`, `core`…). **No se tocan.**
 > Lo único que se abre es `CajaClara.exe` (en las cajas instaladas antes de la 2.31 se llama `Kofe.exe`).
 
-### 4. Si Windows muestra un aviso azul
+### 4. Si Windows muestra un aviso azul (con el instalador o con el ZIP)
 
 La primera vez puede aparecer una pantalla azul que dice **“Windows protegió tu PC”**.
 Es normal: el programa es nuevo y Windows todavía no lo conoce. No es un virus.
@@ -110,6 +137,9 @@ Para dejarlo en la barra de tareas: abre el programa, clic derecho en su icono d
 
 ### Que se abra solo al prender el computador
 
+Con el instalador es una casilla al instalar (si no la marcaste, vuelve a ejecutar el
+instalador y márcala). A mano:
+
 1. Tecla **Windows + R**, escribe `shell:startup` y Enter.
 2. Se abre una carpeta. Copia ahí el icono «Caja Clara» del escritorio
    (cópialo, no lo arrastres: arrastrar lo MUEVE y desaparece del escritorio).
@@ -151,7 +181,8 @@ en unos segundos.
 
 Las actualizaciones pesan unos **120 KB**, no 29 MB: solo viaja el programa, no el motor.
 
-**Si prefieres a mano:**
+**Si prefieres a mano:** ejecuta el instalador de la versión nueva (`CajaClara-Instalar-vX.Y.exe`)
+encima, o bien:
 
 1. Cierra la aplicación.
 2. Descomprime el ZIP de actualización **encima** de la carpeta, aceptando reemplazar.
@@ -182,6 +213,15 @@ agrega solo a la base al arrancar.
 | Las pantallas no toman los precios | Revisa que pegaste la dirección con la IP (no `127.0.0.1`) y que el computador de la caja esté encendido. |
 
 ---
+
+## Para el que arma el instalador
+
+Después de `python -m despliegue.construir_exe`, corre `python -m despliegue.construir_instalador`:
+deja `despliegue/CajaClara-Instalar-vX.Y.exe` junto a los zips. Necesita Inno Setup 6, que es
+gratis (`winget install --id JRSoftware.InnoSetup -e`). La versión sale de `core/config.py`.
+El script es `despliegue/instalador/caja-clara.iss`. Instala por usuario en
+`%LOCALAPPDATA%\Programs\CajaClara` (el actualizador escribe ahí) y jamás borra `pos.db`,
+`respaldos\`, `registros\`, `.secreto` ni `datos-ventana\`, ni al reinstalar ni al desinstalar.
 
 ## Para el que instala: la versión sin `.exe`
 
