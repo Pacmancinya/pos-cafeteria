@@ -2546,13 +2546,22 @@ function pintarQuien() {
 /* ---- la pantalla de entrada ---- */
 let tCandado = null;
 
+/* El sello del producto (Caja Tersa) que va arriba de las pantallas de entrada. El
+   titular sigue siendo el nombre del LOCAL; esto solo dice qué programa es. */
+const SELLO_TERSA = `<div class="sello-tersa"><svg viewBox="0 0 100 100" aria-hidden="true">
+  <rect width="100" height="100" rx="22" fill="#0E3A2D"/>
+  <g transform="translate(25 19) scale(.5)">
+    <path d="M50 6C50 6 84 54 84 76A34 34 0 1 1 16 76C16 54 50 6 50 6Z" fill="#46D2A5"/>
+    <path d="M34 66a16 20 0 0 0 4 26" fill="none" stroke="#0E3A2D" stroke-width="6" stroke-linecap="round" opacity=".5"/>
+  </g></svg><span>Caja Tersa</span></div>`;
+
 async function mostrarCandado(motivo) {
   clearTimeout(tCandado);
   // La caja se TAPA de inmediato; las caras llegan cuando contesta el servidor.
   // Esperar la respuesta para tapar era justo el hueco por donde se quedaba
   // pegada: si el servidor no contestaba, no se tapaba nunca.
   if ($("#candado").hidden) {
-    $("#candadoCaja").innerHTML = `<h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
+    $("#candadoCaja").innerHTML = `${SELLO_TERSA}<h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
       <p>${motivo || "¿Quién está en la caja?"}</p>`;
     $("#candado").hidden = false;
     const puerta = $("#cajaCerrada");
@@ -2568,6 +2577,7 @@ async function mostrarCandado(motivo) {
   if (info.primer_arranque) return pintarPrimerUsuario();
 
   $("#candadoCaja").innerHTML = `
+    ${SELLO_TERSA}
     <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
     <p>${motivo || "¿Quién está en la caja?"}</p>
     <div class="candado__gente">
@@ -2590,6 +2600,7 @@ function pintarPrimerUsuario() {
   const sugerido = NOMBRE_DEL_LOCAL && !["Kofe", "Mi local"].includes(NOMBRE_DEL_LOCAL)
     ? NOMBRE_DEL_LOCAL : "";
   $("#candadoCaja").innerHTML = `
+    ${SELLO_TERSA}
     <h1>Una caja nueva</h1>
     <p>Todavía no hay nadie registrado. Primero los datos del local; después el
        dueño, que va a poder crear a los demás.</p>
@@ -2636,6 +2647,7 @@ async function pedirPin(usuarioId) {
    entra y un campo con el foco puesto. Enter confirma. Nada de tocar nada. */
 function pedirPinEscrito(u) {
   $("#candadoCaja").innerHTML = `
+    ${SELLO_TERSA}
     <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
     <div class="cara cara--sola" style="--c:${u.color || "#C9552B"}">
       <span class="cara__ini">${esc((u.nombre[0] || "?").toUpperCase())}</span>
@@ -2930,6 +2942,7 @@ async function salirDeLaCaja(por) {
    sesión a la vista parece que anda y no hace nada— y se reintenta sola. */
 function candadoSinConexion(motivo) {
   $("#candadoCaja").innerHTML = `
+    ${SELLO_TERSA}
     <h1>${esc(NOMBRE_DEL_LOCAL)}</h1>
     <p>${motivo || "¿Quién está en la caja?"}</p>
     <p class="candado__nota">La caja no está respondiendo. Se vuelve a intentar sola;

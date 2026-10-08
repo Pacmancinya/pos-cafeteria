@@ -1,9 +1,9 @@
-CAJA CLARA - DEMO PARA MOSTRAR EN 5 MINUTOS
+CAJA TERSA - DEMO PARA MOSTRAR EN 5 MINUTOS
 ===========================================
 
 Es la caja de verdad, con datos de ejemplo. Sirve para mostrarsela a un dueno de
 local en un notebook. NUNCA la instales en un local: para eso esta el instalador
-normal (CajaClara-instalar-vX.Y.zip).
+normal (CajaTersa-instalar-vX.Y.zip).
 
 
 ANTES DE LA REUNION (una sola vez, 3 minutos)
@@ -12,7 +12,7 @@ ANTES DE LA REUNION (una sola vez, 3 minutos)
    (Si no, Windows marca los archivos como bajados de internet y la caja se abre
     en el navegador en vez de en su ventana.)
 2. Extraer el ZIP en el Escritorio. Nunca abrirlo desde dentro del ZIP.
-3. Doble clic en CajaClara.exe. La primera vez prepara los datos de ejemplo: tarda
+3. Doble clic en CajaTersa.exe. La primera vez prepara los datos de ejemplo: tarda
    unos segundos mas.
 
 

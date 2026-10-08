@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Caja Clara — la aplicación de escritorio del punto de venta.
+"""Caja Tersa — la aplicación de escritorio del punto de venta.
 
-Hasta la 2.30 el producto se llamó Kofe, y este archivo conserva ese nombre porque es
-interno. Esto es lo que se congela con PyInstaller y queda como `CajaClara.exe` (las
-cajas instaladas antes de la 2.31 tienen `Kofe.exe`, con su copia vieja). El .exe trae
+Hasta la 2.30 el producto se llamó Kofe y hasta la 2.31 Caja Clara; este archivo conserva el
+primer nombre porque es interno. Esto es lo que se congela con PyInstaller y queda como
+`CajaTersa.exe` (las cajas instaladas antes tienen `CajaClara.exe` o `Kofe.exe`, con su
+copia vieja, y se siguen actualizando sin cambiar de exe). El .exe trae
 adentro Python y las librerías (fastapi, uvicorn, sqlmodel, pywebview…), pero
 **no** trae el código del punto de venta: ese sigue viviendo en archivos .py
 sueltos al lado del .exe.
@@ -153,10 +154,12 @@ NOMBRE_VENTANA_BASE = "Caja"
 # Sin esto, Windows agrupa la ventana bajo "Python" y le pone su icono en la
 # barra de tareas, aunque el .exe tenga el nuestro.
 ID_EN_LA_BARRA = "Kofe.PuntoDeVenta"
-# Desde la 2.31 el icono es el de Caja Clara; kofe.ico queda por si falta.
+# El icono es el de Caja Tersa; caja-clara.ico y kofe.ico quedan por si falta (las cajas
+# instaladas antes no reciben el .ico nuevo con una actualización).
 ICONO = next((r for r in (os.path.join(CARPETA, "despliegue", "icono", n)
-                          for n in ("caja-clara.ico", "kofe.ico")) if os.path.exists(r)),
-             os.path.join(CARPETA, "despliegue", "icono", "caja-clara.ico"))
+                          for n in ("caja-tersa.ico", "caja-clara.ico", "kofe.ico"))
+              if os.path.exists(r)),
+             os.path.join(CARPETA, "despliegue", "icono", "caja-tersa.ico"))
 CERROJO = "Kofe-punto-de-venta-8090"     # nombre del mutex de instancia única
 ESPERA_MAXIMA = 25                        # segundos que le damos al servidor
 
@@ -218,10 +221,11 @@ def esperar_a_que_muera(pid: int, segundos: int = 20) -> None:
 # 4. El servidor
 # ---------------------------------------------------------------------------
 def _titulo() -> str:
-    # Desde la 2.31 (CajaClara.exe) la ventana se llama como el producto. Tiene que ser
-    # fijo: traer_al_frente() busca la ventana abierta por este mismo título. Las cajas
-    # instaladas antes conservan su Kofe.exe congelado, con «Caja de <local>».
-    return "Caja Clara"
+    # Los exe nuevos (CajaTersa.exe) llevan la ventana con el nombre del producto. Tiene
+    # que ser fijo: traer_al_frente() busca la ventana abierta por este mismo título. Las
+    # cajas instaladas antes conservan su exe congelado (CajaClara.exe dice «Caja Clara»;
+    # Kofe.exe, «Caja de <local>»): esta copia no les llega.
+    return "Caja Tersa"
 
 
 def puerto_libre(puerto: int) -> bool:

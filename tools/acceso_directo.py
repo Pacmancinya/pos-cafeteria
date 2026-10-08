@@ -39,11 +39,15 @@ MARCA = os.path.join(RAIZ, ".acceso-directo")
 
 
 def _nombre() -> str:
-    """«Caja Clara» en las instalaciones nuevas (CajaClara.exe, desde la 2.31). Las
-    instaladas antes conservan «<local> - Punto de venta»: renombrarlo les dejaría dos
-    iconos en el escritorio."""
-    if getattr(sys, "frozen", False) and os.path.basename(sys.executable).lower() == "cajaclara.exe":
-        return "Caja Clara"
+    """«Caja Tersa» en las instalaciones nuevas (CajaTersa.exe). Las instaladas antes
+    conservan su nombre («Caja Clara» con CajaClara.exe desde la 2.31, «<local> - Punto de
+    venta» con Kofe.exe): renombrarlo les dejaría dos iconos en el escritorio."""
+    if getattr(sys, "frozen", False):
+        exe = os.path.basename(sys.executable).lower()
+        if exe == "cajatersa.exe":
+            return "Caja Tersa"
+        if exe == "cajaclara.exe":
+            return "Caja Clara"
     return f"{NOMBRE_LOCAL} - Punto de venta"
 
 
@@ -63,13 +67,14 @@ def _destino() -> tuple[str, str]:
     dejaría un icono que no abre nada, que es peor que no tener icono.
     """
     if getattr(sys, "frozen", False):
-        # Desde la 2.31 el ejecutable de las instalaciones nuevas es CajaClara.exe;
-        # las cajas instaladas antes siguen con Kofe.exe (una actualización no cambia
-        # el exe). El que está corriendo es el que sirve en este computador.
+        # El ejecutable de las instalaciones nuevas es CajaTersa.exe; las instaladas antes
+        # siguen con CajaClara.exe (2.31) o Kofe.exe (una actualización no cambia el exe).
+        # El que está corriendo es el que sirve en este computador.
         yo = os.path.abspath(sys.executable)
-        if os.path.basename(yo).lower() in ("cajaclara.exe", "kofe.exe") and os.path.exists(yo):
+        if (os.path.basename(yo).lower() in ("cajatersa.exe", "cajaclara.exe", "kofe.exe")
+                and os.path.exists(yo)):
             return yo, ""
-        for nombre in ("CajaClara.exe", "Kofe.exe"):
+        for nombre in ("CajaTersa.exe", "CajaClara.exe", "Kofe.exe"):
             exe = os.path.join(RAIZ, nombre)
             if os.path.exists(exe):
                 return exe, ""
@@ -156,10 +161,11 @@ def _escribir(lnk: str, destino: str, args: str) -> bool:
     sobre uno que ya existe lo abre con sus propiedades y `.Save()` lo pisa, así
     que no hay que borrarlo antes.
     """
-    # caja-clara.ico llega con las instalaciones nuevas; el actualizador no copia .ico,
-    # así que una caja instalada antes de la 2.31 sigue con kofe.ico.
+    # caja-tersa.ico llega con las instalaciones nuevas; el actualizador no copia .ico,
+    # así que una caja instalada antes sigue con caja-clara.ico (2.31) o kofe.ico.
     icono = next((r for r in (os.path.join(RAIZ, "despliegue", "icono", n)
-                              for n in ("caja-clara.ico", "kofe.ico")) if os.path.exists(r)), destino)
+                              for n in ("caja-tersa.ico", "caja-clara.ico", "kofe.ico"))
+                  if os.path.exists(r)), destino)
 
     orden = (
         f"$d={_ps(lnk)};"

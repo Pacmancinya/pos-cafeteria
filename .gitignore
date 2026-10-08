@@ -43,8 +43,10 @@ __pycache__/
 # `python -m despliegue.construir_exe`.
 despliegue/Kofe/
 despliegue/CajaClara/
+despliegue/CajaTersa/
 despliegue/_construccion/
 *.zip
 .tmp-pytest-*/
 auditoria-pantallas/
 despliegue/CajaClara-Instalar-*.exe
+despliegue/CajaTersa-Instalar-*.exe

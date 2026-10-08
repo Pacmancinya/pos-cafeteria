@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Convierte caja-clara.svg en caja-clara.ico (el icono de la aplicación en Windows).
+"""Convierte caja-tersa.svg en caja-tersa.ico (el icono de la aplicación en Windows).
+
+Sin argumentos hace el de Caja Tersa; con un nombre (`caja-clara`, `kofe`) rehace el de
+antes a partir de su .svg, que se conserva porque las cajas instaladas lo usan.
 
 No usa Pillow ni nada externo: un .ico es una cabecera de 6 bytes, una entrada
 de 16 bytes por tamaño, y los PNG pegados uno detrás del otro. Windows acepta
@@ -19,8 +22,9 @@ import sys
 import tempfile
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-SVG = os.path.join(AQUI, "caja-clara.svg")
-ICO = os.path.join(AQUI, "caja-clara.ico")
+BASE = sys.argv[1] if len(sys.argv) > 1 else "caja-tersa"
+SVG = os.path.join(AQUI, BASE + ".svg")
+ICO = os.path.join(AQUI, BASE + ".ico")
 
 # 256 para el explorador en vista grande, 16 para la barra de tareas y la
 # esquina de la ventana. Los del medio evitan que Windows escale a ojo.

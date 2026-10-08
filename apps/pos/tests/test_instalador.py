@@ -1,4 +1,4 @@
-"""El instalador de Windows (despliegue/instalador/caja-clara.iss) no puede llevarse las
+"""El instalador de Windows (despliegue/instalador/caja-tersa.iss) no puede llevarse las
 ventas de un local ni quedar desfasado de la version.
 
 No necesitan Inno Setup: leen el script como texto. Lo que de verdad se instala se prueba
@@ -13,7 +13,7 @@ from core.config import APP_VERSION
 from despliegue import construir_instalador as ci
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-RUTA_ISS = os.path.join(RAIZ, "despliegue", "instalador", "caja-clara.iss")
+RUTA_ISS = os.path.join(RAIZ, "despliegue", "instalador", "caja-tersa.iss")
 
 # Los datos del local: ninguna instruccion del instalador puede borrarlos ni pisarlos.
 DATOS = ["pos.db", "pos.db-wal", "pos.db-shm", "respaldos", "registros", ".secreto",
@@ -56,7 +56,7 @@ def test_la_version_no_esta_escrita_a_mano():
     texto = _sin_comentarios(_iss())
     assert "#ifndef VersionApp" in texto
     assert re.search(r"^AppVersion=\{#VersionApp\}\s*$", texto, re.M)
-    assert "OutputBaseFilename=CajaClara-Instalar-v{#VersionApp}" in texto
+    assert "OutputBaseFilename=CajaTersa-Instalar-v{#VersionApp}" in texto
     assert APP_VERSION not in texto
     assert not re.search(r"^AppVersion=\d", texto, re.M)
 
@@ -98,8 +98,17 @@ def test_los_accesos_directos_y_el_inicio_opcional():
     assert "{autodesktop}" in iconos and "{autoprograms}" in iconos
     inicio = [l for l in iconos.splitlines() if "{userstartup}" in l]
     assert len(inicio) == 1 and "Tasks: inicio" in inicio[0]
-    assert "caja-clara.ico" in iconos
-    assert os.path.isfile(os.path.join(RAIZ, "despliegue", "icono", "caja-clara.ico"))
+    assert "caja-tersa.ico" in iconos and "CajaTersa.exe" in iconos
+    assert os.path.isfile(os.path.join(RAIZ, "despliegue", "icono", "caja-tersa.ico"))
+
+
+def test_el_instalador_dice_caja_tersa_y_publica_tersa():
+    setup = _secciones(_iss())["setup"]
+    assert re.search(r"^AppName=Caja Tersa\s*$", setup, re.M)
+    assert re.search(r"^AppPublisher=Tersa\s*$", setup, re.M)
+    assert re.search(r"^DefaultDirName=\{autopf\}\\CajaTersa\s*$", setup, re.M)
+    assert "UsePreviousAppDir=yes" in setup      # una caja de antes se actualiza donde está
+    assert "Caja Clara" not in _sin_comentarios(_iss())
 
 
 def test_ordenes_de_iscc_pasan_la_version_y_la_carpeta():
@@ -120,7 +129,7 @@ def test_sin_la_carpeta_construida_falla_con_un_mensaje_claro(monkeypatch, tmp_p
 
 
 def test_sin_inno_setup_falla_con_un_mensaje_claro(monkeypatch, tmp_path):
-    (tmp_path / "CajaClara.exe").write_bytes(b"")
+    (tmp_path / "CajaTersa.exe").write_bytes(b"")
     monkeypatch.setattr(ci, "ORIGEN", str(tmp_path))
     monkeypatch.setattr(ci, "encontrar_iscc", lambda: None)
     try:

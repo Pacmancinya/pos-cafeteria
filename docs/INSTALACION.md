@@ -7,7 +7,7 @@
 
 ## Lo que recibes
 
-Un archivo **`CajaClara-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación completa,
+Un archivo **`CajaTersa-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación completa,
 **no hay que instalar Python ni nada más**.
 
 ## Lo que necesitas
@@ -20,35 +20,36 @@ Un archivo **`CajaClara-Instalar-vX.Y.exe`**: el instalador. Trae la aplicación
 
 ## La forma fácil: el instalador
 
-1. **Haz doble clic** en `CajaClara-Instalar-vX.Y.exe`.
+1. **Haz doble clic** en `CajaTersa-Instalar-vX.Y.exe`.
 2. Si sale una pantalla azul que dice **«Windows protegió su PC»**: toca **Más información** y
    después **Ejecutar de todas formas**. Pasa una sola vez, es normal (ver el paso 4 más abajo).
 3. Elige el idioma si te lo pide y toca **Siguiente**. Hay una casilla, apagada, que dice
-   **«Abrir Caja Clara al prender el computador»**: márcala solo si quieres que la caja se
+   **«Abrir Caja Tersa al prender el computador»**: márcala solo si quieres que la caja se
    abra sola cada mañana.
-4. Toca **Instalar** y, al terminar, **Finalizar** (deja marcado «Abrir Caja Clara»).
+4. Toca **Instalar** y, al terminar, **Finalizar** (deja marcado «Abrir Caja Tersa»).
 
-Listo: queda un icono **Caja Clara** en el Escritorio y en el menú Inicio. Sigue en el
+Listo: queda un icono **Caja Tersa** en el Escritorio y en el menú Inicio. Sigue en el
 **paso 5** («Los datos del local y tu usuario»).
 
 - **Si ya estaba instalada, instalar de nuevo es actualizar**: ejecuta el instalador nuevo y
   listo. No se pierde nada: las ventas, los usuarios y los precios se quedan como estaban.
   Si la caja está abierta, el instalador te pide cerrarla primero.
-- **Para quitarla**: Configuración de Windows → **Aplicaciones** → **Caja Clara** → Desinstalar.
+- **Para quitarla**: Configuración de Windows → **Aplicaciones** → **Caja Tersa** → Desinstalar.
   Las ventas y los datos **no se borran**: quedan en la carpeta del programa, por si la
   vuelves a instalar.
 
-> Las cajas que ya se instalaron con el ZIP siguen como están; no hay que cambiarlas. Se
-> siguen actualizando solas desde el botón de la versión.
+> Las cajas que ya se instalaron (con el ZIP, o cuando se llamaba Caja Clara o Kofe) siguen
+> como están; no hay que cambiarlas. Se siguen actualizando solas desde el botón de la
+> versión, y conservan su ejecutable y su icono de antes.
 
 ## La otra forma: el ZIP
 
-Si ya tienes **`CajaClara-instalar-vX.Y.zip`** (unos 29 MB), también sirve: se extrae y se
+Si ya tienes **`CajaTersa-instalar-vX.Y.zip`** (unos 29 MB), también sirve: se extrae y se
 abre. Estos son los pasos.
 
 ### 1. Desbloquea el ZIP ANTES de extraerlo
 
-Clic derecho sobre `CajaClara-instalar-vX.Y.zip` → **Propiedades** → abajo de todo, si aparece una
+Clic derecho sobre `CajaTersa-instalar-vX.Y.zip` → **Propiedades** → abajo de todo, si aparece una
 casilla que dice **Desbloquear**, márcala y dale **Aceptar**.
 
 > **Por qué.** Windows le pone una marca de "bajado de internet" a todo lo que sale de un
@@ -62,19 +63,19 @@ casilla que dice **Desbloquear**, márcala y dale **Aceptar**.
 
 ### 2. Descomprime el ZIP donde quieras dejarlo
 
-Clic derecho sobre `CajaClara-instalar-vX.Y.zip` → **Extraer todo**. Recomendado: dejar la carpeta
-en el **Escritorio** o en `C:\CajaClara`.
+Clic derecho sobre `CajaTersa-instalar-vX.Y.zip` → **Extraer todo**. Recomendado: dejar la carpeta
+en el **Escritorio** o en `C:\CajaTersa`.
 
 > ⚠️ **No lo dejes dentro del ZIP.** Si haces doble clic sin extraer, Windows lo abre en
 > una carpeta temporal y se pierde todo cada vez, ventas incluidas.
 
-### 3. Doble clic en `CajaClara.exe`
+### 3. Doble clic en `CajaTersa.exe`
 
-Se abre la aplicación, con su ventana y su icono de tacita. La primera vez demora unos
+Se abre la aplicación, con su ventana y su icono de gota. La primera vez demora unos
 segundos más porque prepara la base de datos.
 
 > Dentro de la carpeta hay otras cosas (`_internal`, `apps`, `core`…). **No se tocan.**
-> Lo único que se abre es `CajaClara.exe` (en las cajas instaladas antes de la 2.31 se llama `Kofe.exe`).
+> Lo único que se abre es `CajaTersa.exe` (en las cajas instaladas antes se llama `CajaClara.exe`, o `Kofe.exe` si son de antes de la 2.31).
 
 ### 4. Si Windows muestra un aviso azul (con el instalador o con el ZIP)
 
@@ -125,7 +126,7 @@ Guárdala.
 ### Que se abra con un clic desde el Escritorio
 
 **No hay que hacer nada.** La primera vez que arranca, la caja deja sola un icono
-«Caja Clara» en el escritorio (en las cajas instaladas antes de la 2.31, «Kofe - Punto de venta»), apuntando al lanzador que de verdad sirve en
+«Caja Tersa» en el escritorio (en las cajas instaladas antes conserva su nombre: «Caja Clara», o «Kofe - Punto de venta» si son de antes de la 2.31), apuntando al lanzador que de verdad sirve en
 ese equipo. Si el dueño lo borra, no se vuelve a crear: se entiende que no lo quiere.
 
 No lo crees a mano con **Enviar a → Escritorio**: eso apunta al archivo sobre el que
@@ -141,7 +142,7 @@ Con el instalador es una casilla al instalar (si no la marcaste, vuelve a ejecut
 instalador y márcala). A mano:
 
 1. Tecla **Windows + R**, escribe `shell:startup` y Enter.
-2. Se abre una carpeta. Copia ahí el icono «Caja Clara» del escritorio
+2. Se abre una carpeta. Copia ahí el icono de la caja del escritorio
    (cópialo, no lo arrastres: arrastrar lo MUEVE y desaparece del escritorio).
 
 ### Que no se apague la pantalla
@@ -181,12 +182,12 @@ en unos segundos.
 
 Las actualizaciones pesan unos **120 KB**, no 29 MB: solo viaja el programa, no el motor.
 
-**Si prefieres a mano:** ejecuta el instalador de la versión nueva (`CajaClara-Instalar-vX.Y.exe`)
+**Si prefieres a mano:** ejecuta el instalador de la versión nueva (`CajaTersa-Instalar-vX.Y.exe`)
 encima, o bien:
 
 1. Cierra la aplicación.
 2. Descomprime el ZIP de actualización **encima** de la carpeta, aceptando reemplazar.
-3. Vuelve a abrir `CajaClara.exe` (o `Kofe.exe`).
+3. Vuelve a abrir `CajaTersa.exe` (o `CajaClara.exe` / `Kofe.exe`, el que tenga la carpeta).
 
 **No se pierden las ventas, los usuarios ni los precios**: `pos.db` no viene en el ZIP, así
 que tu base se queda como está. Y si la versión nueva agrega campos, el programa se los
@@ -217,14 +218,15 @@ agrega solo a la base al arrancar.
 ## Para el que arma el instalador
 
 Después de `python -m despliegue.construir_exe`, corre `python -m despliegue.construir_instalador`:
-deja `despliegue/CajaClara-Instalar-vX.Y.exe` junto a los zips. Necesita Inno Setup 6, que es
+deja `despliegue/CajaTersa-Instalar-vX.Y.exe` junto a los zips. Necesita Inno Setup 6, que es
 gratis (`winget install --id JRSoftware.InnoSetup -e`). La versión sale de `core/config.py`.
-El script es `despliegue/instalador/caja-clara.iss`. Instala por usuario en
-`%LOCALAPPDATA%\Programs\CajaClara` (el actualizador escribe ahí) y jamás borra `pos.db`,
+El script es `despliegue/instalador/caja-tersa.iss`. Instala por usuario en
+`%LOCALAPPDATA%\Programs\CajaTersa` (el actualizador escribe ahí; si el computador ya tenía
+una instalación de antes, el instalador la reutiliza en su carpeta vieja) y jamás borra `pos.db`,
 `respaldos\`, `registros\`, `.secreto` ni `datos-ventana\`, ni al reinstalar ni al desinstalar.
 
 ## Para el que instala: la versión sin `.exe`
 
 La carpeta también trae `INICIAR-POS.bat`, que hace lo mismo pero usando el Python del
 computador (y lo instala si falta). Sirve para probar cambios en el código sin volver a
-construir el ejecutable. Para el local no hace falta: `CajaClara.exe` es más simple.
+construir el ejecutable. Para el local no hace falta: `CajaTersa.exe` es más simple.

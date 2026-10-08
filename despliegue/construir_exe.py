@@ -1,11 +1,11 @@
-"""Arma CajaClara.exe, el paquete que se le entrega al local y el paquete de demostración.
+"""Arma CajaTersa.exe, el paquete que se le entrega al local y el paquete de demostración.
 
     .venv/Scripts/python -m despliegue.construir_exe
 
-Hasta la 2.30 el producto se llamó Kofe y el ejecutable, Kofe.exe. Las cajas instaladas
-antes siguen con Kofe.exe para siempre (una actualización no cambia el exe); desde la 2.31
-las instalaciones nuevas traen CajaClara.exe. El guion de entrada sigue siendo `Kofe.py`:
-es un nombre interno y no lo ve nadie.
+Hasta la 2.30 el producto se llamó Kofe y el ejecutable, Kofe.exe; la 2.31 trajo CajaClara.exe.
+Las cajas instaladas antes siguen con Kofe.exe o CajaClara.exe para siempre (una
+actualización no cambia el exe); las instalaciones nuevas traen CajaTersa.exe. El guion de
+entrada sigue siendo `Kofe.py`: es un nombre interno y no lo ve nadie.
 
 ## La decisión de fondo
 
@@ -31,13 +31,13 @@ nada, y el .exe tomó el cambio.
 
 ## Lo que sale
 
-    despliegue/CajaClara/                 ← la carpeta que se le pasa al local (~45 MB)
-      CajaClara.exe                       ← doble clic acá
+    despliegue/CajaTersa/                 ← la carpeta que se le pasa al local (~45 MB)
+      CajaTersa.exe                       ← doble clic acá
       _internal/                          ← Python y las librerías. No se toca.
       apps/ core/ tools/                  ← el programa. Esto es lo que se actualiza.
       docs/  LEEME.md
-    despliegue/CajaClara-instalar-vX.Y.zip   ← para un local de verdad
-    despliegue/CajaClara-demo-vX.Y.zip       ← la misma carpeta + MODO-DEMO.txt: se abre
+    despliegue/CajaTersa-instalar-vX.Y.zip   ← para un local de verdad
+    despliegue/CajaTersa-demo-vX.Y.zip       ← la misma carpeta + MODO-DEMO.txt: se abre
                                                 con carta, usuarios y ventas de ejemplo
 """
 from __future__ import annotations
@@ -51,12 +51,12 @@ from datetime import datetime
 
 from core.config import APP_VERSION
 
-NOMBRE = "CajaClara"
+NOMBRE = "CajaTersa"
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SALIDA = os.path.join(RAIZ, "despliegue")
 TRABAJO = os.path.join(SALIDA, "_construccion")
 DESTINO = os.path.join(SALIDA, NOMBRE)
-ICONO = os.path.join(SALIDA, "icono", "caja-clara.ico")
+ICONO = os.path.join(SALIDA, "icono", "caja-tersa.ico")
 # Lo que convierte una instalación en demostración (ver tools/demo/inicio.py).
 DEMO = os.path.join(SALIDA, "demo")
 ARCHIVOS_DEMO = ["MODO-DEMO.txt", "REINICIAR-DEMO.bat", "LEEME-DEMO.txt"]
@@ -137,7 +137,7 @@ def copiar_el_programa() -> int:
     if os.path.exists(ICONO):
         d = os.path.join(DESTINO, "despliegue", "icono")
         os.makedirs(d, exist_ok=True)
-        shutil.copy2(ICONO, os.path.join(d, "caja-clara.ico"))
+        shutil.copy2(ICONO, os.path.join(d, "caja-tersa.ico"))
         copiados += 1
     return copiados
 
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    print("\n  Caja Clara · construyendo la aplicación\n")
+    print("\n  Caja Tersa · construyendo la aplicación\n")
     if os.path.exists(TRABAJO):
         shutil.rmtree(TRABAJO, ignore_errors=True)
     if os.path.exists(DESTINO):
@@ -187,5 +187,5 @@ if __name__ == "__main__":
     for z in (zip_final, zip_demo):
         print(f"  {z}  ·  {os.path.getsize(z) / (1024*1024):.0f} MB")
     print(f"  Armado el {datetime.now():%d-%m-%Y %H:%M}\n")
-    print("  Se entrega el ZIP. Se extrae y se abre CajaClara.exe. No necesita")
+    print("  Se entrega el ZIP. Se extrae y se abre CajaTersa.exe. No necesita")
     print("  instalar Python ni nada más. El de demo NUNCA va a un local de verdad.\n")

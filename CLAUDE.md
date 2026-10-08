@@ -1,4 +1,4 @@
-# CLAUDE.md — Caja Clara, el punto de venta
+# CLAUDE.md — Caja Tersa, el punto de venta
 
 > **Dónde se trabaja:** este repositorio, `Pacmancinya/caja-clara` (privado), es el ÚNICO
 > donde se desarrolla: cada cambio entra por rama y pull request hacia main.
@@ -15,14 +15,17 @@
 Guía para cualquier sesión de Claude que abra este repositorio. Léela entera antes de
 tocar algo: acá está lo que no sale en las pruebas y que ya rompió cajas de verdad.
 
-> **Nombre.** Desde la 2.31 el producto se llama **Caja Clara** (hasta la 2.30, Kofe). Quedan
-> con el nombre viejo, a propósito, los identificadores de los que dependen las cajas
-> instaladas: `Kofe.py`, `Kofe.exe` en las cajas instaladas antes de la 2.31 (las nuevas traen
-> `CajaClara.exe`), `%USERPROFILE%\.kofe`, `Kofe-respaldos`, la impresora «Kofe Tickets», el
-> mutex y el nombre del repositorio. **«Kofe» también es el nombre de un local real** (el
-> café piloto): en los televisores y en el nombre del local no se toca. El repositorio
-> todavía se llama pos-cafeteria: cambiar su dirección se planifica (ver «Cómo llega una
-> versión»).
+> **Nombre.** Desde la próxima versión el producto se llama **Caja Tersa**, de la empresa
+> Tersa (hasta la 2.31 se llamó Caja Clara; hasta la 2.30, Kofe). Quedan con el nombre viejo,
+> a propósito, los identificadores de los que dependen las cajas instaladas: `Kofe.py`,
+> `Kofe.exe` en las cajas instaladas antes de la 2.31 y `CajaClara.exe` en las de la 2.31 (las
+> instalaciones nuevas traen `CajaTersa.exe`; todo lo que reconoce un exe tiene que reconocer
+> los tres), `caja-clara.ico` y `kofe.ico`, `%USERPROFILE%\.kofe`, `Kofe-respaldos`, la
+> impresora «Kofe Tickets», el mutex `Kofe-punto-de-venta-8090`, el AppId del instalador, la
+> versión 2.31 en `VERSIONES.md` y los nombres de los repositorios (`caja-clara`,
+> `pos-cafeteria`). **«Kofe» también es el nombre de un local real** (el café piloto): en los
+> televisores y en el nombre del local no se toca. El repositorio todavía se llama
+> pos-cafeteria: cambiar su dirección se planifica (ver «Cómo llega una versión»).
 
 ---
 
@@ -35,7 +38,7 @@ actualiza sola desde este repositorio, que es **público** a propósito (las caj
 `version.json` sin clave; lo que protege las actualizaciones es la firma, no el secreto).
 
 Corre en el computador del local: un servidor FastAPI en `127.0.0.1:8090` y una ventana
-propia (`CajaClara.exe`, o `Kofe.exe` en las cajas de antes; pywebview). Los datos del local viven en su `pos.db` (SQLite) y no
+propia (`CajaTersa.exe`, o `CajaClara.exe` / `Kofe.exe` en las cajas de antes; pywebview). Los datos del local viven en su `pos.db` (SQLite) y no
 salen de ahí.
 
 ---
@@ -75,7 +78,7 @@ O doble clic en `INICIAR-POS.bat`. Pruebas, desde la raíz:
 ```
 
 Con las carpetas, no `pytest` pelado: en un equipo donde se armó el exe, pytest entra a
-`despliegue/CajaClara/_internal` y se cae recogiendo las pruebas de las librerías empaquetadas.
+`despliegue/CajaTersa/_internal` y se cae recogiendo las pruebas de las librerías empaquetadas.
 `conftest.py` fija una base de prueba **antes** de importar nada: las pruebas nunca tocan
 `pos.db`. Algunas pruebas corren el JavaScript de la pantalla con Node (`*.cjs` en
 `apps/pos/tests`); sin Node se saltan.
@@ -108,7 +111,7 @@ apps/pos/firma.py, vuelta.py   firma y «volver a la versión anterior» (solo b
 apps/pos/balanza.py     cobro de etiquetas de balanza
 apps/pos/impresion_windows.py  impresión por el driver de Windows y ESC/POS en crudo
 tools/                  demo, respaldo, restaurar, firmar_version, auditar pantallas, balanza
-despliegue/             construir CajaClara.exe (construir_exe.py), los zips y la demo
+despliegue/             construir CajaTersa.exe (construir_exe.py), los zips y la demo
 docs/                   contrato, instalación, publicar actualizaciones, SII
 ```
 
@@ -151,7 +154,7 @@ Ninguna de estas sale en las pruebas.
 PyInstaller vio en los imports de `Kofe.py`; el código de la caja vive afuera y nunca se
 analizó. Un import nuevo de la biblioteca estándar en `apps/`, `core/` o `tools/` que no
 esté en el exe hace caer la caja justo después de actualizarse. Antes de publicar, revisar
-con `.venv/Scripts/pyi-archive_viewer.exe -l -r -b despliegue/CajaClara/CajaClara.exe` (más los
+con `.venv/Scripts/pyi-archive_viewer.exe -l -r -b despliegue/CajaTersa/CajaTersa.exe` (más los
 `_internal/*.pyd` y `sys.builtin_module_names`: `math`, `time` y `sys` vienen incluidos).
 
 **Caché del navegador.** `main.py` reemplaza `__VERSION__` por el número de versión en los
@@ -206,7 +209,7 @@ con `sqlite3.Connection.backup`, nunca copiando el archivo; en un `.bat` va
 
 ---
 
-## Caja Clara y Gesfact
+## Caja Tersa y Gesfact
 
 Gesfact es otro producto, de otra empresa: usa las cámaras del local para ver cada venta
 y la cruza con las boletas. **En este repositorio no hay ninguna conexión implementada con
@@ -236,6 +239,8 @@ ahí; el conector completo está pendiente.
   «NO ES BOLETA». Primera etapa: con Lioren, la caja timbra y Lioren firma y envía
   (`docs/BOLETA-ETAPA1-LIOREN.md`). Segunda etapa: software propio, diseñado en
   `docs/BOLETA-ELECTRONICA.md`. Ver también `docs/SII.md`.
-- **El cambio de nombre** a Caja Clara en el programa, el instalador, el icono y los
-  documentos, sin cortar las actualizaciones.
+- **Terminar el cambio de nombre** a Caja Tersa: el programa, el instalador, el icono y los
+  documentos de este repositorio ya lo dicen; falta publicarlo en una versión (con su entrada
+  en `VERSIONES.md` y `APP_NOMBRE`), la web y lo que vive fuera del repositorio, sin cortar
+  las actualizaciones.
 - **El repositorio a privado o a una organización**, siguiendo el procedimiento de arriba.
