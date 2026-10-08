@@ -235,7 +235,7 @@ async function cargarCarta() {
   if (!catActiva || !conProductos.find((c) => c.id === catActiva)) {
     catActiva = conProductos.length ? conProductos[0].id : null;
   }
-  $("#rail").innerHTML = conProductos.map((c) => {
+  $("#railLista").innerHTML = conProductos.map((c) => {
     const n = c.productos.filter((p) => p.activo).length;
     return `<button class="rail__cat${c.id === catActiva && !busqueda ? " is-on" : ""}"
               data-cat="${c.id}" style="--c:${colorDeCat(c.id)}">
@@ -380,21 +380,29 @@ function lineasParaVenta() {
    tiene leche y café, y ése se descuenta, no se topea (`stock` viene nulo). */
 const olvidarAvisos = () => {};
 
-function agregar(id) {
+function agregar(id, cuantos = 1) {
   const cat = CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
   const p = cat && cat.productos.find((x) => x.id === id);
   if (!p) return;
-  sumarAlPedido(p);
+  sumarAlPedido(p, cuantos);
 }
 
-function sumarAlPedido(p) {
+/* `cuantos` viene del teclado de multiplicar («2 ✱» y tocar el producto). Un
+   producto de la carta no abre ningún diálogo al tocarlo (no hay variantes ni
+   agregados): entra directo, así que la cantidad se aplica acá y el precio lo
+   sigue poniendo la carta. */
+function sumarAlPedido(p, cuantos = 1) {
+  // El multiplicador NO se aplica a la balanza: cada etiqueta es un ticket único
+  // con su peso y su precio (agregarBalanza rechaza repetirlo). Multiplicar uno
+  // cobraría dos veces el mismo jamón; el multiplicador se descarta.
   if (p.balanza) return agregarBalanza(p);
   const deLaCarta = productoDeLaCarta(p.id) || p;
   if (!deLaCarta.precio && deLaCarta.precio_kilo > 0) {
     return avisar(`${deLaCarta.nombre} se vende por peso: escanea la etiqueta de la balanza.`, true);
   }
+  const n = Math.max(1, Math.floor(Number(cuantos)) || 1);
   const ya = carrito.find((l) => l.id === p.id);
-  const pide = (ya ? ya.cantidad : 0) + 1;
+  const pide = (ya ? ya.cantidad : 0) + n;
 
   // El saldo lo manda la carta (p.stock), que se refresca después de cada venta.
   // `null` = no lleva cuenta como tal cual (o es de receta): no se topea.
@@ -407,9 +415,9 @@ function sumarAlPedido(p) {
     return;
   }
 
-  if (ya) ya.cantidad += 1;
+  if (ya) ya.cantidad += n;
   else carrito.push({ id: p.id, nombre: p.nombre, precio: p.precio,
-                      cantidad: 1, stock: stock });
+                      cantidad: n, stock: stock });
   pintarCarrito();
 }
 
@@ -4722,6 +4730,19 @@ async function alternarPantallaCompleta(salir = false) {
   }
 }
 
+/* La barra de arriba se puede esconder mientras se vende. Se recuerda por caja;
+   si el navegador no deja leer o guardar, la barra se ve (nunca queda escondida
+   sin forma de volver: la franja con la pestañita siempre aparece). El alto que
+   libera lo aprovecha la vista sola: es flex:1 dentro del body. */
+function barraGuardada() {
+  try { return localStorage.getItem("pos.barra_oculta") === "1"; } catch (e) { return false; }
+}
+function ponerBarra(oculta) {
+  document.body.classList.toggle("barra-oculta", oculta);
+  $("#barraFranja").hidden = !oculta;
+  try { localStorage.setItem("pos.barra_oculta", oculta ? "1" : "0"); } catch (e) {}
+}
+
 window.addEventListener("pywebviewready", sincronizarPantallaCompleta);
 document.addEventListener("fullscreenchange", pintarPantallaCompleta);
 
@@ -4757,7 +4778,12 @@ document.addEventListener("click", (e) => {
     $("#buscar").value = "";
     return buscar("");
   }
-  if (cerca("data-prod")) return agregar(+cerca("data-prod").dataset.prod);
+  if (cerca("data-prod")) {
+    // tomar() devuelve lo armado con ✱ (o 1) y deja el visor limpio, haya entrado
+    // el producto o no.
+    const cuantos = window.Teclado ? Teclado.multiplicador.tomar() : 1;
+    return agregar(+cerca("data-prod").dataset.prod, cuantos);
+  }
   if (cerca("data-mas")) return cambiarCantidad(+cerca("data-mas").dataset.mas, 1);
   if (cerca("data-menos")) return cambiarCantidad(+cerca("data-menos").dataset.menos, -1);
   if (cerca("data-quitar-linea")) return quitarLineaDelPedido(+cerca("data-quitar-linea").dataset.quitarLinea);
@@ -4837,6 +4863,8 @@ document.addEventListener("click", (e) => {
     return filtrarEditorCarta();
   }
   if (t.closest("#btnPantallaCompleta")) return alternarPantallaCompleta();
+  if (t.closest("#btnEsconderBarra")) return ponerBarra(true);
+  if (t.closest("#btnMostrarBarra")) return ponerBarra(false);
   if (t.id === "btnNuevaCat") return nuevaCategoria();
   if (t.id === "btnHoy") { $("#fechaDia").value = hoyISO(); turnoElegido = null; return cargarDia(); }
   if (t.id === "btnExportar") {
@@ -5127,6 +5155,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 (async function iniciar() {
+  ponerBarra(barraGuardada());
   sincronizarPantallaCompleta();
   reloj();
   setInterval(reloj, 20000);

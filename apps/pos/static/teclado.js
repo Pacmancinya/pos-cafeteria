@@ -7,8 +7,25 @@
 
    POR QUÉ existe: en la pantalla táctil, cualquier input numérico hace
    saltar el teclado de Windows, que ocupa la mitad de abajo — o sea, justo
-   donde está "Confirmar venta". Este teclado lo reemplaza y, además, sabe
-   subir el diálogo para no taparlo.
+   donde está "Confirmar venta". Este teclado lo reemplaza.
+
+   Son DOS teclados con la misma distribución de teléfono:
+
+       [1][2][3]
+       [4][5][6]
+       [7][8][9]
+       [✱][0][⌫]
+
+   · El PANEL de los campos: flota al costado izquierdo, centrado en alto, y
+     se abre solo al tocar un campo numérico. No tapa el diálogo (que se corre
+     a la derecha, ver .capa.con-teclado) ni el botón de confirmar. Sin botón
+     "Listo": el valor ya se escribe en el campo en vivo. Acá ✱ vale "000" en
+     el modo monto y está apagada en los demás.
+   · El teclado FIJO de la pantalla de venta (#mult, bajo las categorías):
+     sirve para multiplicar. Se escribe un número, se toca ✱ y luego un
+     producto: entran esa cantidad de una vez. Ver `multiplicador` más abajo.
+
+   En los dos, ⌫ borra el último dígito y, mantenida ~0,6 s, borra todo.
 
    POR QUÉ se engancha solo: los ocho campos numéricos del POS ya declaran
    inputmode="numeric" y TODOS se leen con soloNumeros(), que borra los
@@ -40,15 +57,73 @@
     },
   };
 
-  // El orden de la grilla. "ok" ocupa dos filas y el 0 se estira para llenar.
-  const TECLAS = ["7","8","9","borrar","4","5","6","limpiar","1","2","3","ok","0","extra"];
-  const ROTULO = { borrar: "⌫", limpiar: "C", ok: "Listo" };
+  // El orden de la grilla de teléfono. «extra» es ✱ (000 en los montos).
+  const TECLAS = ["1","2","3","4","5","6","7","8","9","extra","0","borrar"];
   const SELECTOR = 'input[data-teclado], input[inputmode="numeric"]';
+  const MS_BORRAR_TODO = 600;                  // ⌫ mantenida: borra todo
 
   let caja = null, eco = null, titulo = null, estado = null, volcando = false;
 
-  /* ---------------- armado ---------------- */
+  /* ---------------- la grilla, común a los dos teclados ---------------- */
+  // Qué se dibuja en cada tecla. `extra` cambia según quién la pida: en el panel
+  // de un campo es «000» (solo montos) y en el de multiplicar, «✱».
+  function teclasDe(modo) {
+    const cfg = modo && MODOS[modo];
+    return TECLAS.map((k) => {
+      if (k === "borrar") return { tecla: k, rotulo: "⌫", etiqueta: "Borrar", acc: true };
+      if (k === "extra") {
+        if (!modo) return { tecla: k, rotulo: "✱", etiqueta: "Multiplicar", acc: true };
+        return cfg && cfg.extra
+          ? { tecla: k, rotulo: cfg.extra, etiqueta: "Tres ceros", acc: true }
+          : { tecla: k, rotulo: "✱", etiqueta: "No disponible", acc: true, apagada: true };
+      }
+      return { tecla: k, rotulo: k };
+    });
+  }
+
+  function grillaHTML(modo) {
+    return teclasDe(modo).map((t) =>
+      '<button type="button" class="teclado__t' + (t.acc ? " teclado__t--acc" : "") +
+      '" data-tecla="' + t.tecla + '" tabindex="-1"' +
+      (t.etiqueta ? ' aria-label="' + t.etiqueta + '"' : "") +
+      (t.apagada ? " disabled" : "") + ">" + t.rotulo + "</button>"
+    ).join("");
+  }
+
+  // Toque corto = `corto(tecla)`; ⌫ mantenida = `largo()`. pointerdown con
+  // preventDefault: si el foco se va del campo a la tecla, el campo pierde el
+  // caret y pintarArqueo() le pisa el valor de vuelta (mira el guard
+  // `if (document.activeElement !== campo)` de app.js).
+  function enlazar(contenedor, corto, largo) {
+    let reloj = null, fueLargo = false;
+    const soltar = () => { clearTimeout(reloj); reloj = null; };
+    contenedor.addEventListener("pointerdown", (e) => {
+      const t = e.target.closest(".teclado__t");
+      if (!t) return;
+      e.preventDefault();
+      fueLargo = false;
+      if (t.dataset.tecla === "borrar") {
+        soltar();
+        reloj = setTimeout(() => { fueLargo = true; largo(); }, MS_BORRAR_TODO);
+      }
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((ev) =>
+      contenedor.addEventListener(ev, soltar));
+    // Mantener apretado no debe abrir el menú contextual del dedo.
+    contenedor.addEventListener("contextmenu", (e) => {
+      if (e.target.closest(".teclado__t")) e.preventDefault();
+    });
+    contenedor.addEventListener("click", (e) => {
+      const t = e.target.closest(".teclado__t");
+      if (!t || t.disabled) return;
+      if (fueLargo) { fueLargo = false; return; }   // ya borró todo al mantener
+      corto(t.dataset.tecla);
+    });
+  }
+
+  /* ---------------- el panel de los campos ---------------- */
   function construir() {
+    if (caja) return;
     caja = document.createElement("div");
     caja.className = "teclado";
     caja.id = "teclado";
@@ -66,31 +141,12 @@
     document.body.appendChild(caja);
     titulo = caja.querySelector(".teclado__tit");
     eco    = caja.querySelector(".teclado__eco");
-
-    // pointerdown + preventDefault: si el foco se va del campo a la tecla, el
-    // campo pierde el caret y pintarArqueo() le pisa el valor de vuelta (mira
-    // el guard `if (document.activeElement !== campo)` de app.js).
-    caja.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".teclado__t")) e.preventDefault();
-    });
-    caja.addEventListener("click", (e) => {
-      const t = e.target.closest(".teclado__t");
-      if (t) pulsar(t.dataset.tecla);
-    });
+    enlazar(caja, pulsar, () => pulsar("limpiar"));
+    construirMult();
   }
 
   function pintarTeclas(modo) {
-    const cfg = MODOS[modo];
-    caja.querySelector(".teclado__grilla").innerHTML = TECLAS.map((k) => {
-      if (k === "extra" && !cfg.extra) return "";        // sin extra, el 0 ocupa 3
-      const cls = ["teclado__t"];
-      if (k === "ok") cls.push("teclado__t--ok");
-      else if (k === "borrar" || k === "limpiar") cls.push("teclado__t--acc");
-      if (k === "0") cls.push(cfg.extra ? "teclado__t--ancho" : "teclado__t--triple");
-      const txt = k === "extra" ? cfg.extra : (ROTULO[k] !== undefined ? ROTULO[k] : k);
-      return '<button type="button" class="' + cls.join(" ") +
-             '" data-tecla="' + k + '" tabindex="-1">' + txt + "</button>";
-    }).join("");
+    caja.querySelector(".teclado__grilla").innerHTML = grillaHTML(modo);
   }
 
   /* ---------------- teclas ---------------- */
@@ -101,10 +157,10 @@
     if (!estado.campo.isConnected) return cerrar();
     const cfg = MODOS[estado.modo];
 
-    if (k === "ok") return confirmar();
     if (k === "limpiar") estado.buf = "";
     else if (k === "borrar") estado.buf = estado.buf.slice(0, -1);
     else {
+      if (k === "extra" && !cfg.extra) return;            // ✱ solo vale en montos
       const d = k === "extra" ? cfg.extra : k;
       if (!estado.buf && d === "000") return;             // no se empieza en cero
       if ((estado.buf + d).length > cfg.largo) return;
@@ -123,6 +179,8 @@
     volcando = false;
   }
 
+  // Ya no hay botón «Listo»: solo confirman el PIN al juntar sus dígitos y el
+  // Enter del teclado físico.
   function confirmar() {
     const fn = estado.op.alConfirmar, buf = estado.buf, campo = estado.campo;
     cerrar();
@@ -160,35 +218,99 @@
     pintarTeclas(modo);
     caja.hidden = false;
 
+    // El panel flota a la izquierda y no tapa nada del centro ni de abajo: lo
+    // único que hace falta es correr los diálogos que sí quedarían debajo de él
+    // (en 1024 px de ancho el cobro mide casi todo; en 1366 no hace falta y el
+    // diálogo no se mueve). Ya no hay que subirlos ni reservar alto: el viejo
+    // --alto-teclado y acomodar() sobraron.
+    clearTimeout(soltarCapas);
     if (!centrado) {
-      document.documentElement.style.setProperty("--alto-teclado", caja.offsetHeight + "px");
-      document.querySelectorAll(".capa.is-on").forEach((c) => c.classList.add("con-teclado"));
-      acomodar();
+      const borde = caja.getBoundingClientRect().right + 12;
+      document.querySelectorAll(".capa.is-on").forEach((c) => {
+        const d = c.querySelector(".dialogo");
+        if (d && d.getBoundingClientRect().left < borde) c.classList.add("con-teclado");
+      });
     }
   }
 
-  // Si el campo quedó debajo del teclado, subimos su contenedor con scroll.
-  function acomodar() {
-    const tope = window.innerHeight - caja.offsetHeight - 16;
-    const r = estado.campo.getBoundingClientRect();
-    if (r.bottom <= tope) return;
-    let n = estado.campo.parentElement;
-    while (n && n !== document.body) {
-      const ov = getComputedStyle(n).overflowY;
-      if ((ov === "auto" || ov === "scroll") && n.scrollHeight > n.clientHeight) {
-        n.scrollTop += (r.bottom - tope) + 20;
-        return;
-      }
-      n = n.parentElement;
-    }
-  }
-
+  // El diálogo vuelve a su lugar un instante DESPUÉS de cerrar el panel: tocar
+  // «Cancelar» cierra el panel en pointerdown, y si el diálogo se moviera ahí
+  // mismo el dedo soltaría sobre otro lugar y el toque se perdería.
+  let soltarCapas = null;
   function cerrar() {
     if (!caja || caja.hidden) return;
     caja.hidden = true;
-    document.documentElement.style.setProperty("--alto-teclado", "0px");
-    document.querySelectorAll(".con-teclado").forEach((c) => c.classList.remove("con-teclado"));
     estado = null;
+    clearTimeout(soltarCapas);
+    soltarCapas = setTimeout(() => {
+      if (estado) return;                      // se abrió otro campo mientras tanto
+      document.querySelectorAll(".con-teclado").forEach((c) => c.classList.remove("con-teclado"));
+    }, 350);
+  }
+
+  /* ---------------- el multiplicador de la pantalla de venta ----------------
+     «2 ✱» y tocar Latte → 2 Latte de una vez. Es estado puro (sin DOM) para que
+     la prueba lo corra en Node; app.js solo llama a tomar() al tocar un producto.
+
+       · dígitos: hasta 2 (1 a 99); un 0 inicial no entra.
+       · ✱: arma la cantidad escrita (si hay una). El visor muestra «2 ×».
+       · ⌫: borra el último dígito; con ✱ armado, primero lo desarma.
+         Mantenida, borra todo.
+       · un dígito nuevo con ✱ armado empieza otra cantidad.
+       · tomar(): lo que pide el producto tocado. Con ✱ armado devuelve la
+         cantidad; sin él, 1. Siempre deja el visor limpio, así que números sin
+         ✱ no multiplican nada.
+
+     NO se escucha el teclado físico: el lector de códigos de barra escribe
+     dígitos por ahí y se pisarían (ver escaner.js). */
+  const MAX_MULT = 2;
+  const multiplicador = {
+    buf: "", armado: false,
+    tecla(k) {
+      if (/^[0-9]$/.test(k)) {
+        if (this.armado) { this.buf = ""; this.armado = false; }
+        if (this.buf.length >= MAX_MULT) return pintarMult();
+        if (this.buf === "" && k === "0") return pintarMult();
+        this.buf += k;
+      } else if (k === "extra") {
+        if (this.buf && Number(this.buf) >= 1) this.armado = true;
+      } else if (k === "borrar") {
+        if (this.armado) this.armado = false;
+        else this.buf = this.buf.slice(0, -1);
+      } else if (k === "limpiar") {
+        this.buf = ""; this.armado = false;
+      }
+      pintarMult();
+    },
+    visor() { return this.armado ? this.buf + " ×" : this.buf; },
+    tomar() {
+      // Con el modo táctil apagado el multiplicador no existe: siempre 1.
+      const n = SE_USA && this.armado ? Number(this.buf) : 1;
+      this.buf = ""; this.armado = false;
+      pintarMult();
+      return n;
+    },
+  };
+
+  let multCaja = null, multVisor = null;
+  function construirMult() {
+    multCaja = document.getElementById("mult");
+    if (!multCaja) return;                   // la página del PIN no lo tiene
+    multCaja.innerHTML =
+      '<output class="mult__visor" aria-live="polite"></output>' +
+      '<div class="mult__grilla">' + grillaHTML(null) + "</div>";
+    multVisor = multCaja.querySelector(".mult__visor");
+    enlazar(multCaja, (k) => multiplicador.tecla(k), () => multiplicador.tecla("limpiar"));
+    multCaja.hidden = !SE_USA;
+    pintarMult();
+  }
+
+  function pintarMult() {
+    if (!multVisor) return;
+    const v = multiplicador.visor();
+    multVisor.textContent = v || "Cantidad";
+    multVisor.classList.toggle("mult__visor--vacio", !v);
+    multVisor.classList.toggle("mult__visor--armado", multiplicador.armado);
   }
 
   /* ---------------- ¿se usa este teclado? ----------------
@@ -202,6 +324,8 @@
   function encender(siONo) {
     SE_USA = !!siONo;
     if (!SE_USA && estado) cerrar();
+    if (!SE_USA) multiplicador.tecla("limpiar");
+    if (multCaja) multCaja.hidden = !SE_USA;
   }
 
   /* ---------------- enganche automático ---------------- */
@@ -243,14 +367,15 @@
     if (/^[0-9]$/.test(e.key)) { e.preventDefault(); return pulsar(e.key); }
     if (e.key === "Backspace") { e.preventDefault(); return pulsar("borrar"); }
     if (e.key === "Delete")    { e.preventDefault(); return pulsar("limpiar"); }
-    if (e.key === "Enter")     { e.preventDefault(); return pulsar("ok"); }
+    if (e.key === "Enter")     { e.preventDefault(); return confirmar(); }
   });
-  window.addEventListener("resize", () => { if (estado) acomodar(); });
 
   if (document.body) construir();
   else document.addEventListener("DOMContentLoaded", construir);
 
   window.Teclado = { abrir: abrir, cerrar: cerrar, encender: encender,
+                     multiplicador: multiplicador,
+                     teclasDe: teclasDe, grillaHTML: grillaHTML,
                      get seUsa() { return SE_USA; },
                      get abierto() { return !!estado; } };
 })();

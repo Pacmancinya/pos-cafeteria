@@ -22,8 +22,9 @@
   --toque:48px;        /* mínimo cómodo para un dedo */
   --toque-alto:56px;   /* lo que se toca todo el día */
   --toque-rey:64px;    /* cobrar, medios de pago, +/− del pedido */
-  --tecla:64px;        /* teclado numérico en pantalla */
-  --alto-teclado:0px;  /* lo sube teclado.js cuando se abre */
+  --tecla:56px;        /* teclado numérico en pantalla (panel de los campos) */
+  --tecla-mult:46px;   /* teclado fijo de la pantalla de venta */
+  --ancho-teclado:224px; /* ancho del panel que flota a la izquierda */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -87,7 +88,12 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- rail de categorías ---------- */
 .rail{
   width:186px;flex:none;background:var(--tarjeta);border-right:1px solid var(--linea);
-  padding:12px 10px;display:flex;flex-direction:column;gap:4px;overflow:auto;
+  padding:12px 10px;display:flex;flex-direction:column;gap:4px;overflow:hidden;
+}
+/* Las categorías se desplazan solas dentro de la columna: así el teclado de
+   multiplicar (.mult) que va debajo nunca se corta ni se va con el scroll. */
+.rail__lista{
+  flex:1;min-height:0;display:flex;flex-direction:column;gap:inherit;overflow:auto;
 }
 .rail__cat{
   display:flex;align-items:center;gap:10px;width:100%;
@@ -471,9 +477,11 @@ button{font-family:inherit;cursor:pointer}
    Esas pantallas usan las tres columnas apretadas del final de esta hoja. */
 @media (max-width:760px){
   .rail{
-    width:100%;flex-direction:row;overflow-x:auto;padding:9px 10px;
+    width:100%;flex-direction:row;padding:9px 10px;
     border-right:0;border-bottom:1px solid var(--linea);
   }
+  .rail__lista{flex-direction:row;overflow-x:auto;overflow-y:hidden}
+  .mult{display:none !important}      /* en un celular no hay lugar para multiplicar */
   .rail__cat{width:auto;flex:none;padding:9px 14px;white-space:nowrap}
   .rail__cat.is-on::before{display:none}
   .rail__n{display:none}
@@ -488,26 +496,29 @@ button{font-family:inherit;cursor:pointer}
 }
 
 /* ---------- teclado numérico en pantalla ---------- */
+/* Un panel chico que flota al costado IZQUIERDO, centrado en alto. Los diálogos
+   van centrados y el botón de confirmar abajo: ahí no estorba. */
 .teclado{
   /* Por encima de TODO, candado incluido (z-index 80): el teclado es la
      superficie con la que se escribe, si algo lo tapa no sirve de nada. */
-  position:fixed;left:0;right:0;bottom:0;z-index:90;
-  background:var(--tarjeta);border-top:1px solid var(--linea);
-  box-shadow:0 -12px 34px rgba(42,21,11,.16);
-  padding:6px 12px 14px;touch-action:manipulation;user-select:none;
+  position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:90;
+  width:var(--ancho-teclado);max-height:calc(100vh - 16px);overflow:auto;
+  background:var(--tarjeta);border:1px solid var(--linea);border-radius:18px;
+  box-shadow:0 18px 44px rgba(42,21,11,.28);
+  padding:8px 10px 12px;touch-action:manipulation;user-select:none;
 }
 .teclado[hidden]{display:none}
-.teclado__caja{max-width:560px;margin:0 auto}
-.teclado__cab{display:flex;align-items:center;gap:12px;height:48px;padding:0 4px}
+.teclado__cab{display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:2px 4px 8px}
 .teclado__tit{
-  font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .teclado__eco{
-  margin-left:auto;font-size:30px;font-weight:700;color:var(--tinta);
-  font-variant-numeric:tabular-nums;
+  font-size:30px;line-height:1.15;font-weight:700;color:var(--tinta);text-align:right;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-.teclado__grilla{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:var(--tecla);gap:8px}
+.teclado__grilla,.mult__grilla{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.teclado__grilla{grid-auto-rows:var(--tecla)}
 .teclado__t{
   border:1px solid var(--linea);background:var(--papel);color:var(--tinta);
   border-radius:13px;font:700 26px/1 var(--f);font-variant-numeric:tabular-nums;
@@ -516,27 +527,67 @@ button{font-family:inherit;cursor:pointer}
   transition:transform .05s ease,background .1s ease;
 }
 .teclado__t:active{transform:scale(.94);background:#EBDCC7}
-.teclado__t--acc{font-size:20px;font-weight:600;color:var(--suave)}
-.teclado__t--ok{grid-row:span 2;background:var(--verde);border-color:var(--verde);
-  color:#fff;font-size:20px}
-.teclado__t--ok:active{background:#166634}
-.teclado__t--ancho{grid-column:span 2}
-.teclado__t--triple{grid-column:span 3}
+.teclado__t--acc{font-size:22px;font-weight:600;color:var(--suave)}
+.teclado__t:disabled{opacity:.3;cursor:default}
+.teclado__t:disabled:active{transform:none;background:var(--papel)}
 
 /* Centrado, solo para el PIN: ahí no hay nada detrás que mirar. */
 .teclado--centro{
-  inset:0;display:grid;place-items:center;padding:20px;
-  background:rgba(42,21,11,.42);border-top:0;box-shadow:none;
+  inset:0;transform:none;width:auto;max-height:none;overflow:visible;
+  display:grid;place-items:center;padding:20px;
+  background:rgba(42,21,11,.42);border:0;border-radius:0;box-shadow:none;
 }
 .teclado--centro .teclado__caja{
-  width:min(420px,100%);background:var(--tarjeta);border-radius:18px;
+  width:min(320px,100%);background:var(--tarjeta);border-radius:18px;
   padding:10px 18px 20px;box-shadow:0 24px 60px rgba(42,21,11,.3);
 }
-.teclado--centro .teclado__eco{letter-spacing:.34em;font-size:34px}
+.teclado--centro .teclado__eco{letter-spacing:.34em;font-size:34px;text-align:center}
 
-/* Con el teclado abierto el diálogo sube y se achica: si tapa el campo que
-   estás llenando —o el botón Confirmar venta— el teclado no sirve de nada. */
-.capa.con-teclado{align-items:flex-start;padding-bottom:calc(var(--alto-teclado) + 20px)}
+/* Con el panel abierto el diálogo se corre a la derecha para no quedar debajo
+   de él (en 1024 px de ancho el cobro mide casi todo). Alto no hace falta
+   reservar: el panel no tapa el pie del diálogo. */
+.capa.con-teclado{padding-left:calc(var(--ancho-teclado) + 24px)}
+@media (max-width:620px){.capa.con-teclado{padding-left:var(--capa-pad)}}   /* celular: no hay de dónde */
+
+/* El teclado FIJO de la pantalla de venta, debajo de las categorías: sirve para
+   multiplicar («2 ✱» y tocar el producto). Solo existe con el modo táctil. */
+.mult{flex:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--linea)}
+.mult[hidden]{display:none}
+.mult__visor{
+  display:block;height:34px;line-height:32px;padding:0 10px;margin-bottom:6px;
+  text-align:right;font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;
+  color:var(--tinta);background:var(--papel);border:1px solid var(--linea);border-radius:10px;
+  white-space:nowrap;overflow:hidden;
+}
+.mult__visor--vacio{font-size:12.5px;font-weight:600;color:#B0A08E;letter-spacing:.04em}
+.mult__visor--armado{
+  background:color-mix(in srgb, var(--clay) 13%, white);
+  border-color:var(--clay);color:var(--clay-osc);
+}
+.mult__grilla{grid-auto-rows:var(--tecla-mult);gap:6px}
+.mult .teclado__t{border-radius:11px;font-size:21px}
+.mult .teclado__t--acc{font-size:21px}
+@media (max-height:620px){
+  :root{--tecla-mult:44px}
+  .mult{margin-top:6px;padding-top:6px}
+  .mult__grilla{gap:5px}
+}
+
+/* ---------- esconder la barra de arriba ---------- */
+body.barra-oculta .barra{display:none}
+/* La franja queda EN el flujo (no encima del contenido) y solo deja ver la
+   pestañita: no parece un botón de venta y no tapa el buscador ni la primera
+   categoría. Su zona de toque se agranda hacia abajo con ::after. */
+.barra-franja{flex:none;height:26px;display:flex;justify-content:center;background:transparent}
+.barra-franja[hidden]{display:none}
+.barra-franja__tab{
+  position:relative;width:120px;height:26px;padding:0;
+  border:1px solid var(--linea);border-top:0;border-radius:0 0 12px 12px;
+  background:var(--tarjeta);color:var(--suave);font-size:13px;font-weight:600;line-height:1;
+  display:grid;place-items:center;
+}
+.barra-franja__tab::after{content:"";position:absolute;left:-12px;right:-12px;top:0;bottom:-14px}
+.barra-franja__tab:hover{color:var(--tinta)}
 
 
 /* ==========================================================
@@ -566,7 +617,8 @@ button{font-family:inherit;cursor:pointer}
 .rail__cat.is-on::before{top:12px;bottom:12px;width:5px}
 .rail__n{font-size:14px}
 .turno{min-height:var(--toque);padding:0 16px;font-size:15px;border-radius:10px}
-.pantalla-completa{width:var(--toque);padding:0;font-size:26px;flex:none}
+.pantalla-completa,.esconder-barra{width:var(--toque);padding:0;font-size:26px;flex:none}
+.esconder-barra{font-size:24px;padding-bottom:6px}   /* el ⌃ queda alto en su línea */
 .pantalla-completa[aria-pressed="true"]{background:var(--clay);color:white}
 .version{min-height:var(--toque);padding:0 14px;font-size:14px;border-radius:10px}
 .barra{padding:8px 16px}
@@ -655,11 +707,11 @@ button{font-family:inherit;cursor:pointer}
 
 /* --- 6. scroll, inercia y doble tap --- */
 html,body{overscroll-behavior:none}
-.grilla,.lineas,.rail,.capa,.tabla-wrap,.novedades,
+.grilla,.lineas,.rail,.rail__lista,.capa,.tabla-wrap,.novedades,
 .vista[data-vista="dia"],.vista[data-vista="carta"],.vista[data-vista="inventario"]{
   overscroll-behavior:contain;scroll-behavior:smooth;
 }
-.grilla,.lineas,.capa,.rail{touch-action:pan-y}
+.grilla,.lineas,.capa,.rail,.rail__lista{touch-action:pan-y}
 .tabla-wrap{touch-action:pan-x pan-y}
 ::-webkit-scrollbar{width:12px;height:12px}
 ::-webkit-scrollbar-thumb{background:#DCCDB8;border-radius:99px;border:3px solid var(--tarjeta)}
@@ -681,7 +733,8 @@ html,body{overscroll-behavior:none}
 
 /* --- 8. media queries: ajustar las existentes (L373 y L385) --- */
 @media (max-width:760px){
-  .rail{width:100%;touch-action:pan-x;scroll-snap-type:x proximity}
+  .rail__lista{touch-action:pan-x;scroll-snap-type:x proximity}
+  .rail{width:100%}
   .rail__cat{min-height:var(--toque-alto);padding:0 18px;scroll-snap-align:start}
 }
 @media (max-width:900px){
@@ -1513,15 +1566,12 @@ html,body{overscroll-behavior:none}
   :root{--capa-pad:0px;--dlg-px:16px;--dlg-pb:20px}
   .dialogo > .dialogo__pie{border-radius:0}
 }
-.capa.con-teclado > .dialogo > .dialogo__pie{position:static;margin-bottom:0}
-
 /* El pie pegado tapaba el campo al que se llega con Tab: el navegador desplaza la
    capa hasta dejar el campo justo en el borde de abajo, sin saber que ahí está el
    pie. Contando billetes en un notebook con teclado —Tab, número, Tab— los de
    $1.000 y $500 quedaban escondidos detrás de «Abrir caja». scroll-padding le
    dice cuánto del borde de abajo está ocupado. */
 .capa{scroll-padding-bottom:calc(var(--capa-pad) + 100px)}
-.capa.con-teclado{scroll-padding-bottom:0}
 
 /* De 621 a 900 px la capa táctil apila los botones del pie uno sobre otro, a lo
    ancho. Pegado, eso tapaba 136 a 196 px de una pantalla de 529: un tercio. Ahí
