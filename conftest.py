@@ -33,6 +33,25 @@ def _limpiar_al_final():
     shutil.rmtree(_CARPETA_PRUEBAS, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def _config_por_sesion(monkeypatch):
+    """Config pide el PIN de nuevo (apps/pos/api/config.py). Las pruebas del resto de la caja no
+    son sobre eso: les basta con que la puerta mire la sesión, como antes de existir el PIN de
+    Config. Las que SÍ son sobre eso (test_config.py) piden la fixture `config_real`.
+
+    Y la caja nunca se reinicia de verdad desde una prueba: cerraría pytest."""
+    from apps.pos.api import config
+    monkeypatch.setattr(config, "autoridad", config.autoridad_de_sesion)
+    monkeypatch.setattr(config, "programar_reinicio", lambda: None)
+
+
+@pytest.fixture()
+def config_real(_config_por_sesion, monkeypatch):
+    """La puerta de Config de verdad: PIN reciente, amarrado a la sesión."""
+    from apps.pos.api import config
+    monkeypatch.setattr(config, "autoridad", config.autoridad_real)
+
+
 @pytest.fixture()
 def cliente():
     from apps.pos import freno
@@ -40,6 +59,8 @@ def cliente():
     from apps.pos.main import app
 
     freno.PIN.olvidar_todo()          # un test que falla PIN no frena al siguiente
+    from apps.pos import pantallas
+    pantallas._visto.clear()          # «visto hace…» de los televisores es de la corrida anterior
 
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)

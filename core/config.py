@@ -245,6 +245,15 @@ MARGEN_SUGERIDO = 50            # % de la venta que se queda el local
 # Nadie cobra $2.437. El sugerido sube al múltiplo de $50 de arriba: así el
 # margen pedido es un PISO y no algo que el redondeo se come.
 REDONDEO_PRECIO = 50
+# Los múltiplos que el dueño puede elegir en Config → Cobro. El 50 es el de siempre.
+REDONDEOS_PRECIO = (10, 50, 100)
+
+# Lo que dice el pie del comprobante mientras el dueño no escriba otra cosa: es lo que
+# decía antes de que se pudiera cambiar, así que ningún local nota nada al actualizar.
+MENSAJE_TICKET = "¡Gracias!"
+
+# Los botones de descuento del cobro («Sin descuento» está siempre). Los de siempre.
+DESCUENTOS_RAPIDOS = (10, 15, 20)
 
 # ¿Se usa el teclado numérico en pantalla?
 #

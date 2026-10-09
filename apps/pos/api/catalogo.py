@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from apps.pos import local as datos_local
+from apps.pos import pantallas
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
@@ -35,15 +36,19 @@ def _productos_de(s: Session, cat_id: int, solo_activos: bool = True):
 
 
 @router.get("/carta")
-def carta(respuesta: Response, s: Session = Depends(get_session)):
+def carta(respuesta: Response, s: Session = Depends(get_session), t: Optional[int] = None):
     """Formato exacto que esperan las pantallas de `menu-cafeteria`.
 
     CORS abierto a propósito: sin esto el navegador de la pantalla rechaza la
     respuesta y el menú se queda con la carta vieja. Es de solo lectura y solo
     expone precios que ya están a la vista del público.
+
+    `t` es el número del televisor en Config → Pantallas del local. Sirve solo para
+    anotar que ese televisor está conectado («visto hace 2 min»); sin él, todo igual.
     """
     respuesta.headers["Access-Control-Allow-Origin"] = "*"
     respuesta.headers["Cache-Control"] = "no-store"
+    pantallas.marcar_visto(t)
 
     cats = s.exec(
         select(Categoria).where(Categoria.activa == True).order_by(Categoria.orden, Categoria.id)  # noqa: E712
@@ -79,7 +84,10 @@ def carta(respuesta: Response, s: Session = Depends(get_session)):
             }
         salida.append(bloque)
 
-    return {"local": datos_local.nombre(), "avisos": AVISOS, "categorias": salida}
+    # Los avisos que corren abajo: los que el dueño escribió en Config → Pantallas del local o,
+    # mientras no escriba ninguno, los de siempre.
+    return {"local": datos_local.nombre(), "avisos": pantallas.cinta_o(AVISOS),
+            "categorias": salida}
 
 
 @router.get("/categorias")

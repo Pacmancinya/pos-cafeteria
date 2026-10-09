@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 
 from apps.pos import acceso, local as datos_local, sesion
+from apps.pos.api import config
 from apps.pos.db.models import Presencia, Turno, Usuario, Venta
 from apps.pos.db.session import get_session
 from core.config import (CATALOGO_DE_PERMISOS, NOMBRE_ROL, PERMISOS,
@@ -126,10 +127,12 @@ def salir(datos: SalirIn, respuesta: Response,
 # Administrar la gente
 # ---------------------------------------------------------------------------
 @router.get("/usuarios/permisos")
-def catalogo_permisos(quien: dict = Depends(sesion.exige("usuarios"))):
+def catalogo_permisos(quien: dict = Depends(config.exige("usuarios"))):
     return {
         "catalogo": [{"clave": clave, "nombre": nombre} for clave, nombre in CATALOGO_DE_PERMISOS],
         "roles": PERMISOS,
+        # Los colores que se ofrecen para cada persona en Config → Equipo.
+        "colores": list(COLORES),
     }
 
 
@@ -140,19 +143,21 @@ def _permisos_guardados(rol: str, propios: str) -> str:
 
 @router.get("/usuarios")
 def listar(s: Session = Depends(get_session),
-           quien: dict = Depends(sesion.exige("usuarios"))):
+           quien: dict = Depends(config.exige("usuarios"))):
     gente = s.exec(select(Usuario).order_by(Usuario.orden, Usuario.id)).all()
     return [_usuario_dict(u) for u in gente]
 
 
 @router.post("/usuarios")
-def crear(datos: UsuarioIn, request: Request, s: Session = Depends(get_session),
+def crear(datos: UsuarioIn, request: Request, respuesta: Response,
+          s: Session = Depends(get_session),
           quien: dict = Depends(sesion.quien_es)):
     """Crea a alguien.
 
     El primer usuario lo puede crear cualquiera, porque todavía no hay nadie que
-    pueda dar permiso. Del segundo en adelante hace falta el permiso `usuarios`,
-    y como el primero se crea siempre como dueño, esa puerta se cierra sola.
+    pueda dar permiso. Del segundo en adelante hace falta el permiso `usuarios`
+    —y, desde la 2.33, el PIN reciente de Config—, y como el primero se crea
+    siempre como dueño, esa puerta se cierra sola.
     """
     primero = not sesion.hay_usuarios(s)
     if primero and not acceso.es_local(request):
@@ -160,8 +165,12 @@ def crear(datos: UsuarioIn, request: Request, s: Session = Depends(get_session),
         # en todas: si el primer dueño se pudiera crear desde el Wi-Fi, cualquiera
         # se quedaba con la caja (lo encontró la revisión de Codex).
         raise HTTPException(403, "El primer usuario se crea en el computador de la caja.")
-    if not primero and not _puede_usuarios(quien):
-        raise HTTPException(403, "Solo el dueño puede crear usuarios.")
+    if not primero:
+        if not _puede_usuarios(quien):
+            raise HTTPException(403, "Solo el dueño puede crear usuarios.")
+        quien = config.autoridad(request, respuesta, s, quien)
+        if not _puede_usuarios(quien):
+            raise HTTPException(403, "Solo el dueño puede crear usuarios.")
     if not datos.pin:
         raise HTTPException(422, "Ponle un PIN de 4 números.")
     if _nombre_repetido(s, datos.nombre, None):
@@ -187,7 +196,7 @@ def crear(datos: UsuarioIn, request: Request, s: Session = Depends(get_session),
 
 @router.put("/usuarios/{usuario_id}")
 def editar(usuario_id: int, datos: UsuarioIn, s: Session = Depends(get_session),
-           quien: dict = Depends(sesion.exige("usuarios"))):
+           quien: dict = Depends(config.exige("usuarios"))):
     u = s.get(Usuario, usuario_id)
     if not u:
         raise HTTPException(404, "No existe ese usuario")
@@ -216,7 +225,7 @@ def editar(usuario_id: int, datos: UsuarioIn, s: Session = Depends(get_session),
 
 @router.delete("/usuarios/{usuario_id}")
 def sacar(usuario_id: int, s: Session = Depends(get_session),
-          quien: dict = Depends(sesion.exige("usuarios"))):
+          quien: dict = Depends(config.exige("usuarios"))):
     """Lo saca de la caja. No lo borra: sus ventas tienen que seguir cuadrando."""
     u = s.get(Usuario, usuario_id)
     if not u:

@@ -11,8 +11,8 @@ from apps.pos.api import ajustes, inventario
 from apps.pos.balanza import resolver
 from apps.pos.db.models import Producto, Turno, Usuario, Venta, VentaLinea
 from apps.pos.db.session import get_session
-from core.config import (MEDIOS_PAGO, a_local, ahora, hoy_local, neto_iva, puede,
-                         rango_utc_del_dia)
+from core.config import (MEDIOS_PAGO, NOMBRE_MEDIO, a_local, ahora, hoy_local, neto_iva,
+                         puede, rango_utc_del_dia)
 from core.schemas import AnularIn, VentaIn
 
 router = APIRouter(prefix="/api/v1", tags=["ventas"])
@@ -139,7 +139,7 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
                 if not ajustes._leer(s)["usar_balanza"]:
                     raise HTTPException(409, "La balanza de este local está apagada, así que "
                                              "esa etiqueta no se puede cobrar. Quítala del pedido "
-                                             "(o prende la balanza en Ayuda → Ajustes).")
+                                             "(o prende la balanza en Config → Impresora y balanza).")
                 raise HTTPException(409, "Esa etiqueta ya no calza con el formato guardado de la "
                                          "balanza. Quítala del pedido y vuelve a escanearla.")
             if cobro.modo == "ticket" and item.cantidad != 1:
@@ -200,6 +200,28 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
     # Un descuento mayor que la venta dejaría un cobro negativo: se recorta.
     descuento = min(datos.descuento, total)
 
+    # LAS FORMAS DE COBRO QUE ESTE LOCAL ELIGIÓ (Config → Cobro).
+    #
+    # Se revisan acá y no solo en la pantalla por lo de siempre: la pantalla se puede recargar,
+    # abrir en otro aparato o quedar con una copia vieja. Una forma de pago desactivada no se
+    # puede registrar, aunque alguien mande la petición a mano. Los valores de fábrica son los
+    # de antes (las cuatro formas, pago en dos formas y propinas prendidos), así que una caja
+    # que se actualiza cobra igual hasta que el dueño decida otra cosa.
+    cfg = ajustes._leer(s)
+    usados = [p.medio for p in datos.pagos] if datos.pagos else [datos.medio_pago]
+    for medio in usados:
+        if medio not in cfg["medios_pago"]:
+            raise HTTPException(409, f"{NOMBRE_MEDIO.get(medio, medio)} está desactivado en este "
+                                     "local. Elige otra forma de pago (se cambia en Config → Cobro).")
+    if datos.pagos and not cfg["pago_mixto"]:
+        raise HTTPException(409, "Este local no cobra en dos formas de pago (se cambia en "
+                                 "Config → Cobro).")
+    if datos.propina and not datos.pagos:
+        if not cfg["propinas"]:
+            raise HTTPException(409, "Este local no ofrece propina (se cambia en Config → Cobro).")
+        if cfg["propina_solo_tarjeta"] and datos.medio_pago not in ("debito", "credito"):
+            raise HTTPException(409, "La propina solo se cobra con tarjeta en este local.")
+
     # SIN CAJA ABIERTA NO SE VENDE.
     #
     # Antes se aceptaba y la venta quedaba con `turno_id` en nulo: no entraba en
@@ -228,7 +250,7 @@ def registrar_venta(datos: VentaIn, s: Session = Depends(get_session),
     #
     # Se chequea ANTES de escribir un solo Movimiento: una venta rechazada a la
     # mitad dejaría el libro con unos insumos descontados y otros no.
-    usar_inventario = ajustes._leer(s)["usar_inventario"] == 1
+    usar_inventario = cfg["usar_inventario"] == 1
     faltan = _lo_que_no_alcanza(s, lineas) if usar_inventario else ""
     if faltan:
         raise HTTPException(409, faltan)

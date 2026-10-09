@@ -97,7 +97,7 @@ def leer(codigo: str, s: Session = Depends(get_session),
         return salida
 
     if problema and es_de_balanza(codigo) and not ajustes._leer(s)["usar_balanza"]:
-        problema += " Si este local cobra etiquetas de balanza, préndela en Ayuda → Ajustes."
+        problema += " Si este local cobra etiquetas de balanza, préndela en Config → Impresora y balanza."
     return {
         "encontrado": False,
         "codigo": limpio,

@@ -27,6 +27,7 @@ const c = { console, document: { activeElement: null },
   pintarTalCual() {}, pintarCodigos() {}, selectorDeDibujo: () => '<input id="fDibujo">', colorParaGuardar: (p) => p.color || '',
   cargarCarta: async () => {}, estadoAfueraHTML: () => '', cargarAjustesDelLocal() {},
 };
+c.window = c;
 vm.createContext(c);
 vm.runInContext(fuente.slice(fuente.indexOf('const clp ='), fuente.indexOf('/* El mismo')), c);
 const persistencia = fuente.slice(fuente.indexOf('let carrito ='), fuente.indexOf('let medioPago'));
@@ -34,9 +35,7 @@ vm.runInContext(persistencia.replace('let carrito', 'var carrito'), c);
 vm.runInContext(fuente.match(/^const totalCarrito = .*;$/m)[0], c);
 for (const nombre of ['alEscanear', 'agregarBalanza', 'pintarCarrito', 'lineasParaVenta',
   'sumarAlPedido', 'productoDeLaCarta', 'cambiarCantidad', 'quitarLineaDelPedido', 'confirmarVenta',
-  'limpiarCarritoDeBorrados', 'costoConIva', 'bloqueSugerido',
-  'dibujoFormatoBalanza', 'bloqueBalanza', 'leerFormatoBalanza', 'conectarBalanza',
-  'guardarFormatoBalanza', 'probarEtiquetaBalanza', 'pintarAjustes']) {
+  'limpiarCarritoDeBorrados', 'costoConIva', 'bloqueSugerido']) {
   vm.runInContext(funcion(nombre), c);
 }
 for (const id of ['#lineas', '#total', '#btnCobrar']) poner(id);
@@ -128,81 +127,23 @@ const plano = (v) => JSON.parse(JSON.stringify(v));
   assert.deepEqual(avisos.at(-1), ['PLU desconocido', true]);
   assert.equal(c.carrito.length, 0);
 
-  // La ficha y sus precios por kilo se prueban en inventario_ui.cjs.
-  assert.equal(c.dibujoFormatoBalanza(digi).split('\n')[1], 'PPNNNN$$$$$$V');
-  // Un campo vacío o al revés no se dibuja como una superposición inventada.
-  assert(c.dibujoFormatoBalanza({ ...digi, codigo: [null, 6] }).startsWith('Falta o está mal'));
-  assert(c.dibujoFormatoBalanza({ ...digi, valor: [7, 3] }).includes('el valor'));
-  assert(c.dibujoFormatoBalanza({ ...digi, prefijo: '78' }).includes('prefijo'));
+  // La ficha y sus precios por kilo se prueban en inventario_ui.cjs; el formato del código, en config_logica.cjs.
   // Un producto por kilo no entra tocando su azulejo a $0.
   const antesDelKilo = c.carrito.length;
   c.CATEGORIAS = [{ id: 1, productos: [{ id: 77, nombre: 'Queso laminado', precio: 0, precio_kilo: 12990 }] }];
   c.sumarAlPedido({ id: 77 });
   assert.equal(c.carrito.length, antesDelKilo);
   assert.deepEqual(avisos.at(-1), ['Queso laminado se vende por peso: escanea la etiqueta de la balanza.', true]);
-  assert(c.bloqueBalanza().includes('value="ticket" selected'));
-  assert(c.bloqueBalanza().includes('value="25"'));
-  assert(c.dibujoFormatoBalanza({ ...digi, codigo: [2, 7] }).includes('!'));
-  for (const [id, valor] of Object.entries({ Modo: 'plu_peso', Prefijo: '25',
-    CodigoDesde: '2', CodigoHasta: '6', ValorDesde: '6', ValorHasta: '12', Divisor: '1000' })) {
-    poner('#ajBalanza' + id, { value: valor });
-  }
-  for (const id of ['#ajBalanza', '#ajBalanzaDibujo', '#ajBalanzaDivisorCampo',
-    '#ajBalanzaGuardar', '#ajBalanzaProbar', '#ajBalanzaPrueba', '#ajBalanzaResultado',
-    '#ajUsarBalanza', '#ajBalanzaCuerpo']) poner(id);
-  // Viene apagada: la casilla prende la balanza en el servidor y muestra el resto.
-  assert(!c.bloqueBalanza().includes('id="ajUsarBalanza" checked'));
-  assert(/id="ajBalanzaCuerpo" hidden/.test(c.bloqueBalanza()));
-  const guardados = [];
-  c.guardarAjuste = async (cambios) => { guardados.push(cambios); };
-  c.conectarBalanza();
-  elementos.get('#ajUsarBalanza').checked = true;
-  elementos.get('#ajUsarBalanza').oyentes.change({ target: elementos.get('#ajUsarBalanza'), stopPropagation() {} });
-  assert.deepEqual(plano(guardados.at(-1)), { usar_balanza: 1 });
-  assert.equal(elementos.get('#ajBalanzaCuerpo').hidden, false);
-  c.AJUSTES.usar_balanza = 1;
-  assert(c.bloqueBalanza().includes('id="ajUsarBalanza" checked'));
-  elementos.get('#ajBalanza').oyentes.input();
-  assert.equal(elementos.get('#ajBalanzaDivisorCampo').hidden, false);
-  elementos.get('#ajBalanzaModo').value = 'ticket';
-  elementos.get('#ajBalanza').oyentes.input();
-  assert.equal(elementos.get('#ajBalanzaDivisorCampo').hidden, true);
-  assert.equal(elementos.get('#ajBalanzaDibujo').textContent, c.dibujoFormatoBalanza(digi));
-  c.api = async (ruta, opciones) => {
-    assert.equal(ruta, '/ajustes');
-    assert.equal(opciones.method, 'PUT');
-    assert.deepEqual(JSON.parse(opciones.body), { formato_balanza: digi });
-    return { formato_balanza: digi };
-  };
-  await elementos.get('#ajBalanzaGuardar').onclick();
-  assert.deepEqual(plano(c.AJUSTES.formato_balanza), digi);
-  c.api = async () => { throw Error('Las posiciones se solapan'); };
-  await c.guardarFormatoBalanza();
-  assert.equal(elementos.get('#ajBalanzaResultado').textContent, 'Las posiciones se solapan');
-  assert.equal(elementos.get('#ajBalanzaPrefijo').value, '25');
-  elementos.get('#ajBalanzaCodigoDesde').value = '';
-  assert.equal(c.leerFormatoBalanza().codigo[0], null);
-
-  // La prueba llama GET sin mandar el borrador del formato ni agregar al pedido.
-  c.api = async (ruta, opciones) => {
-    assert.equal(ruta, '/codigos/' + etiqueta.codigo);
-    assert.equal(opciones, undefined);
-    return { balanza: etiqueta };
-  };
-  c.document.activeElement = elementos.get('#ajBalanzaPrueba');
+  // La etiqueta de prueba de Config: el lector llena el campo de prueba y NO suma nada al pedido.
+  const probadas = [];
+  c.Config = { campoDePrueba: () => ({ value: '' }), probarEtiqueta: async () => { probadas.push(1); } };
+  c.carrito = [];
   await c.alEscanear(etiqueta.codigo);
   assert.equal(c.carrito.length, 0);
-  assert.equal(elementos.get('#ajBalanzaResultado').textContent,
-    'Jamón pierna · 0,250 kg a $8.990/kg · $2.248');
-  c.api = async () => ({ problema: 'Ticket ya cobrado' });
-  await c.probarEtiquetaBalanza();
-  assert.equal(elementos.get('#ajBalanzaResultado').textContent, 'Ticket ya cobrado');
-  c.puedo = () => false;
-  c.api = () => assert.fail('Sin config no se prueba ni se guarda');
-  await c.guardarFormatoBalanza();
-  await c.probarEtiquetaBalanza();
-  poner('#panelAjustes', { innerHTML: 'viejo' });
-  c.pintarAjustes();
-  assert.equal(elementos.get('#panelAjustes').innerHTML, '');
+  assert.equal(probadas.length, 1);
+  c.Config.campoDePrueba = () => null;
+  c.api = async () => ({ de_balanza: true, balanza: etiqueta });
+  await c.alEscanear(etiqueta.codigo);
+  assert.equal(c.carrito.length, 1, 'sin el campo de prueba a la vista, la etiqueta se vende');
   console.log('Balanza UI: carrito, ficha, formato y prueba de etiquetas OK');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -5,7 +5,7 @@ Hasta la 2.18 salían de variables de entorno de Windows: el nombre era
 Kofe en la caja, en el comprobante y en sus televisores. Y el PIN de red era
 `2468` en todas las instalaciones, escrito en la guía y en el código público.
 Ahora viven en la tabla `Ajuste`, se piden en el primer arranque y el dueño los
-cambia desde Ayuda → Ajustes.
+cambia desde Config → Mi local.
 
 Las variables de entorno siguen sirviendo: el nombre como respaldo si nadie lo
 escribió en la caja, y el PIN como algo que fija la instalación y la caja no
@@ -77,6 +77,13 @@ def datos() -> dict:
 
 def nombre() -> str:
     return datos()["nombre"]
+
+
+def mensaje_ticket() -> str:
+    """La frase del pie del comprobante. Vacía o sin guardar, la de siempre."""
+    from core.config import MENSAJE_TICKET
+    guardado = " ".join((_leer("mensaje_ticket").get("mensaje_ticket") or "").split())
+    return guardado or MENSAJE_TICKET
 
 
 def rut_normalizado(texto: str) -> str | None:

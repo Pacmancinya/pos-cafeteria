@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from apps.pos import actualizar, sesion
+from apps.pos.api import config as puerta_config
 from core.config import APP_NOMBRE, APP_VERSION
 
 router = APIRouter(prefix="/api/v1", tags=["actualizaciones"])
@@ -75,7 +76,7 @@ def revisar():
 
 
 @router.post("/actualizacion")
-def instalar(datos: InstalarIn, quien: dict = Depends(sesion.exige("config"))):
+def instalar(datos: InstalarIn, quien: dict = Depends(puerta_config.exige())):
     """Instala la versión nueva del canal oficial y, si se puede, reinicia solo.
 
     Solo desde el canal oficial y solo el dueño. Antes aceptaba la dirección de
@@ -106,7 +107,7 @@ def vuelta():
 
 
 @router.post("/actualizacion/volver")
-def volver(quien: dict = Depends(sesion.exige("config"))):
+def volver(quien: dict = Depends(puerta_config.exige())):
     """Deja el programa como estaba antes de la última actualización y reinicia.
     Existe por la 2.12: un error que tumbaba El día llegó a la caja el mismo día
     que se publicó, y la única salida era esperar la versión siguiente."""

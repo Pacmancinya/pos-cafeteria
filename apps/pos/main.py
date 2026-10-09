@@ -16,9 +16,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from apps.pos import acceso, diagnostico, freno, local, mudanza
-from apps.pos.api import (actualizaciones, ajustes, catalogo, codigos, datos,
+from apps.pos.api import (actualizaciones, ajustes, catalogo, codigos, config, datos,
                           impresion, importar, inventario, reportes, turnos,
                           usuarios, ventas)
+from apps.pos.api import pantallas as api_pantallas
 from apps.pos.api import diagnostico as api_diagnostico
 from apps.pos.api import mudanza as api_mudanza
 from apps.pos.db.models import Turno
@@ -187,6 +188,8 @@ app.include_router(ventas.router)
 app.include_router(turnos.router)
 app.include_router(datos.router)
 app.include_router(reportes.router)
+app.include_router(config.router)
+app.include_router(api_pantallas.router)
 app.include_router(impresion.router)
 app.include_router(actualizaciones.router)
 app.include_router(usuarios.router)

@@ -156,7 +156,10 @@ async function api(ruta, opciones = {}) {
     // vuelve al candado. El PIN malo también es 401, pero ése lo maneja el
     // mismo candado. Los de /reportes tampoco: ahí 401 es «pide el PIN de nuevo» y lo
     // maneja ventas.js.
-    if (r.status === 401 && ruta !== "/sesion/entrar" && !ruta.startsWith("/reportes")) sesionPerdida();
+    // Los «Config pide el PIN» tampoco: es volver al PIN de Config, no una sesión perdida (config.js).
+    if (r.status === 401 && ruta !== "/sesion/entrar" && !ruta.startsWith("/reportes")
+        && !(typeof detalle === "string" && /^Config /.test(detalle))
+        && !(ruta === "/config/entrar" && !/Hay que entrar/.test(String(detalle)))) sesionPerdida();
     // Los 422 de validación llegan como una lista de objetos. Mostrar el JSON crudo
     // («[{"type":"value_error","loc":...}]») no le dice nada a quien está configurando.
     if (Array.isArray(detalle)) {
@@ -537,16 +540,12 @@ const totalCarrito = () => carrito.reduce((s, l) => s + l.precio * l.cantidad, 0
 async function alEscanear(codigo) {
   // El lector restaura el campo antes de avisarnos: se repone para probarlo,
   // sin que una etiqueta de prueba termine sumada al pedido.
-  const prueba = $("#ajBalanzaPrueba");
-  const cuerpo = $("#ajBalanzaCuerpo");
-  const probando = prueba && puedo("config") && (document.activeElement === prueba
-    // Con el bloque de la balanza a la vista en Ayuda, el lector es para probar
-    // aunque el foco haya quedado en un botón: si no, la etiqueta de prueba entraba
-    // al pedido y se cobraba con el cliente siguiente.
-    || ($(".vista.is-on")?.dataset.vista === "guias" && cuerpo && !cuerpo.hidden));
-  if (probando) {
+  const prueba = window.Config && Config.campoDePrueba();
+  if (prueba) {
+    // Con el bloque de la balanza a la vista en Config, el lector es para probar: si no, la
+    // etiqueta de prueba entraba al pedido y se cobraba con el cliente siguiente.
     prueba.value = codigo;
-    return probarEtiquetaBalanza();
+    return Config.probarEtiqueta();
   }
   if (invEscanear(codigo)) return;
   // Con un diálogo abierto que no sea el de la carta, el escaneo no es para
@@ -741,6 +740,46 @@ function pintarCarrito() {
 let mixto = false;
 let mixtoMontos = {};
 
+/* Lo que el dueño eligió en Config → Cobro. Sin nada guardado son las cuatro formas de pago,
+   pago en dos formas, propina libre y descuentos de 10/15/20: lo de siempre. El servidor también
+   lo exige (apps/pos/api/ventas.py); esto es para que no se llegue a intentar. */
+const MEDIOS_COBRO = ["efectivo", "debito", "credito", "transferencia"];
+const mediosActivos = () => {
+  const m = (AJUSTES.medios_pago || MEDIOS_COBRO).filter((x) => MEDIOS_COBRO.includes(x));
+  return m.length ? m : MEDIOS_COBRO;
+};
+const esTarjeta = (m) => m === "debito" || m === "credito";
+
+function aplicarAjustesCobro() {
+  const activos = mediosActivos();
+  $$("#medios .medio").forEach((b) => { b.hidden = !activos.includes(b.dataset.medio); });
+  if (!activos.includes(medioPago)) medioPago = activos[0];
+  $$("#medios .medio").forEach((b) => b.classList.toggle("is-on", b.dataset.medio === medioPago));
+  $("#bloqueEfectivo").style.display = medioPago === "efectivo" ? "" : "none";
+  // Pagar en dos formas necesita al menos dos formas activas y que el local lo permita.
+  $("#marcaMixto").hidden = !(AJUSTES.pago_mixto !== 0 && activos.length > 1);
+  const conPropina = AJUSTES.propinas !== 0;
+  $("#campoPropina").hidden = !conPropina;
+  const sug = conPropina ? (AJUSTES.propina_sugerida || []) : [];
+  const rp = $("#rapidosProp");
+  rp.hidden = !sug.length;
+  rp.innerHTML = sug.map((p) => `<button data-prop="${p}">Propina ${p}%</button>`).join("");
+  const desc = AJUSTES.descuentos_rapidos || [10, 15, 20];
+  $("#rapidosDesc").innerHTML = `<button data-desc="0">Sin descuento</button>`
+    + desc.map((p) => `<button data-desc="${p}">${p}%</button>`).join("");
+  ajustarPropinaSegunMedio();
+}
+
+/* Con «la propina solo se cobra con tarjeta», el campo se apaga con efectivo o transferencia. */
+function ajustarPropinaSegunMedio() {
+  const solo = !!AJUSTES.propina_solo_tarjeta && !mixto && !esTarjeta(medioPago);
+  const campo = $("#propina");
+  campo.disabled = mixto || solo || AJUSTES.propinas === 0;
+  if (solo) campo.value = "";
+  $$("#rapidosProp button").forEach((b) => { b.disabled = campo.disabled; });
+  $("#campoPropina").title = solo ? "En este local la propina solo se cobra con tarjeta" : "";
+}
+
 function abrirCobro() {
   if (!carrito.length) return;
   medioPago = "efectivo";
@@ -748,8 +787,7 @@ function abrirCobro() {
   mixtoMontos = {};
   $("#pagoMixto").checked = false;
   $("#mixtoGrid").hidden = true;
-  $$("#medios .medio").forEach((b) => b.classList.toggle("is-on", b.dataset.medio === "efectivo"));
-  $("#bloqueEfectivo").style.display = "";
+  aplicarAjustesCobro();
   $("#cobroTotal").textContent = clp(totalCarrito());
   $("#pagaCon").value = "";
   $("#propina").value = "";
@@ -772,8 +810,8 @@ function cambiarAMixto(activar) {
   $("#mixtoGrid").hidden = !activar;
   // En mixto no aplican: el medio único, el vuelto y la propina.
   $("#bloqueEfectivo").style.display = activar ? "none" : "";
-  $("#propina").disabled = activar;
   $$("#medios .medio").forEach((b) => { b.disabled = activar; });
+  ajustarPropinaSegunMedio();
   if (activar) { mixtoMontos = {}; pintarMixto(); }
   else { actualizarCobro(); }
 }
@@ -782,7 +820,7 @@ function pintarMixto() {
   const caja = $("#mixtoGrid");
   caja.innerHTML = `
     <div class="mixto">
-      ${Object.keys(NOMBRE_MEDIO_LARGO).map((m) => `
+      ${Object.keys(NOMBRE_MEDIO_LARGO).filter((m) => mediosActivos().includes(m)).map((m) => `
         <label class="mixto__fila">
           <span>${NOMBRE_MEDIO_LARGO[m]}</span>
           <input type="text" inputmode="numeric" data-mixto="${m}"
@@ -1089,46 +1127,6 @@ function selectorDeDibujo(elegido, color) {
    que la caja SÍ sabe en qué dirección están y puede mostrarlas con su botón de
    copiar — que es lo que había que hacer a mano mientras fueron un programa
    aparte. */
-function pintarConectar(salud) {
-  const caja = $("#conectar");
-  if (!caja) return;
-  $("#pantallasLocal").hidden = !salud.en_la_red;
-  if (!salud.en_la_red) return;
-  const mia = (salud.carta_url || "").replace("/api/v1/carta", "");
-  const p = salud.pantallas_url || (mia + "/pantallas");
-  const fila = (cual, url) => `
-    <div class="conectar__url">
-      <span class="conectar__cual">${cual}</span>
-      <code>${url}</code>
-      <button class="btn btn--chico" data-copiar="${url}">Copiar</button>
-    </div>`;
-
-  caja.innerHTML = `
-    En cada televisor, abre el navegador y entra a la dirección que le toca. No
-    hay que instalar ni copiar nada: la carta le llega de esta caja sola.
-    ${fila("Vitrina", p + "?p=1")}
-    ${fila("Carta con precios", p + "?p=2")}
-    ${fila("Las dos turnándose", p + "?tv=1")}
-    <div class="conectar__url conectar__url--simple">
-      <span class="conectar__cual">Si el TV se ve mal</span>
-      <code>${p}/simple</code>
-      <button class="btn btn--chico" data-copiar="${p}/simple">Copiar</button>
-    </div>
-    <p style="margin:10px 0 0;font-size:13px;line-height:1.6">
-      El navegador que traen algunos televisores es muy viejo y muestra la
-      pantalla en blanco con letras negras. Si te pasa, usa la última dirección:
-      es la misma carta, más sobria, y anda en cualquier televisor. La normal se
-      cambia sola cuando se da cuenta.
-    </p>
-    ${mia ? `<div class="conectar__url conectar__url--simple">
-      <span class="conectar__cual">Esta caja</span>
-      <code>${mia}</code>
-      <button class="btn btn--chico" data-copiar="${mia}">Copiar</button>
-    </div>
-    <p style="margin:8px 0 0;font-size:13px;line-height:1.6">Esa es para abrir la
-      caja desde un tablet o desde otro computador del local. La primera vez pide el
-      <b>PIN de red</b>: el dueño lo ve en Ayuda → Ajustes.</p>` : ""}`;
-}
 
 /* ---------------- actualizaciones ----------------
    El dueño no tiene por qué saber que existe una "versión": el número está
@@ -1176,33 +1174,14 @@ function dialogoVersion() {
     ${cuerpo}
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cerrar</button>
-      ${VUELTA && VUELTA.disponible && puedo("config")
-        ? `<button class="btn" data-volver-version>Volver a la v${esc(VUELTA.version)}</button>` : ""}
-      ${hay ? `<button class="btn btn--cobrar" id="btnActualizar" style="width:auto">Actualizar ahora</button>` : ""}
+      ${hay ? `<button class="btn btn--cobrar" id="btnIrAConfig" style="width:auto">Actualizar en Config</button>` : ""}
     </div>`;
   $("#capaVersion").classList.add("is-on");
 
-  if (hay) $("#btnActualizar").onclick = async (e) => {
-    const b = e.currentTarget;
-    b.disabled = true;
-    b.textContent = "Actualizando…";
-    try {
-      const r = await api("/actualizacion", { method: "POST", body: JSON.stringify({ zip: i.zip || "" }) });
-      if (!r.ok) throw new Error(r.error || "no se pudo actualizar");
-      if (r.sin_cambios) { avisar(r.aviso); $("#capaVersion").classList.remove("is-on"); b.disabled = false; return; }
-      $("#dialogoVersion").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-        <h2>Listo</h2>
-        <p class="ayuda">Se actualizaron ${r.archivos.length} archivos.
-          La caja se está reiniciando: la página se recarga sola en unos segundos.</p>`;
-      // El servidor se cierra y el .bat lo vuelve a levantar. Reintentamos hasta
-      // que conteste, y recién ahí recargamos.
-      esperarQueVuelva();
-    } catch (err) {
-      avisar(err.message, true);
-      b.disabled = false;
-      b.textContent = "Actualizar ahora";
-    }
+  // Instalar la versión pide el PIN de Config: se hace allá, en Respaldos y actualizaciones.
+  if (hay) $("#btnIrAConfig").onclick = () => {
+    $("#capaVersion").classList.remove("is-on");
+    Config.irA("respaldos");
   };
 }
 
@@ -1813,14 +1792,13 @@ async function cargarSesion() {
   if (SESION.entrado) {
     // Los ajustes pueden haber cambiado mientras la caja estaba bloqueada.
     await cargarAjustes();
-    pintarAjustes();
   }
   return SESION;
 }
 
 function pintarQuien() {
   const configurar = $("#btnConfigurar");
-  if (configurar) configurar.textContent = puedo("config") ? "Config" : "Ayuda";
+  if (configurar) configurar.textContent = "Config";
   $("#btnVarios").hidden = !puedo("cobrar_varios");
   const chip = $("#quienEsta");
   const equipo = $("#verEquipo");
@@ -1855,6 +1833,7 @@ const SELLO_MARCA = `<div class="sello-marca"><svg viewBox="0 0 100 100" aria-hi
 async function mostrarCandado(motivo) {
   clearTimeout(tCandado);
   if (window.Ventas) Ventas.cerrarReportes();     // Reportes no sobrevive a un cambio de persona
+  if (window.Config) Config.cerrar();             // ni Config
   // La caja se TAPA de inmediato; las caras llegan cuando contesta el servidor.
   // Esperar la respuesta para tapar era justo el hueco por donde se quedaba
   // pegada: si el servidor no contestaba, no se tapaba nunca.
@@ -1918,7 +1897,7 @@ function pintarPrimerUsuario() {
              placeholder="••••" autocomplete="off"></label>
     <button class="btn btn--cobrar" id="crearPrimero">Crear el local y mi usuario</button>
     <p class="candado__nota">El RUT y la dirección salen en el comprobante. Todo se cambia
-      después en Ayuda → Ajustes.</p>`;
+      después en Config.</p>`;
   $("#candado").hidden = false;
   setTimeout(() => $(sugerido ? "#primerNombre" : "#primerLocal").focus(), 80);
 }
@@ -2036,7 +2015,7 @@ function mostrarPinDeRed(pin, seguir) {
        otros computadores del local la primera vez que la abren.</p>
     <div class="pin-red pin-red--grande">${esc(pin)}</div>
     <p class="candado__nota">Es distinto de tu PIN, y de cualquier otra caja. Lo vuelves
-      a ver cuando quieras en Ayuda → Ajustes.</p>
+      a ver cuando quieras en Config → Esta caja.</p>
     <button class="btn btn--cobrar" id="pinRedVisto">Anotado, entrar</button>`;
   $("#pinRedVisto").onclick = seguir;
 }
@@ -2051,161 +2030,11 @@ function mostrarPinDeRed(pin, seguir) {
 let EQUIPO = [];
 let PERMISOS_EQUIPO = { catalogo: [], roles: {} };
 
-async function dialogoEquipo() {
-  try {
-    [EQUIPO, PERMISOS_EQUIPO] = await Promise.all([api("/usuarios"), api("/usuarios/permisos")]);
-  }
-  catch (e) { return avisar(e.message, true); }
 
-  $("#dialogoEquipo").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>Quiénes entran a la caja</h2>
-    <p class="ayuda" style="margin-bottom:14px">Por su rol, el <b>dueño</b> puede todo. El
-      <b>cajero</b> vende, cobra y cuadra su caja, pero no cambia precios ni
-      corrige ventas de días pasados. Al editar puedes elegir los permisos de cada persona.</p>
-    <div class="equipo">
-      ${EQUIPO.map((u) => `
-        <button class="equipo__fila ${u.activo ? "" : "es-baja"}" data-editar-usuario="${u.id}">
-          <span class="equipo__ini" style="--c:${u.color || "#C9552B"}">${esc((u.nombre[0] || "?").toUpperCase())}</span>
-          <span class="equipo__quien">
-            <b>${esc(u.nombre)}</b>
-            <small>${u.activo ? esc(u.rol_nombre) : "ya no entra a la caja"}</small>
-          </span>
-          <span class="equipo__ir">Editar</span>
-        </button>`).join("")}
-    </div>
-    <div class="dialogo__pie">
-      <button class="btn btn--fantasma" data-cerrar-capa>Cerrar</button>
-      <button class="btn btn--cobrar" data-editar-usuario="nuevo" style="width:auto">Agregar a alguien</button>
-    </div>`;
-  $("#capaEquipo").classList.add("is-on");
-}
 
-function formUsuario(id) {
-  const u = EQUIPO.find((x) => x.id === id) || { nombre: "", rol: "cajero", activo: true };
-  const nuevo = !u.id;
 
-  $("#dialogoEquipo").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>${nuevo ? "Agregar a alguien" : esc(u.nombre)}</h2>
-    <label class="campo"><span>Nombre</span>
-      <input id="uNombre" type="text" value="${esc(u.nombre)}"
-             placeholder="Cómo se llama" autocomplete="off"></label>
-    <label class="campo"><span>${nuevo ? "Invéntale un PIN de 4 números (que no empiece en 0)"
-      : "PIN nuevo (déjalo vacío y le queda el que tenía)"}</span>
-      <input id="uPin" type="password" inputmode="numeric" data-teclado="entero"
-             placeholder="••••" autocomplete="off"></label>
-    <div class="campo"><span>¿Qué puede hacer?</span>
-      <div class="medios" id="uRol">
-        <button class="medio ${u.rol === "cajero" ? "is-on" : ""}" data-rol="cajero">Cajero</button>
-        <button class="medio ${u.rol === "dueno" ? "is-on" : ""}" data-rol="dueno">Dueño</button>
-      </div>
-    </div>
-    <fieldset class="permisos-persona">
-      <legend>Permisos de esta persona</legend>
-      <label class="marca">
-        <input id="uHeredar" type="checkbox" role="switch" ${u.permisos ? "" : "checked"}
-               aria-controls="uPermisos"> Usar los permisos de su rol
-      </label>
-      <button type="button" class="btn btn--fantasma" id="uSoloVender">Que solo venda</button>
-      <p class="ayuda">Abre la caja, vende y cierra su caja.</p>
-      <div id="uPermisos" ${u.permisos ? "" : "hidden"}>
-        ${PERMISOS_EQUIPO.catalogo.map((p) => `
-          <label class="marca">
-            <input type="checkbox" data-permiso-persona="${esc(p.clave)}"
-              ${(u.permisos ? u.permisos.split(",").map((v) => v.trim()) : PERMISOS_EQUIPO.roles[u.rol] || []).includes(p.clave) ? "checked" : ""}>
-            ${esc(p.nombre)}
-          </label>`).join("")}
-        <p class="ayuda">Marca al menos un permiso. Para impedir que entre, usa «Sacar de la caja».</p>
-      </div>
-      ${u.id === SESION.id ? `<p class="ayuda">No puedes quitarte «Crear y editar personas»: lo necesitas para administrar los permisos del equipo.</p>` : ""}
-    </fieldset>
-    ${nuevo ? "" : `<p class="ayuda">${u.activo
-      ? "Si lo sacas de la caja deja de aparecer en la pantalla de entrada, pero sus ventas y sus turnos se conservan."
-      : "Ahora mismo no aparece en la pantalla de entrada."}</p>`}
-    <div class="dialogo__pie">
-      <button class="btn btn--fantasma" data-equipo-volver>Volver</button>
-      ${nuevo ? "" : (u.activo
-        ? `<button class="btn btn--fantasma" data-sacar-usuario="${u.id}">Sacar de la caja</button>`
-        : `<button class="btn btn--fantasma" data-revivir-usuario="${u.id}">Dejarlo entrar de nuevo</button>`)}
-      <button class="btn btn--cobrar" data-guardar-usuario="${u.id || 0}" style="width:auto">Guardar</button>
-    </div>`;
-  $("#uHeredar").addEventListener("change", () => {
-    marcarPermisosPersona(PERMISOS_EQUIPO.roles[$("#uRol .is-on").dataset.rol] || []);
-    $("#uPermisos").hidden = $("#uHeredar").checked;
-  });
-  $("#uSoloVender").addEventListener("click", () => {
-    $("#uHeredar").checked = false;
-    $("#uPermisos").hidden = false;
-    marcarPermisosPersona(["vender", "turno_abrir", "turno_cerrar"]);
-  });
-  setTimeout(() => $("#uNombre").focus(), 60);
-}
 
-function marcarPermisosPersona(claves) {
-  $$("[data-permiso-persona]").forEach((c) => { c.checked = claves.includes(c.dataset.permisoPersona); });
-}
 
-async function guardarUsuario(id) {
-  const nombre = ($("#uNombre").value || "").trim();
-  const pin = ($("#uPin").value || "").replace(/\D/g, "");
-  const elegido = $("#uRol .is-on");
-  const previo = EQUIPO.find((x) => x.id === id);
-
-  if (!nombre) return avisar("Escribe el nombre", true);
-  if (!id && pin.length < 4) return avisar("Ponle un PIN de 4 números", true);
-  if (pin && pin.length < 4) return avisar("El PIN son 4 números", true);
-  const rol = elegido ? elegido.dataset.rol : "cajero";
-  const heredar = $("#uHeredar").checked;
-  const seleccion = $$("[data-permiso-persona]:checked").map((c) => c.dataset.permisoPersona);
-  if (!heredar && !seleccion.length)
-    return avisar("Marca al menos un permiso o activa «Usar los permisos de su rol».", true);
-  const efectivos = heredar ? PERMISOS_EQUIPO.roles[rol] || [] : seleccion;
-  if (id === SESION.id && !efectivos.includes("usuarios"))
-    return avisar("No puedes quitarte «Crear y editar personas»: lo necesitas para administrar los permisos del equipo.", true);
-
-  const cuerpo = {
-    nombre,
-    rol,
-    permisos: heredar ? "" : seleccion.join(","),
-    // Guardar no puede revivir a alguien que sacaron: para eso está su botón.
-    activo: previo ? previo.activo : true,
-    color: previo ? previo.color : "",
-    orden: previo ? previo.orden : 0,
-  };
-  if (pin) cuerpo.pin = pin;
-
-  try {
-    await api(id ? `/usuarios/${id}` : "/usuarios",
-      { method: id ? "PUT" : "POST", body: JSON.stringify(cuerpo) });
-    if (id === SESION.id) await cargarSesion();
-    avisar(id ? "Guardado" : `${nombre} ya puede entrar a la caja`);
-    dialogoEquipo();
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function sacarUsuario(id) {
-  const u = EQUIPO.find((x) => x.id === id);
-  if (!confirm(`¿Sacar a ${u ? u.nombre : "esta persona"} de la caja? `
-             + "Deja de aparecer en la pantalla de entrada, pero sus ventas y "
-             + "sus turnos se conservan.")) return;
-  try {
-    const r = await api(`/usuarios/${id}`, { method: "DELETE" });
-    avisar(r.aviso || "Listo");
-    dialogoEquipo();
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function revivirUsuario(id) {
-  const u = EQUIPO.find((x) => x.id === id);
-  if (!u) return;
-  try {
-    await api(`/usuarios/${id}`, { method: "PUT", body: JSON.stringify({
-      nombre: u.nombre, rol: u.rol, activo: true, color: u.color || "", orden: u.orden || 0 }) });
-    avisar(`${u.nombre} vuelve a entrar a la caja`);
-    dialogoEquipo();
-  } catch (e) { avisar(e.message, true); }
-}
 
 /* ¿Puedo irme? Solo si no dejo MI caja abierta.
 
@@ -2850,569 +2679,29 @@ function pintarGuias(id) {
    de Windows, o no se configuraba. */
 // Las posiciones se muestran tal como las guarda el servidor: desde cero y
 // hasta sin incluir. Así el dibujo permite revisar cada dígito sin traducirlo.
-function dibujoFormatoBalanza(f) {
-  const bien = (r) => Array.isArray(r) && r.every((n) => Number.isInteger(n) && n >= 0)
-    && r[0] < r[1] && r[1] <= 12;
-  const faltan = [!/^2[0-9]*$/.test(f.prefijo || "") && "el prefijo (solo números, empieza con 2)",
-    !bien(f.codigo) && "dónde está el número", !bien(f.valor) && "dónde está el valor"]
-    .filter(Boolean);
-  if (faltan.length) return "Falta o está mal: " + faltan.join(", ") + ".";
-  const marcas = Array.from({ length: 13 }, (_, i) => {
-    if (i === 12) return "V";
-    const partes = [i < f.prefijo.length ? "P" : "",
-      i >= f.codigo[0] && i < f.codigo[1] ? "N" : "",
-      i >= f.valor[0] && i < f.valor[1] ? "$" : ""].filter(Boolean);
-    return partes.length > 1 ? "!" : partes[0] || "·";
-  });
-  return "0123456789012\n" + marcas.join("")
-    + "\nP: prefijo · N: número\n$: valor · V: verificador\n!: partes superpuestas";
-}
 
-function bloqueBalanza() {
-  const f = AJUSTES.formato_balanza || {
-    modo: "ticket", prefijo: "25", codigo: [2, 6], valor: [6, 12], divisor_peso: 1000 };
-  const usar = !!AJUSTES.usar_balanza;
-  return `<div class="ajuste" id="ajBalanza">
-    <h4>Balanza</h4>
-    <label class="marca">
-      <input type="checkbox" id="ajUsarBalanza" ${usar ? "checked" : ""}>
-      Este local cobra etiquetas de una balanza</label>
-    <p class="ayuda" style="margin:8px 0 0">Para el fiambre, el pan o el queso que se pesan
-      y salen con una etiqueta con código de barras. Si este local no tiene balanza, déjalo
-      apagado: así nadie puede cobrar un código de balanza inventado.</p>
-    ${AJUSTES.formato_balanza_roto ? `<div class="ajuste__alerta">El formato guardado de la
-      balanza no se entiende, así que la caja no está cobrando etiquetas. Revísalo abajo y
-      guárdalo de nuevo.</div>` : ""}
-    <div id="ajBalanzaCuerpo" ${usar ? "" : "hidden"}>
-    <label class="campo" style="margin-top:12px"><span>Qué imprime la etiqueta</span>
-      <select id="ajBalanzaModo">
-        ${[["ticket", "Un ticket con el total (el detalle queda en el papel)"],
-           ["plu_peso", "El número del producto y el peso"],
-           ["plu_precio", "El número del producto y el precio"]].map(([modo, texto]) =>
-          `<option value="${modo}"${f.modo === modo ? " selected" : ""}>${texto}</option>`).join("")}
-      </select></label>
-    <details class="avanzado">
-      <summary>Cómo está armado el código</summary>
-      <div class="avanzado__cuerpo">
-        <label class="campo"><span>Prefijo</span>
-          <input id="ajBalanzaPrefijo" inputmode="numeric" value="${esc(f.prefijo)}"></label>
-        <p class="ayuda">Cuenta desde 0. «Hasta» no se incluye. El último dígito (12)
-          es el verificador: no lo uses para el número ni el valor.</p>
-        ${[["Codigo", "número", f.codigo], ["Valor", "valor", f.valor]].map(([id, nombre, rango]) => `
-          <div class="fila2">
-            <label class="campo"><span>El ${nombre}, desde</span>
-              <input id="ajBalanza${id}Desde" type="number" min="0" max="11" value="${rango[0]}"></label>
-            <label class="campo"><span>Hasta (sin incluir)</span>
-              <input id="ajBalanza${id}Hasta" type="number" min="1" max="12" value="${rango[1]}"></label>
-          </div>`).join("")}
-        <label class="campo" id="ajBalanzaDivisorCampo"${f.modo === "plu_peso" ? "" : " hidden"}>
-          <span>Divisor del peso</span>
-          <input id="ajBalanzaDivisor" type="number" min="1" value="${f.divisor_peso}">
-          <small class="ayuda" style="display:block;margin:6px 0 0">1000 si la etiqueta trae gramos.</small></label>
-        <pre id="ajBalanzaDibujo" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(dibujoFormatoBalanza(f))}</pre>
-      </div>
-    </details>
-    <button type="button" class="btn" id="ajBalanzaGuardar">Guardar formato de balanza</button>
-    <label class="campo"><span>Probar con una etiqueta</span>
-      <input id="ajBalanzaPrueba" type="text" inputmode="numeric" autocomplete="off"
-             placeholder="Escanea o escribe el código"></label>
-    <p class="ayuda">La prueba usa lo guardado. Si cambiaste algo, guarda primero.</p>
-    <button type="button" class="btn" id="ajBalanzaProbar">Probar etiqueta</button>
-    <p class="ayuda" id="ajBalanzaResultado" role="status" aria-live="polite"></p>
-    </div>
-  </div>`;
-}
 
-function leerFormatoBalanza() {
-  // Un campo vacío debe fallar al guardar, no convertirse silenciosamente en 0.
-  const numero = (id) => $(id).value.trim() === "" ? null : Number($(id).value);
-  return { modo: $("#ajBalanzaModo").value, prefijo: $("#ajBalanzaPrefijo").value.trim(),
-    codigo: [numero("#ajBalanzaCodigoDesde"), numero("#ajBalanzaCodigoHasta")],
-    valor: [numero("#ajBalanzaValorDesde"), numero("#ajBalanzaValorHasta")],
-    // Solo el modo por peso usa el divisor. Oculto y mal escrito no puede impedir
-    // guardar un ticket con un error sobre un campo que no se ve.
-    divisor_peso: $("#ajBalanzaModo").value === "plu_peso"
-      ? numero("#ajBalanzaDivisor")
-      : ((AJUSTES.formato_balanza || {}).divisor_peso || 1000) };
-}
 
-function conectarBalanza() {
-  $("#ajUsarBalanza").addEventListener("change", (e) => {
-    e.stopPropagation();
-    const usar = e.target.checked;
-    $("#ajBalanzaCuerpo").hidden = !usar;
-    guardarAjuste({ usar_balanza: usar ? 1 : 0 },
-      usar ? "Balanza prendida: revisa qué imprime la etiqueta y prueba una"
-           : "Balanza apagada: la caja ya no cobra etiquetas");
-  });
-  $("#ajBalanza").addEventListener("input", () => {
-    const f = leerFormatoBalanza();
-    $("#ajBalanzaDibujo").textContent = dibujoFormatoBalanza(f);
-    $("#ajBalanzaDivisorCampo").hidden = f.modo !== "plu_peso";
-  });
-  $("#ajBalanzaGuardar").onclick = guardarFormatoBalanza;
-  $("#ajBalanzaProbar").onclick = probarEtiquetaBalanza;
-  $("#ajBalanzaPrueba").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    e.stopPropagation();
-    probarEtiquetaBalanza();
-  });
-}
 
-async function guardarFormatoBalanza() {
-  if (!puedo("config")) return;
-  try {
-    const r = await api("/ajustes", { method: "PUT",
-      body: JSON.stringify({ formato_balanza: leerFormatoBalanza() }) });
-    AJUSTES = { ...AJUSTES, ...r };
-    $("#ajBalanzaResultado").textContent = "Formato guardado. Ya puedes probar una etiqueta.";
-    avisar("Formato de balanza guardado");
-  } catch (e) {
-    // Conservamos lo escrito para corregir las posiciones que rechazó el servidor.
-    $("#ajBalanzaResultado").textContent = e.message;
-    avisar(e.message, true);
-  }
-}
 
-async function probarEtiquetaBalanza() {
-  if (!puedo("config")) return;
-  const resultado = $("#ajBalanzaResultado");
-  const codigo = $("#ajBalanzaPrueba").value.trim();
-  if (!codigo) { resultado.textContent = "Escanea o escribe una etiqueta"; return; }
-  resultado.textContent = "Leyendo etiqueta…";
-  try {
-    const r = await api("/codigos/" + encodeURIComponent(codigo));
-    resultado.textContent = r.balanza
-      ? `${r.balanza.nombre} · ${r.balanza.detalle} · ${clp(r.balanza.precio)}`
-      : r.problema || "Ese código no es una etiqueta de balanza";
-  } catch (e) { resultado.textContent = e.message; }
-}
 
-function bloqueImpresion() {
-  return `<div class="ajuste" id="ajImpresion">
-    <h4>Impresión de comprobantes</h4>
-    <label class="marca"><input type="checkbox" id="ajImprimirSiempre"
-      ${imprimirSiempre ? "checked" : ""}> Imprimir comprobante después de cada venta</label>
-    <p class="ayuda">Estas preferencias quedan en este navegador. Las impresoras son las
-      instaladas en el computador Windows donde funciona la caja.</p>
-    <div class="ajuste__campos">
-      <label class="campo"><span>Tipo de impresora</span><select id="ajTipoImpresora">
-        <option value="termica"${tipoImpresion() === "termica" ? " selected" : ""}>Impresora de tickets (térmica)</option>
-        <option value="windows"${tipoImpresion() === "windows" ? " selected" : ""}>Impresora normal (Windows)</option>
-        <option value="navegador"${tipoImpresion() === "navegador" ? " selected" : ""}>Preguntar al navegador</option>
-      </select></label>
-      <label class="campo"><span>Impresora</span><select id="ajImpresora">
-        <option value="">Elige una impresora</option>
-        ${IMPRESION.impresora ? `<option selected value="${esc(IMPRESION.impresora)}">${esc(IMPRESION.impresora)} (guardada)</option>` : ""}
-      </select></label>
-      <label class="campo"><span>Ancho del papel</span><select id="ajPapel">
-        <option value="58"${IMPRESION.papel === 58 ? " selected" : ""}>58 mm</option>
-        <option value="80"${IMPRESION.papel === 80 ? " selected" : ""}>80 mm</option>
-      </select></label>
-    </div>
-    <p class="ayuda">Es el ancho del <b>rollo</b>, no el de la impresora. Si en la prueba los
-      precios saltan a la línea de abajo, o las rayas salen cortadas en dos, el rollo es más
-      angosto de lo elegido: cambia a 58 mm y prueba otra vez.</p>
-    <div class="ajuste__fila">
-      <button class="btn" id="ajActualizarImpresoras">Actualizar impresoras</button>
-      <button class="btn" id="ajProbarImpresion"${probandoImpresion ? " disabled" : ""}>Imprimir prueba</button>
-    </div>
-    <div id="ajInstalacionImpresora" hidden>
-      <label class="campo"><span>Puerto disponible</span><select id="ajPuertoImpresora"></select></label>
-      <button class="btn" id="ajInstalarImpresora"${instalandoImpresora ? " disabled" : ""}>Instalar la impresora de tickets</button>
-      <p class="ayuda">Windows va a pedir permiso para instalar la impresora.</p>
-    </div>
-    <p class="ayuda" id="ajImpresionEstado" role="status">Elige una impresora para imprimir directamente.
-      Con «Preguntar al navegador» aparece el diálogo de impresión. Los cierres usan ese diálogo.</p>
-  </div>`;
-}
 
-function guardarImpresion(tipoExplicito = false) {
-  if (!puedo("config")) return;
-  const siguiente = { automatica: $("#ajImprimirSiempre").checked,
-    impresora: $("#ajImpresora").value, papel: +$("#ajPapel").value,
-    puerto: impresorasWindows.find((p) => p.nombre === $("#ajImpresora").value)?.puerto
-      || ($("#ajImpresora").value === IMPRESION.impresora ? IMPRESION.puerto : ""),
-    tipo: tipoExplicito ? $("#ajTipoImpresora").value : IMPRESION.tipo };
-  try {
-    localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
-    IMPRESION = siguiente;
-    imprimirSiempre = siguiente.automatica;
-    $("#ajTipoImpresora").value = tipoImpresion();
-    $("#ajImpresionEstado").textContent = "Preferencias de impresión guardadas en este navegador.";
-  } catch (e) {
-    $("#ajImprimirSiempre").checked = imprimirSiempre;
-    $("#ajImpresora").value = IMPRESION.impresora;
-    $("#ajPapel").value = String(IMPRESION.papel);
-    $("#ajTipoImpresora").value = tipoImpresion();
-    $("#ajImpresionEstado").textContent = "No se pudieron guardar las preferencias. Revisa el almacenamiento del navegador.";
-  }
-}
 
-async function cargarImpresoras() {
-  if (!puedo("config")) return;
-  const selector = $("#ajImpresora"), boton = $("#ajActualizarImpresoras");
-  const estado = $("#ajImpresionEstado");
-  if (!selector || boton.disabled) return;
-  boton.disabled = true;
-  $("#ajInstalacionImpresora").hidden = true;
-  puertosImpresion = [];
-  estado.textContent = "Consultando las impresoras de Windows…";
-  try {
-    const r = await api("/impresion/impresoras");
-    if (selector !== $("#ajImpresora")) return;
-    const lista = r.impresoras || [];
-    impresorasWindows = lista;
-    const elegida = IMPRESION.impresora;
-    const puerto = lista.find((p) => p.nombre === elegida)?.puerto;
-    if (puerto && puerto !== IMPRESION.puerto) {
-      // Recordar el puerto permite detectar el tipo al abrir de nuevo la caja,
-      // aunque ese día el dueño no entre a Configurar.
-      const siguiente = { ...IMPRESION, puerto };
-      try {
-        localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
-        IMPRESION = siguiente;
-      } catch (e) { /* La lista sigue siendo útil aunque el navegador no guarde. */ }
-    }
-    selector.innerHTML = '<option value="">Elige una impresora</option>'
-      + (elegida && !lista.some((p) => p.nombre === elegida)
-        ? `<option value="${esc(elegida)}">${esc(elegida)} (no disponible)</option>` : "")
-      + lista.map((p) => `<option value="${esc(p.nombre)}"${p.disponible ? "" : " disabled"}>${esc(p.nombre)}${p.disponible ? "" : " (requiere diálogo)"}</option>`).join("");
-    selector.value = elegida;
-    $("#ajTipoImpresora").value = tipoImpresion();
-    estado.textContent = !r.disponible ? r.detalle
-      : !lista.length ? "No hay impresoras instaladas. Instálala en Windows y actualiza esta lista."
-      : elegida && !lista.some((p) => p.nombre === elegida && p.disponible)
-        ? "La impresora guardada no está disponible para impresión directa. Elige otra o usa el navegador."
-        : "Lista actualizada. Imprime una prueba para revisar el papel. Los cierres usan el diálogo del navegador.";
-    if (r.disponible && !lista.some((p) => p.disponible)) {
-      const libres = await api("/impresion/puertos");
-      if (selector !== $("#ajImpresora")) return;
-      // FILE/PDF no son conexiones de una impresora enchufada. USB va primero
-      // para que el puerto habitual de una ticketera sea el sugerido.
-      puertosImpresion = (libres.puertos || []).filter((p) =>
-        !/^(FILE:|PORTPROMPT:|NUL:|SHRFAX:|Microsoft\.Office\.OneNote)/i.test(p.nombre))
-        .sort((a, b) => Number(/^USB/i.test(b.nombre)) - Number(/^USB/i.test(a.nombre)));
-      $("#ajPuertoImpresora").innerHTML = puertosImpresion.map((p) =>
-        `<option value="${esc(p.nombre)}">${esc(p.nombre)}${p.descripcion ? " — " + esc(p.descripcion) : ""}</option>`).join("");
-      $("#ajInstalacionImpresora").hidden = !puertosImpresion.length;
-      if (puertosImpresion.length) estado.textContent = "Windows tiene puertos disponibles. Elige el de la impresora y pulsa Instalar.";
-    }
-  } catch (e) {
-    estado.textContent = e.message + ". Se conserva la impresora guardada.";
-  } finally { boton.disabled = false; }
-}
 
-async function probarImpresion() {
-  if (!puedo("config") || probandoImpresion) return;
-  const estado = $("#ajImpresionEstado");
-  if (!IMPRESION.impresora || tipoImpresion() === "navegador") {
-    estado.textContent = "Elige una impresora de Windows para imprimir la prueba.";
-    return;
-  }
-  probandoImpresion = true;
-  $("#ajProbarImpresion").disabled = true;
-  estado.textContent = "Enviando la prueba…";
-  try {
-    const prefijo = tipoImpresion() === "termica" ? "crudo/" : "";
-    const r = await api(`/impresion/${prefijo}prueba`, { method: "POST", espera: 25000,
-      body: JSON.stringify({ impresora: IMPRESION.impresora, papel: IMPRESION.papel }) });
-    estado.textContent = r.detalle;
-  } catch (e) {
-    estado.textContent = e.message + ". Revisa la cola de Windows antes de repetir la prueba.";
-  } finally {
-    probandoImpresion = false;
-    const boton = $("#ajProbarImpresion");
-    if (boton) boton.disabled = false;
-  }
-}
 
-async function instalarImpresora() {
-  if (!puedo("config") || instalandoImpresora) return;
-  const puerto = $("#ajPuertoImpresora").value;
-  if (!puertosImpresion.some((p) => p.nombre === puerto)) return;
-  const estado = $("#ajImpresionEstado");
-  instalandoImpresora = true;
-  $("#ajInstalarImpresora").disabled = true;
-  estado.textContent = "Acepta el permiso de Windows para instalar la impresora…";
-  try {
-    const r = await api("/impresion/instalar", { method: "POST", espera: 125000,
-      body: JSON.stringify({ puerto, nombre: "Kofe Tickets" }) });
-    // Guardar antes de consultar: la cola ya existe aunque falle la recarga o
-    // el dueño haya salido de Configurar mientras aceptaba el permiso.
-    const siguiente = { ...IMPRESION, impresora: r.nombre, puerto };
-    try {
-      localStorage.setItem("pos.impresion", JSON.stringify(siguiente));
-      IMPRESION = siguiente;
-    } catch (e) {
-      throw Error("La impresora se instaló, pero no se pudo guardar la selección en este navegador. Actualiza la lista y selecciónala.");
-    }
-    await cargarImpresoras();
-  } catch (e) {
-    estado.textContent = e.message;
-  } finally {
-    instalandoImpresora = false;
-    const boton = $("#ajInstalarImpresora");
-    if (boton) boton.disabled = false;
-  }
-}
 
-function conectarImpresion() {
-  ["#ajImprimirSiempre", "#ajImpresora", "#ajPapel"].forEach((id) => {
-    $(id).addEventListener("change", () => guardarImpresion());
-  });
-  $("#ajTipoImpresora").addEventListener("change", () => guardarImpresion(true));
-  $("#ajActualizarImpresoras").onclick = cargarImpresoras;
-  $("#ajProbarImpresion").onclick = probarImpresion;
-  $("#ajInstalarImpresora").onclick = instalarImpresora;
-  cargarImpresoras();
-}
 
-function pintarAjustes() {
-  const caja = $("#panelAjustes");
-  if (!caja) return;
-  if (!puedo("config")) { caja.innerHTML = ""; return; }
 
-  const prendido = !!AJUSTES.teclado_en_pantalla;
-  const minutos = AJUSTES.bloqueo_minutos || MINUTOS_QUIETO;
-  const piloto = AJUSTES.canal_actualizaciones === "piloto";
-  caja.innerHTML = `
-    <h3>Configurar esta caja</h3>
 
-    ${bloqueImpresion()}
 
-    <div class="ajuste">
-      <h4>El local</h4>
-      <div class="ajuste__campos">
-        <label class="campo"><span>Nombre</span><input id="ajLocalNombre" maxlength="40"></label>
-        <label class="campo"><span>RUT</span>
-          <input id="ajLocalRut" maxlength="14" placeholder="12.345.678-9"></label>
-        <label class="campo ajuste__ancho"><span>Dirección</span>
-          <input id="ajLocalDireccion" maxlength="80"></label>
-      </div>
-      <div class="ajuste__fila">
-        <button class="btn" data-guardar-local>Guardar los datos del local</button>
-        <span class="ayuda" style="margin:0">Salen en el comprobante, en el cierre y en los televisores.</span>
-      </div>
-    </div>
 
-    <div class="ajuste" id="ajRed"><h4>PIN de red</h4><p class="ayuda">Cargando…</p></div>
 
-    <div class="ajuste">
-      <h4>Inventario</h4>
-      <label class="marca">
-        <input type="checkbox" id="ajInventario" ${usarInventario() ? "checked" : ""}>
-        Llevar inventario en este local</label>
-      <p class="ayuda" style="margin:8px 0 0">Apágalo si solo quieres vender, sin llevar
-        la cuenta de lo que queda. Se esconden las herramientas de stock y Por comprar.
-        Inventario conserva la lista y la ficha de productos. Lo que ya tenías anotado se conserva:
-        al prenderlo de nuevo, retomas desde esos saldos.</p>
-    </div>
 
-    ${bloqueBalanza()}
 
-    <div class="ajuste">
-      <h4>Bloqueo</h4>
-      <label class="campo campo--linea"><span>La caja se bloquea sola después de</span>
-        <select id="ajBloqueo">${[1, 2, 3, 5, 10, 15, 30].map((m) =>
-          `<option value="${m}"${m === minutos ? " selected" : ""}>${m} minuto${m === 1 ? "" : "s"} sin uso</option>`).join("")}
-        </select></label>
-      <p class="ayuda" style="margin:8px 0 0">Nunca corta una venta: si hay un pedido armado o
-        un diálogo abierto, espera.</p>
-    </div>
 
-    <div class="ajuste">
-      <h4>Copia de afuera</h4>
-      <p class="ayuda" style="margin:0">Cada respaldo se copia también a esta carpeta, y se
-        revisa que abra. Conviene una que se sincronice sola con la nube (OneDrive, Google
-        Drive, Dropbox) o un pendrive: si el disco de este computador se muere, o se roban
-        el computador, las ventas quedan ahí.</p>
-      ${estadoAfueraHTML(AJUSTES.respaldo_afuera_estado)}
-      <div class="ajuste__fila">
-        <input id="ajAfuera" class="ajuste__ruta" value="${esc(AJUSTES.respaldo_afuera || "")}"
-               placeholder="Una carpeta de OneDrive, Google Drive o un pendrive">
-        <button class="btn" data-guardar-afuera>Guardar</button>
-        <button class="btn" data-probar-afuera>Respaldar ahora</button>
-      </div>
-      <div class="ajuste__lugares" id="ajLugares"></div>
-    </div>
 
-    <div class="ajuste">
-      <h4>Actualizaciones</h4>
-      <label class="campo campo--linea"><span>Recibir</span>
-        <select id="ajCanal">
-          <option value="estable"${piloto ? "" : " selected"}>Las versiones ya probadas (recomendado)</option>
-          <option value="piloto"${piloto ? " selected" : ""}>Las nuevas, antes que nadie</option>
-        </select></label>
-      <p class="ayuda" style="margin:8px 0 0">Una versión nueva llega primero a un local de
-        confianza y, si anda bien, días después a todos.</p>
-    </div>
 
-    <div class="ajuste" id="ajMudanza" hidden></div>
 
-    <div class="ajuste">
-      <h4>Si algo falla</h4>
-      <p class="ayuda" style="margin:0">Baja un archivo con el registro de errores y el estado
-        de la caja —sin tu PIN ni tus claves— y mándalo por WhatsApp a soporte.</p>
-      <div class="ajuste__fila"><button class="btn" data-diagnostico>Descargar diagnóstico</button></div>
-    </div>
-
-    <div class="ajuste">
-      <h4>Teclado</h4>
-      <label class="marca">
-        <input type="checkbox" id="ajTeclado" ${prendido ? "checked" : ""}>
-        Usar el teclado numérico en pantalla</label>
-      <p class="ayuda" style="margin:8px 0 0">
-        Préndelo si esta caja tiene <b>pantalla táctil</b>. En un computador con
-        teclado de verdad estorba: se abre solo y tapa media pantalla justo cuando
-        quieres escribir. Apagado, se escribe con el teclado del computador,
-        incluido el PIN.
-      </p>
-    </div>`;
-  conectarBalanza();
-  conectarImpresion();
-  cargarAjustesDelLocal();
-}
-
-function estadoAfueraHTML(e) {
-  e = e || {};
-  if (!e.carpeta) {
-    return `<div class="ajuste__alerta">Todavía no hay copia de afuera. Si el disco de este
-      computador se muere, se pierden las ventas junto con sus respaldos.</div>`;
-  }
-  if (!e.cuando) {
-    return `<p class="ayuda" style="margin:8px 0 0">Carpeta elegida. La primera copia sale en el
-      próximo respaldo.</p>`;
-  }
-  const cuando = new Date(e.cuando).toLocaleString("es-CL",
-    { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-  return e.ok
-    ? `<p class="ajuste__ok">Última copia: ${esc(cuando)} · se revisó y abre bien${
-        e.ventas != null ? ` (${e.ventas} ventas)` : ""}.</p>`
-    : `<div class="ajuste__alerta">La última copia falló (${esc(cuando)}): ${esc(e.detalle || "")}</div>`;
-}
-
-async function cargarAjustesDelLocal() {
-  try {
-    const d = await api("/local");
-    $("#ajLocalNombre").value = d.nombre || "";
-    $("#ajLocalRut").value = d.rut || "";
-    $("#ajLocalDireccion").value = d.direccion || "";
-  } catch (e) { }
-  try {
-    const linea = lineaDeMudanza(await api("/mudanza"));
-    const caja = $("#ajMudanza");
-    if (caja && linea) { caja.innerHTML = "<h4>Mudanza</h4>" + linea; caja.hidden = false; }
-  } catch (e) { }
-  try { pintarRed(await api("/red")); }
-  catch (e) { $("#ajRed").innerHTML = `<h4>PIN de red</h4><p class="ayuda">${esc(e.message)}</p>`; }
-  try {
-    const lugares = await api("/respaldo/lugares");
-    $("#ajLugares").innerHTML = !lugares.length ? "" : "En este computador hay: " + lugares.map((l) =>
-      `<button class="btn btn--chico" data-lugar="${esc(l.ruta)}" title="${esc(l.ruta)}">${esc(l.nombre)}</button>`).join(" ");
-  } catch (e) { }
-}
-
-function pintarRed(r) {
-  $("#ajRed").innerHTML = `
-    <h4>PIN de red</h4>
-    <p class="ayuda" style="margin:0">Lo piden los tablets y los otros computadores del local
-      la primera vez que abren la caja. Desde este computador no se pide.</p>
-    ${r.de_fabrica ? `<div class="ajuste__alerta">Es el PIN de fábrica, <b>el mismo de todas
-      las cajas</b>: cualquiera en el Wi-Fi del local que lo sepa puede abrir la caja.
-      Cámbialo por uno propio.</div>` : ""}
-    <div class="ajuste__fila">
-      <span class="pin-red" id="pinRedValor" data-pin="${esc(r.pin)}">••••••</span>
-      <button class="btn btn--chico" data-ver-pin-red>Ver</button>
-      ${r.fijo
-        ? `<span class="ayuda" style="margin:0">Lo fijó la instalación: no se cambia desde acá.</span>`
-        : `<button class="btn" data-nuevo-pin-red>${r.de_fabrica ? "Crear uno propio" : "Cambiar por uno nuevo"}</button>`}
-    </div>`;
-}
-
-async function guardarAjuste(cambios, mensaje) {
-  try {
-    const antes = usarInventario();
-    AJUSTES = { ...AJUSTES, ...(await api("/ajustes", { method: "PUT", body: JSON.stringify(cambios) })) };
-    if (antes !== usarInventario()) aplicarInventario();
-    avisar(mensaje);
-    reiniciarInactividad();
-  } catch (e) { avisar(e.message, true); pintarAjustes(); }
-}
-
-async function guardarLocal() {
-  try {
-    const d = await api("/local", { method: "PUT", body: JSON.stringify({
-      nombre: $("#ajLocalNombre").value.trim(), rut: $("#ajLocalRut").value.trim(),
-      direccion: $("#ajLocalDireccion").value.trim() }) });
-    ponerNombreDelLocal(d.nombre);
-    $("#ajLocalRut").value = d.rut;
-    avisar("Guardado. Los televisores lo toman en su próxima revisión.");
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function nuevoPinDeRed() {
-  if (!confirm("¿Cambiar el PIN de red?\nLos tablets y computadores que ya habían entrado " +
-               "van a tener que escribir el nuevo.")) return;
-  try {
-    const r = await api("/red/pin", { method: "POST", body: "{}" });
-    pintarRed(r);
-    $("#pinRedValor").textContent = r.pin;
-    avisar("PIN de red nuevo: " + r.pin + ". Anótalo.");
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function guardarAfuera(ruta) {
-  try {
-    AJUSTES = { ...AJUSTES, ...(await api("/ajustes", { method: "PUT",
-      body: JSON.stringify({ respaldo_afuera: ruta.trim() }) })) };
-    pintarAjustes();
-    avisar(ruta.trim() ? "Carpeta guardada. Aprieta «Respaldar ahora» para probarla." : "Sin copia de afuera");
-  } catch (e) { avisar(e.message, true); }
-}
-
-function afueraCorto(a) {
-  if (!a || !a.configurado) return "";
-  return a.ok ? " y copiado afuera" : " — la copia de afuera falló";
-}
-
-async function probarAfuera() {
-  try {
-    const r = await api("/respaldo", { method: "POST" });
-    AJUSTES = { ...AJUSTES, ...(await api("/ajustes")) };
-    pintarAjustes();
-    if (!r.afuera || !r.afuera.configurado) {
-      return avisar("Respaldo hecho en este computador. Falta elegir la carpeta de afuera.", true);
-    }
-    avisar(r.afuera.ok ? "Respaldo hecho y copiado afuera. La copia abre bien."
-                       : "La copia de afuera falló: " + (r.afuera.detalle || ""), !r.afuera.ok);
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function volverDeVersion() {
-  if (!VUELTA || !VUELTA.disponible) return;
-  if (!confirm(`¿Volver a la v${VUELTA.version}?\nSe deshace la última actualización. ` +
-               "Tus ventas, precios y respaldos no se tocan.")) return;
-  try {
-    const r = await api("/actualizacion/volver", { method: "POST" });
-    if (!r.ok) throw new Error(r.error || "No se pudo volver");
-    $("#dialogoVersion").innerHTML = `
-      <h2>Volviendo a la v${esc(r.version)}</h2>
-      <p class="ayuda">La caja se reinicia sola: la página se recarga en unos segundos.</p>`;
-    esperarQueVuelva();
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function guardarTeclado(prendido) {
-  AJUSTES.teclado_en_pantalla = prendido ? 1 : 0;
-  if (window.Teclado) Teclado.encender(prendido);
-  try {
-    await api("/ajustes", { method: "PUT",
-      body: JSON.stringify({ teclado_en_pantalla: AJUSTES.teclado_en_pantalla }) });
-    avisar(prendido ? "Teclado en pantalla prendido" : "Teclado en pantalla apagado");
-  } catch (e) { avisar(e.message, true); }
-}
 
 /* ---- Mudanza desde una caja instalada con zip ----
    La primera vez después de mudarse, un aviso que se cierra con el botón. Si la mudanza
@@ -3478,38 +2767,8 @@ function lineaDeMudanza(m) {
     ${cierre}</p>`;
 }
 
-async function pintarVersionAyuda() {
-  try {
-    const r = await api("/novedades");
-    $("#versionAyuda").textContent = "v" + r.actual;
-    $("#versionAyuda").dataset.listo = "1";
-  } catch (e) { }
-}
 
 /* El historial completo de versiones, para saber qué trae la que uno tiene. */
-async function dialogoNovedades() {
-  const r = await api("/novedades");
-  $("#dialogoVersion").className = "dialogo dialogo--ancho";
-  $("#dialogoVersion").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>Qué trae cada versión</h2>
-    <p class="ayuda">Tienes la <b>v${esc(r.actual)}</b>. Acá está todo lo que fue
-      cambiando, de lo más nuevo a lo más viejo.</p>
-    <div class="novedades" style="max-height:56vh">
-      ${r.versiones.map((v) => `
-        <div class="version-fila ${v.version === r.actual ? "es-la-tuya" : ""}">
-          <div class="version-fila__tit">
-            <b>v${esc(v.version)} · ${esc(v.nombre)}</b>
-            <span>${esc(v.fecha)}${v.version === r.actual ? " · la que tienes" : ""}</span>
-          </div>
-          <p>${esc(v.novedades)}</p>
-        </div>`).join("")}
-    </div>
-    <div class="dialogo__pie">
-      <button class="btn" data-cerrar-capa>Cerrar</button>
-    </div>`;
-  $("#capaVersion").classList.add("is-on");
-}
 
 /* ---- "se vende tal cual" ----
    El atajo para lo que se compra hecho y se vende igual: un pastel, un alfajor,
@@ -3535,8 +2794,6 @@ function usarInventario() {
 }
 
 function aplicarInventario() {
-  const interruptor = $("#ajInventario");
-  if (interruptor) interruptor.checked = usarInventario();
   if (!usarInventario()) {
     $("#capaBodega").classList.remove("is-on");
     $("#capaProducto").classList.remove("is-on");
@@ -3721,7 +2978,7 @@ function verVista(nombre, empujarHash = true) {
   if (empujarHash) location.hash = "#/" + nombre;
   if (nombre === "dia") Ventas.abrir();
   if (nombre === "inventario") cargarInventario();
-  if (nombre === "guias") pintarGuias();
+  if (nombre === "guias") Config.abrir();
 }
 
 function vistaDelHash() {
@@ -3763,6 +3020,13 @@ document.addEventListener("click", (e) => {
     campo.dispatchEvent(new Event("input", { bubbles: true }));
     return;
   }
+  if (cerca("data-prop")) {
+    const pct = +cerca("data-prop").dataset.prop;
+    const base = Math.max(0, totalCarrito() - soloNumeros($("#descuento").value));
+    $("#propina").value = Math.round(base * pct / 100 / 10) * 10 || "";
+    actualizarCobro();
+    return;
+  }
   if (cerca("data-desc")) {
     const pct = +cerca("data-desc").dataset.desc;
     // Redondeado a $10 para que el vuelto no quede con monedas que no existen.
@@ -3802,7 +3066,9 @@ document.addEventListener("click", (e) => {
     medioPago = t.closest(".medio").dataset.medio;
     $$("#medios .medio").forEach((b) => b.classList.toggle("is-on", b.dataset.medio === medioPago));
     $("#bloqueEfectivo").style.display = medioPago === "efectivo" ? "" : "none";
-    return calcularVuelto();
+    ajustarPropinaSegunMedio();
+    actualizarCobro();
+    return;
   }
   if (t.id === "limpiarBuscar") { $("#buscar").value = ""; $("#buscar").focus(); return buscar(""); }
   if (t.closest("#btnPantallaCompleta")) return alternarPantallaCompleta();
@@ -3847,26 +3113,6 @@ document.addEventListener("click", (e) => {
   if (cerca("data-otro-usuario")) return mostrarCandado();
   if (cerca("data-reintentar-candado")) return mostrarCandado();
   if (cerca("data-recargar")) return location.reload();
-  if (cerca("data-guardar-local")) return guardarLocal();
-  if (cerca("data-ver-pin-red")) {
-    const v = $("#pinRedValor");
-    v.textContent = v.textContent.includes("•") ? v.dataset.pin : "••••••";
-    return;
-  }
-  if (cerca("data-nuevo-pin-red")) return nuevoPinDeRed();
-  if (cerca("data-guardar-afuera")) return guardarAfuera($("#ajAfuera").value);
-  if (cerca("data-probar-afuera")) return probarAfuera();
-  if (cerca("data-lugar")) { $("#ajAfuera").value = cerca("data-lugar").dataset.lugar; return; }
-  if (cerca("data-diagnostico")) { window.open("/api/v1/diagnostico", "_blank"); return; }
-  if (cerca("data-volver-version")) return volverDeVersion();
-  if (t.id === "ajTeclado") return guardarTeclado(t.checked);
-  if (t.id === "ajInventario") return guardarAjuste({ usar_inventario: t.checked ? 1 : 0 },
-    t.checked ? "Listo: vuelves a llevar inventario" : "Listo: puedes vender sin llevar inventario");
-  if (t.id === "ajBloqueo") return guardarAjuste({ bloqueo_minutos: +t.value },
-    `Listo: la caja se bloquea después de ${t.value} min sin uso`);
-  if (t.id === "ajCanal") return guardarAjuste({ canal_actualizaciones: t.value },
-    t.value === "piloto" ? "Vas a recibir las versiones nuevas antes que nadie"
-                         : "Vas a recibir solo las versiones ya probadas");
   if (t.id === "abrirLaCaja") return dialogoTurno();
   if (t.id === "salirSinCaja") return salirDeLaCaja("cambio");
   if (t.id === "crearPrimero") return crearPrimerUsuario();
@@ -3897,25 +3143,8 @@ document.addEventListener("click", (e) => {
   }
   if (cerca("data-margen")) return elegirMargen(+cerca("data-margen").dataset.margen);
 
-  // ---- el equipo ----
-  if (t.closest("#verEquipo")) return dialogoEquipo();
-  if (cerca("data-editar-usuario")) {
-    const v = cerca("data-editar-usuario").dataset.editarUsuario;
-    return formUsuario(v === "nuevo" ? 0 : +v);
-  }
-  if (cerca("data-equipo-volver")) return dialogoEquipo();
-  if (cerca("data-rol")) {
-    const b = cerca("data-rol");
-    $$("#uRol .medio").forEach((o) => o.classList.toggle("is-on", o === b));
-    if ($("#uHeredar").checked) marcarPermisosPersona(PERMISOS_EQUIPO.roles[b.dataset.rol] || []);
-    return;
-  }
-  if (cerca("data-guardar-usuario"))
-    return guardarUsuario(+cerca("data-guardar-usuario").dataset.guardarUsuario);
-  if (cerca("data-sacar-usuario"))
-    return sacarUsuario(+cerca("data-sacar-usuario").dataset.sacarUsuario);
-  if (cerca("data-revivir-usuario"))
-    return revivirUsuario(+cerca("data-revivir-usuario").dataset.revivirUsuario);
+  // ---- el equipo: vive en Config → Equipo (config.js) ----
+  if (t.closest("#verEquipo")) return Config.irA("equipo");
 
   if (cerca("data-dibujo")) {
     const b = cerca("data-dibujo");
@@ -4021,7 +3250,6 @@ document.addEventListener("keydown", (e) => {
     NOMBRE_DEL_LOCAL = s.local;
     $("#nombreLocal").textContent = s.local;
     document.title = "Caja · " + s.local;
-    pintarConectar(s);
   } catch (e) { avisar("No se pudo conectar con el punto de venta", true); }
 
   // Los ajustes van PRIMERO: el candado pregunta el PIN de una forma o de otra
@@ -4047,8 +3275,6 @@ document.addEventListener("keydown", (e) => {
   await cargarCarta();
   await cargarTurno();
   cargarVersion();
-  pintarVersionAyuda();
-  pintarAjustes();
   pintarCarrito();
   verVista(vistaDelHash(), false);
   avisoDeMudanza();

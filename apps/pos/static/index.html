@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/styles.css?v=__VERSION__">
 <link rel="stylesheet" href="/static/inventario.css?v=__VERSION__">
 <link rel="stylesheet" href="/static/ventas.css?v=__VERSION__">
+<link rel="stylesheet" href="/static/config.css?v=__VERSION__">
 </head>
 <body>
 
@@ -110,26 +111,7 @@
 <main class="vista" data-vista="inventario" id="vistaInventario"></main>
 
 <!-- ══════════ AYUDA ══════════ -->
-<main class="vista" data-vista="guias">
-  <div class="panel" id="panelAjustes"></div>
-  <div class="panel"><details class="conectar" id="pantallasLocal"><summary>Las pantallas del local</summary><div id="conectar"></div></details></div>
-
-  <div class="panel panel--ayuda">
-    <div class="ayuda-cabecera">
-      <div>
-        <h3>Guías</h3>
-        <p class="ayuda" style="margin:0">Cómo se hace cada cosa, explicado paso a paso.
-          Se puede leer de pie, con el local abierto.</p>
-      </div>
-      <span class="version" id="versionAyuda" title="Ver qué cambió en cada versión"></span>
-    </div>
-    <div class="ayuda-cuerpo">
-      <nav class="ayuda-lista" id="listaGuias"></nav>
-      <article class="ayuda-texto" id="textoGuia"></article>
-    </div>
-  </div>
-
-</main>
+<main class="vista" data-vista="guias" id="vistaConfig"></main>
 
 <!-- ══════════ COBRAR ══════════ -->
 <div class="capa" id="capaCobro">
@@ -150,7 +132,7 @@
             <button class="medio" data-medio="credito">Crédito</button>
             <button class="medio" data-medio="transferencia">Transferencia</button>
           </div>
-          <label class="marca" style="margin-top:10px">
+          <label class="marca" id="marcaMixto" style="margin-top:10px">
             <input type="checkbox" id="pagoMixto"> Paga en dos formas (parte y parte)</label>
         </div>
 
@@ -164,10 +146,11 @@
           <label class="campo"><span>Descuento</span>
             <input id="descuento" type="text" inputmode="numeric" placeholder="0"
                    autocomplete="off"></label>
-          <label class="campo"><span>Propina</span>
+          <label class="campo" id="campoPropina"><span>Propina</span>
             <input id="propina" type="text" inputmode="numeric" placeholder="0"
                    autocomplete="off"></label>
         </div>
+        <div class="rapidos" id="rapidosProp" hidden></div>
         <div class="rapidos" id="rapidosDesc">
           <button data-desc="0">Sin descuento</button>
           <button data-desc="10">10%</button>
@@ -200,11 +183,6 @@
 </div>
 
 <!-- ══════════ TURNO ══════════ -->
-<!-- ══════════ EQUIPO ══════════ -->
-<div class="capa" id="capaEquipo">
-  <div class="dialogo dialogo--ancho" id="dialogoEquipo"></div>
-</div>
-
 <!-- ══════════ ACTUALIZACIONES ══════════ -->
 <div class="capa" id="capaVersion">
   <div class="dialogo" id="dialogoVersion"></div>
@@ -228,6 +206,11 @@
 
 <div class="capa capa--firme" id="capaBodega">
   <div class="dialogo dialogo--ancho" id="dialogoBodega"></div>
+</div>
+
+<!-- Los diálogos de la pestaña Config (persona, televisor, restaurar, confirmaciones). -->
+<div class="capa" id="capaConfig">
+  <div class="dialogo i-dlg" id="dialogoConfig"></div>
 </div>
 
 <!-- Los diálogos de la pestaña Ventas (detalle de una venta, anular, retiro, corte de un turno). -->
@@ -274,5 +257,7 @@
 <script src="/static/app.js?v=__VERSION__"></script>
 <script src="/static/ventas-logica.js?v=__VERSION__"></script>
 <script src="/static/ventas.js?v=__VERSION__"></script>
+<script src="/static/config-logica.js?v=__VERSION__"></script>
+<script src="/static/config.js?v=__VERSION__"></script>
 </body>
 </html>

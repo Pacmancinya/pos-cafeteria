@@ -13,6 +13,7 @@ import re
 from typing import Literal
 from apps.pos import local as datos_local
 from apps.pos import impresion_windows, sesion
+from apps.pos.api import config as puerta_config
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -163,7 +164,7 @@ def _comprobante(venta_id: int, s: Session) -> tuple[str, str]:
     {anulada}
     <div class="aviso">NO ES BOLETA<br>Comprobante interno del local</div>
     {'<div class="aviso">DEMO · datos de ejemplo</div>' if modo_demo() else ''}
-    <div class="centro chico" style="margin-top:9px">¡Gracias!</div>"""
+    <div class="centro chico" style="margin-top:9px">{escape(datos_local.mensaje_ticket())}</div>"""
     return f"Comprobante {v.numero}", cuerpo
 
 
@@ -250,7 +251,9 @@ def _bloques_comprobante(venta_id: int, s: Session) -> list:
         bloques.append({"tipo": "aviso", "texto": "DEMO - DATOS DE EJEMPLO"})
     bloques += [
         {"tipo": "blanco"},
-        {"tipo": "centro", "texto": "¡Gracias!"},
+        # La frase del pie la escribe el dueño (Config → Mi local): puede ser larga, así que
+        # se parte en palabras al ancho del rollo (32 columnas en 58 mm, 48 en 80 mm).
+        {"tipo": "centro", "texto": datos_local.mensaje_ticket(), "envolver": True},
     ]
     return bloques
 
@@ -264,7 +267,7 @@ def _enviar(datos: ImpresionIn, lineas: list, crudo: bool = False):
 
 
 @router.get("/api/v1/impresion/impresoras")
-def impresoras(quien: dict = Depends(sesion.exige("config"))):
+def impresoras(quien: dict = Depends(puerta_config.exige())):
     try:
         return impresion_windows.listar()
     except impresion_windows.ErrorImpresion as e:
@@ -272,12 +275,12 @@ def impresoras(quien: dict = Depends(sesion.exige("config"))):
 
 
 @router.post("/api/v1/impresion/prueba")
-def prueba_impresion(datos: ImpresionIn, quien: dict = Depends(sesion.exige("config"))):
+def prueba_impresion(datos: ImpresionIn, quien: dict = Depends(puerta_config.exige())):
     return _prueba(datos)
 
 
 @router.post("/api/v1/impresion/crudo/prueba")
-def prueba_cruda(datos: ImpresionIn, quien: dict = Depends(sesion.exige("config"))):
+def prueba_cruda(datos: ImpresionIn, quien: dict = Depends(puerta_config.exige())):
     return _prueba(datos, crudo=True)
 
 
@@ -299,6 +302,9 @@ def _prueba(datos: ImpresionIn, crudo: bool = False):
             {"tipo": "separador"},
             {"tipo": "aviso", "texto": "NO ES BOLETA"},
             {"tipo": "chico", "texto": "Prueba sin venta ni cobro.", "centrado": True},
+            {"tipo": "blanco"},
+            # Así se ve la frase del pie en este papel, antes de cobrarle a alguien.
+            {"tipo": "centro", "texto": datos_local.mensaje_ticket(), "envolver": True},
         ], crudo=True)
     return _enviar(datos, [datos_local.nombre(), "PRUEBA DE IMPRESIÓN",
                           f"Papel de {datos.papel} mm", "Café · azúcar · ñ · $1.234",
@@ -340,7 +346,7 @@ class InstalacionIn(BaseModel):
 
 
 @router.get("/api/v1/impresion/puertos")
-def puertos_impresion(quien: dict = Depends(sesion.exige("config"))):
+def puertos_impresion(quien: dict = Depends(puerta_config.exige())):
     try:
         return impresion_windows.puertos_sin_impresora()
     except impresion_windows.ErrorImpresion as e:
@@ -348,7 +354,7 @@ def puertos_impresion(quien: dict = Depends(sesion.exige("config"))):
 
 
 @router.post("/api/v1/impresion/instalar")
-def instalar_impresora(datos: InstalacionIn, quien: dict = Depends(sesion.exige("config"))):
+def instalar_impresora(datos: InstalacionIn, quien: dict = Depends(puerta_config.exige())):
     try:
         return impresion_windows.instalar(datos.puerto, datos.nombre)
     except impresion_windows.ErrorImpresion as e:

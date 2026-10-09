@@ -132,7 +132,8 @@ def test_las_rutas_que_leen_datos_restringidos_piden_permiso():
         fuente = io.open(api / archivo, encoding="utf-8").read()
         for m in re.finditer(r'@router\.get\((["\'])(.+?)\1', fuente):
             trozo = fuente[m.start():m.start() + 320]
-            if "sesion.exige(" not in trozo and "Depends(exige(" not in trozo:
+            if ("sesion.exige(" not in trozo and "Depends(exige(" not in trozo
+                    and "exige_o_config(" not in trozo):
                 sin_guardia.append(f"{archivo} {m.group(2)}")
 
     assert not sin_guardia, (

@@ -213,9 +213,24 @@ def main() -> None:
             paso("merma", cerrar + "; invAbrirOperacion('merma')", 1200)
             paso("categorias", cerrar + "; invAbrirCategorias()", 800)
             paso("inventario_actualizado", cerrar + "; verVista('inventario')", 1200)
-            paso("ayuda", "verVista('guias')", 1000)
+            # Config: pide el PIN (lo verifica el servidor); con PIN se recorren sus secciones y diálogos.
+            paso("config_pin", "verVista('guias')", 1000)
+            if PIN:
+                paso("config_local", """(async () => {
+                  await fetch('/api/v1/config/entrar', {method: 'POST',
+                    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: '%s'})});
+                  verVista('caja'); verVista('guias');
+                })()""" % PIN, 1800)
+                for sec in ("equipo", "cobro", "impresora", "pantallas", "caja", "respaldos", "guias"):
+                    paso("config_" + sec, "document.querySelector('.cfg-nav__b[data-c-sec=\"%s\"]').click()" % sec, 1200)
+                paso("config_equipo_persona", """document.querySelector('.cfg-nav__b[data-c-sec="equipo"]').click();
+                  setTimeout(() => document.querySelector('[data-c-persona]').click(), 500)""", 1500)
+                paso("config_television", cerrar + """; document.querySelector('.cfg-nav__b[data-c-sec="pantallas"]').click();
+                  setTimeout(() => { const b = document.querySelector('[data-c-tv]'); if (b) b.click(); }, 700)""", 1500)
+                paso("config_buscador", cerrar + """; const i = document.querySelector('#cfgBuscar'); i.value = 'propina';
+                  i.dispatchEvent(new Event('input', {bubbles: true}))""", 600)
+                paso("config_salir", cerrar + """; document.querySelector('[data-c-act="salir"]').click()""", 600)
             paso("cierre_de_caja", "verVista('caja'); dialogoTurno()", 1500)
-            paso("equipo", cerrar + "; dialogoEquipo()", 1200)
             paso("version", cerrar + "; dialogoVersion()", 1200)
 
             if errores:

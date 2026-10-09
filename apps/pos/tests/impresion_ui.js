@@ -18,9 +18,7 @@ function entorno(almacen = new Map()) {
     innerHTML: '', style: {}, remove() {}, addEventListener(tipo, fn) { this[tipo] = fn; },
     classList: { remove() { this.cerrada = true; } } });
   for (const id of ['cobroConfirmar', 'descuento', 'propina', 'pagaCon', 'capaCobro',
-    'ajImprimirSiempre', 'ajImpresora', 'ajPapel', 'ajActualizarImpresoras',
-    'ajImpresionEstado', 'ajProbarImpresion', 'panelAjustes', 'ajTipoImpresora',
-    'ajInstalacionImpresora', 'ajInstalarImpresora', 'ajPuertoImpresora']) nodos.set('#' + id, nodo());
+    ]) nodos.set('#' + id, nodo());
   const c = { console, Set, JSON, setTimeout() {},
     $: (id) => nodos.get(id), puedo: () => true,
     document: { getElementById: () => null, createElement: nodo,
@@ -45,8 +43,7 @@ function entorno(almacen = new Map()) {
   vm.runInContext(fuente.slice(fuente.indexOf('const clp ='), fuente.indexOf('/* El mismo')), c);
   vm.runInContext(fuente.slice(fuente.indexOf('function leerImpresion()'),
     fuente.indexOf('/* ---------------- utilidades')), c);
-  for (const nombre of ['confirmarVenta', 'bloqueImpresion', 'guardarImpresion',
-    'cargarImpresoras', 'probarImpresion', 'instalarImpresora', 'conectarImpresion', 'pintarAjustes']) {
+  for (const nombre of ['confirmarVenta']) {
     vm.runInContext(funcion(nombre), c);
   }
   return { c, nodos, avisos, marcos, envios, almacen,
@@ -66,42 +63,6 @@ function entorno(almacen = new Map()) {
   let e = entorno();
   e.c.localStorage.getItem = () => { throw Error('Sin almacenamiento'); };
   assert.deepEqual(plano(e.c.leerImpresion()), { automatica: false, impresora: '', papel: 80, tipo: null, puerto: '' });
-
-  e = entorno();
-  e.c.pintarAjustes();
-  assert(e.nodos.get('#panelAjustes').innerHTML.includes('Impresión de comprobantes'));
-  assert(e.nodos.get('#panelAjustes').innerHTML.includes('58 mm'));
-  assert(e.nodos.get('#panelAjustes').innerHTML.includes('80 mm'));
-  await tick();
-  e.nodos.get('#ajImprimirSiempre').checked = true;
-  e.nodos.get('#ajImpresora').value = 'Caja ñ';
-  e.nodos.get('#ajPapel').value = '58';
-  e.nodos.get('#ajPapel').change();
-  assert.deepEqual(entorno(e.almacen).preferencias(),
-    { automatica: true, impresora: 'Caja ñ', papel: 58, tipo: null, puerto: '' });
-  e.c.localStorage.setItem = () => { throw Error('Cuota'); };
-  e.nodos.get('#ajPapel').value = '80';
-  e.c.guardarImpresion();
-  assert.equal(e.preferencias().papel, 58);
-  assert.equal(e.nodos.get('#ajPapel').value, '58');
-
-  // Lista vacía, impresora removida y fallo de Windows no borran la selección.
-  e.c.api = async () => ({ disponible: true, impresoras: [] });
-  await e.c.cargarImpresoras();
-  assert(e.nodos.get('#ajImpresora').innerHTML.includes('no disponible'));
-  assert.equal(e.nodos.get('#ajImpresora').value, 'Caja ñ');
-  e.c.api = async () => { throw Error('Windows desconectado'); };
-  await e.c.cargarImpresoras();
-  assert(e.nodos.get('#ajImpresionEstado').textContent.includes('Se conserva'));
-  assert.equal(e.nodos.get('#ajActualizarImpresoras').disabled, false);
-  e.c.api = async () => ({ disponible: false, impresoras: [], detalle: 'Requiere Windows' });
-  await e.c.cargarImpresoras();
-  assert.equal(e.nodos.get('#ajImpresionEstado').textContent, 'Requiere Windows');
-  e.c.api = async () => ({ disponible: true, impresoras: [
-    { nombre: 'Caja <ñ>', disponible: true }, { nombre: 'PDF', disponible: false }] });
-  await e.c.cargarImpresoras();
-  assert(e.nodos.get('#ajImpresora').innerHTML.includes('Caja &lt;ñ>'));
-  assert(e.nodos.get('#ajImpresora').innerHTML.includes('disabled>PDF'));
 
   const guardadas = new Map([['pos.impresion', JSON.stringify({
     automatica: true, impresora: 'Caja', papel: 58 })]]);
@@ -146,26 +107,6 @@ function entorno(almacen = new Map()) {
     assert(e.avisos.at(-1)[0].includes('La venta sigue registrada'));
   }
 
-  // Prueba doble: un solo POST de prueba y ningún /ventas.
-  e = entorno(guardadas);
-  e.c.api = (ruta, opciones) => {
-    e.envios.push([ruta, opciones]);
-    return new Promise((resolve) => { terminar = resolve; });
-  };
-  const prueba = e.c.probarImpresion();
-  await e.c.probarImpresion();
-  assert.equal(e.envios.length, 1);
-  assert.equal(e.envios[0][0], '/impresion/prueba');
-  assert.equal(e.nodos.get('#ajProbarImpresion').disabled, true);
-  terminar({ detalle: 'Enviado a la cola' });
-  await prueba;
-  assert.equal(e.nodos.get('#ajProbarImpresion').disabled, false);
-  assert.equal(e.c.carrito.length, 1);
-  e.c.puedo = () => false;
-  await e.c.probarImpresion();
-  await e.c.cargarImpresoras();
-  assert.equal(e.envios.length, 1);
-
   e = entorno();
   e.c.api = async () => ({ id: 8, numero: 13 });
   await e.c.confirmarVenta();
@@ -179,17 +120,12 @@ function entorno(almacen = new Map()) {
   for (const tipo of ['termica', 'windows', 'navegador']) {
     e = entorno(new Map([['pos.impresion', JSON.stringify({
       automatica: true, impresora: 'Sewoo', papel: 80, tipo })]]));
-    assert(e.c.bloqueImpresion().includes('Tipo de impresora'));
-    assert(e.c.bloqueImpresion().includes('Impresora de tickets (térmica)'));
-    assert(e.c.bloqueImpresion().includes('Impresora normal (Windows)'));
     await e.c.imprimir('/comprobante/20');
     if (tipo === 'navegador') {
       assert.equal(e.envios.length, 0);
       assert.equal(e.marcos[0].src, '/comprobante/20?papel=80');
     } else {
       assert.equal(e.envios[0][0], `/impresion/${tipo === 'termica' ? 'crudo/' : ''}comprobante/20`);
-      await e.c.probarImpresion();
-      assert.equal(e.envios[1][0], `/impresion/${tipo === 'termica' ? 'crudo/' : ''}prueba`);
     }
     const llamadas = e.envios.length;
     await e.c.imprimir('/cierre/4');
@@ -197,68 +133,8 @@ function entorno(almacen = new Map()) {
     assert.equal(e.marcos.at(-1).src, '/cierre/4?papel=80');
   }
 
-  // El puerto detecta una ticketera de nombre genérico y se recuerda al abrir
-  // la caja. Cambiar el tipo a mano gana sobre cualquier actualización posterior.
-  e = entorno(new Map([['pos.impresion', JSON.stringify({ impresora: 'Caja', papel: 80 })]]));
-  e.c.api = async () => ({ disponible: true, impresoras: [
-    { nombre: 'Caja', puerto: 'USB001', disponible: true }] });
-  await e.c.cargarImpresoras();
-  assert.equal(e.nodos.get('#ajTipoImpresora').value, 'termica');
-  assert.equal(entorno(e.almacen).c.tipoImpresion(), 'termica');
-  e.nodos.get('#ajPapel').value = '80';
-  e.nodos.get('#ajTipoImpresora').value = 'windows';
-  e.c.guardarImpresion(true);
-  await e.c.cargarImpresoras();
-  assert.equal(entorno(e.almacen).c.tipoImpresion(), 'windows');
-
-  // Instalar solo se ofrece sin impresoras de papel y con algún puerto libre.
-  for (const papel of [true, false]) {
-    for (const libre of [true, false]) {
-      e = entorno();
-      e.c.api = async (ruta) => ruta.endsWith('/puertos')
-        ? { puertos: libre ? [{ nombre: 'USB001', descripcion: 'USB <tickets>' }] : [] }
-        : { disponible: true, impresoras: [{ nombre: 'PDF', disponible: false },
-          ...(papel ? [{ nombre: 'Caja', disponible: true }] : [])] };
-      await e.c.cargarImpresoras();
-      assert.equal(e.nodos.get('#ajInstalacionImpresora').hidden, papel || !libre);
-    }
-  }
-  e = entorno();
-  let instalada = false;
-  e.c.api = async (ruta, opciones) => {
-    e.envios.push([ruta, opciones]);
-    if (ruta.endsWith('/instalar')) {
-      assert.deepEqual(JSON.parse(opciones.body), { puerto: 'USB001', nombre: 'Kofe Tickets' });
-      assert.equal(opciones.espera, 125000);
-      instalada = true;
-      return { nombre: 'Kofe Tickets', ok: true };
-    }
-    if (ruta.endsWith('/puertos')) return { puertos: [{ nombre: 'USB001', descripcion: 'USB' }] };
-    return { disponible: true, impresoras: instalada
-      ? [{ nombre: 'Kofe Tickets', puerto: 'USB001', disponible: true }] : [] };
-  };
-  await e.c.cargarImpresoras();
-  e.nodos.get('#ajPuertoImpresora').value = 'USB001';
-  e.nodos.get('#ajPapel').value = '80';
-  await e.c.instalarImpresora();
-  assert.equal(e.preferencias().impresora, 'Kofe Tickets');
-  assert.equal(entorno(e.almacen).c.tipoImpresion(), 'termica');
-  assert.equal(e.nodos.get('#ajInstalacionImpresora').hidden, true);
-  assert.equal(e.nodos.get('#ajInstalarImpresora').disabled, false);
-
-  e = entorno();
-  e.c.api = async (ruta) => ruta.endsWith('/puertos')
-    ? { puertos: [{ nombre: 'USB001' }] } : { disponible: true, impresoras: [] };
-  await e.c.cargarImpresoras();
-  e.nodos.get('#ajPuertoImpresora').value = 'USB001';
-  let rechazar;
-  e.c.api = () => new Promise((resolve, reject) => { rechazar = reject; });
-  const instalacion = e.c.instalarImpresora();
-  await e.c.instalarImpresora();
-  rechazar(Error('Se canceló el permiso de Windows. No se instaló la impresora.'));
-  await instalacion;
-  assert(e.nodos.get('#ajImpresionEstado').textContent.includes('Se canceló'));
-  assert.equal(e.preferencias().impresora, '');
-  assert.equal(e.nodos.get('#ajInstalarImpresora').disabled, false);
+  // El tipo se deduce del nombre y del puerto cuando el dueño no eligió uno (la pantalla de
+  // Config lo guarda en config.js; la deducción se prueba en config_logica.cjs).
+  assert.equal(entorno(new Map([['pos.impresion', JSON.stringify({ impresora: 'Caja', papel: 80, puerto: 'USB001' })]])).c.tipoImpresion(), 'termica');
   console.log('Impresión UI: tipos, instalación, persistencia y cobro aislado OK');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -530,6 +530,6 @@ def test_con_precio_por_unidad_si_se_vende_tocandolo(cliente, caja, carta):
 def test_balanza_apagada_explica_que_hacer(cliente, caja):
     cliente.put("/api/v1/ajustes", json={"usar_balanza": 0})
     codigo = _etiqueta()
-    assert "Ayuda → Ajustes" in _escanear(cliente, codigo)["problema"]
+    assert "Config → Impresora y balanza" in _escanear(cliente, codigo)["problema"]
     r = _cobrar(cliente, codigo)
     assert r.status_code == 409 and "apagada" in r.json()["detail"]

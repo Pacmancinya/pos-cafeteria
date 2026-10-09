@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from apps.pos.db.models import Venta
 from apps.pos import sesion
+from apps.pos.api import config as puerta_config
 from apps.pos.db.session import get_session
 from core.config import a_local, hoy_local, neto_iva, rango_utc_del_dia
 from tools import respaldo as resp
@@ -20,12 +21,12 @@ router = APIRouter(prefix="/api/v1", tags=["datos"])
 
 
 @router.post("/respaldo")
-def hacer_respaldo(quien: dict = Depends(sesion.exige("ver_informes"))):
+def hacer_respaldo(quien: dict = Depends(puerta_config.exige_o_config("ver_informes"))):
     return resp.respaldar("botón")
 
 
 @router.get("/respaldos")
-def ver_respaldos(quien: dict = Depends(sesion.exige("ver_informes"))):
+def ver_respaldos(quien: dict = Depends(puerta_config.exige_o_config("ver_informes"))):
     return {"carpeta": resp.CARPETA, "copias": resp.listar()}
 
 
@@ -55,7 +56,7 @@ def _ventas_entre(s: Session, desde: date, hasta: date) -> list[Venta]:
 
 
 @router.get("/exportar/ventas",
-            dependencies=[Depends(sesion.exige("ver_informes"))])
+            dependencies=[Depends(puerta_config.exige_o_config("ver_informes"))])
 def exportar_ventas(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),
@@ -91,7 +92,7 @@ def exportar_ventas(
 
 
 @router.get("/exportar/detalle",
-            dependencies=[Depends(sesion.exige("ver_informes"))])
+            dependencies=[Depends(puerta_config.exige_o_config("ver_informes"))])
 def exportar_detalle(
     desde: str | None = Query(default=None),
     hasta: str | None = Query(default=None),

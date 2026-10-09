@@ -218,6 +218,43 @@ def _podar(carpeta: str) -> int:
     return borrados
 
 
+def listar_detalle() -> list[dict]:
+    """Los respaldos con lo que hay que saber para elegir uno: cuándo se sacó, cuánto pesa,
+    cuántas ventas tiene y si se abre. Incluye las copias `antes-de-restaurar-*`, que se
+    guardan cada vez que se restaura: son la forma de deshacer una restauración."""
+    if not os.path.isdir(CARPETA):
+        return []
+    salida = []
+    for f in os.listdir(CARPETA):
+        diario = f.startswith("pos-") and f.endswith(".db")
+        antes = f.startswith("antes-de-restaurar-") and f.endswith(".db")
+        if not (diario or antes):
+            continue
+        ruta = os.path.join(CARPETA, f)
+        ventas = None
+        try:
+            c = sqlite3.connect(f"file:{ruta}?mode=ro", uri=True)
+            try:
+                ventas = c.execute("SELECT COUNT(*) FROM venta").fetchone()[0]
+            finally:
+                c.close()
+        except sqlite3.Error:
+            ventas = None
+        try:
+            cuando = datetime.fromtimestamp(os.path.getmtime(ruta), ZONA)
+        except OSError:
+            continue
+        salida.append({
+            "archivo": f, "tipo": "diario" if diario else "antes",
+            "fecha": f[4:-3] if diario else cuando.strftime("%Y-%m-%d"),
+            "hora": cuando.strftime("%H:%M"),
+            "tamano_kb": round(os.path.getsize(ruta) / 1024),
+            "ventas": ventas, "abre": ventas is not None,
+        })
+    salida.sort(key=lambda r: (r["fecha"], r["hora"]), reverse=True)
+    return salida
+
+
 def listar() -> list[dict]:
     if not os.path.isdir(CARPETA):
         return []

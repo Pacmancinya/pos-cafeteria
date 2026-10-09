@@ -4,11 +4,12 @@ from __future__ import annotations
 import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StrictInt, field_validator, model_validator
 
 from core.codigos import FORMATO_BALANZA_POR_DEFECTO, validar_formato_balanza
-from core.config import (BLOQUEO_MINUTOS, MARGEN_SUGERIDO, MEDIOS_PAGO, ROLES,
-                         TECLADO_EN_PANTALLA, TODOS_LOS_PERMISOS, UNIDADES)
+from core.config import (BLOQUEO_MINUTOS, DESCUENTOS_RAPIDOS, MARGEN_SUGERIDO,
+                         MEDIOS_PAGO, MENSAJE_TICKET, REDONDEO_PRECIO, REDONDEOS_PRECIO,
+                         ROLES, TECLADO_EN_PANTALLA, TODOS_LOS_PERMISOS, UNIDADES)
 
 
 class LineaIn(BaseModel):
@@ -240,6 +241,16 @@ class UsuarioIn(BaseModel):
             raise ValueError("El usuario necesita un nombre")
         return v.strip()
 
+    @field_validator("color")
+    @classmethod
+    def color_valido(cls, v):
+        # El color de la persona (su tarjeta en la entrada y su círculo en Config). Vacío =
+        # que la caja le reparta uno.
+        v = (v or "").strip()
+        if v and not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Ese color no es válido.")
+        return v
+
     @field_validator("rol")
     @classmethod
     def rol_valido(cls, v):
@@ -431,10 +442,63 @@ class AjustesIn(BaseModel):
     formato_balanza: dict = Field(
         default_factory=lambda: validar_formato_balanza(FORMATO_BALANZA_POR_DEFECTO))
 
+    # ---- Config → Mi local y Config → Cobro (desde la 2.33) ----
+    # Todos arrancan con lo que la caja hacía antes: ningún local cambia al actualizar.
+    # Una sola frase de despedida en el pie del comprobante. Vacía vuelve a la de siempre.
+    mensaje_ticket: str = Field(default=MENSAJE_TICKET, max_length=60)
+    # Las formas de pago que aparecen al cobrar. Al menos una: sin ninguna no se cobra.
+    medios_pago: list[str] = Field(default_factory=lambda: list(MEDIOS_PAGO))
+    pago_mixto: int = Field(default=1, ge=0, le=1)
+    propinas: int = Field(default=1, ge=0, le=1)
+    # Botones de porcentaje para la propina. Vacío = ninguno, como hasta ahora.
+    propina_sugerida: list[StrictInt] = Field(default_factory=list)
+    # Con esto prendido la propina solo se acepta en una venta pagada con tarjeta.
+    propina_solo_tarjeta: int = Field(default=0, ge=0, le=1)
+    descuentos_rapidos: list[StrictInt] = Field(default_factory=lambda: list(DESCUENTOS_RAPIDOS))
+    redondeo_precio: int = Field(default=REDONDEO_PRECIO)
+
     @field_validator("formato_balanza", mode="before")
     @classmethod
     def formato_valido(cls, v):
         return validar_formato_balanza(v)
+
+    @field_validator("mensaje_ticket")
+    @classmethod
+    def mensaje_limpio(cls, v):
+        # Una sola línea, sin espacios de más y sin caracteres de control: el papel
+        # de la impresora de tickets no entiende saltos ni órdenes escondidas.
+        v = " ".join((v or "").split())
+        if not v.isprintable():
+            raise ValueError("El mensaje del ticket tiene caracteres que no se pueden imprimir.")
+        return v
+
+    @field_validator("medios_pago")
+    @classmethod
+    def medios_validos(cls, v):
+        malos = [m for m in v if m not in MEDIOS_PAGO]
+        if malos:
+            raise ValueError(f"Forma de pago desconocida: {malos[0]}")
+        v = [m for m in MEDIOS_PAGO if m in v]          # sin repetidos, en el orden de siempre
+        if not v:
+            raise ValueError("Tiene que quedar al menos una forma de pago.")
+        return v
+
+    @field_validator("propina_sugerida", "descuentos_rapidos")
+    @classmethod
+    def porcentajes_validos(cls, v, info):
+        if any(type(n) is not int or not 1 <= n <= 100 for n in v):
+            raise ValueError("Los porcentajes son números enteros entre 1 y 100.")
+        v = sorted(set(v))
+        if len(v) > 6:
+            raise ValueError("Pon como máximo 6 botones de porcentaje.")
+        return v
+
+    @field_validator("redondeo_precio")
+    @classmethod
+    def redondeo_valido(cls, v):
+        if v not in REDONDEOS_PRECIO:
+            raise ValueError("El redondeo es de $10, $50 o $100.")
+        return v
 
 
 class CodigoIn(BaseModel):

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from apps.pos import diagnostico, local, sesion
+from apps.pos.api import config as puerta_config
 
 router = APIRouter(prefix="/api/v1", tags=["diagnostico"])
 
@@ -45,7 +46,7 @@ def evento(datos: EventoIn, request: Request):
 
 
 @router.get("/diagnostico")
-def paquete(quien: dict = Depends(sesion.exige("config"))):
+def paquete(quien: dict = Depends(puerta_config.exige())):
     """Un .zip con el registro y el estado de la caja, para mandarlo a soporte."""
     nombre_local = re.sub(r"[^a-z0-9]+", "-", local.nombre().lower()).strip("-") or "caja"
     nombre = f"diagnostico-{nombre_local}-{datetime.now():%Y-%m-%d-%H%M}.zip"

@@ -37,7 +37,7 @@ window.GUIAS = [
   resumen: "Si solo necesitas la caja para cobrar.",
   html: `
     <p>Si no llevas la cuenta de lo que queda, entra como dueño a <b>Config →
-       Ajustes</b> y apaga <b>Llevar inventario en este local</b>.</p>
+       Mi local</b> y apaga <b>Llevar inventario en este local</b>.</p>
     <p>Al agregar un producto, basta con su nombre, precio y categoría. Puedes
        vender aunque no tengas existencias anotadas.</p>
     <p>Lo que ya tenías guardado no se borra. Si vuelves a prenderlo, retomas
@@ -176,7 +176,7 @@ window.GUIAS = [
        Contar requiere permiso para ajustar stock.</p>
     <p>Las recetas antiguas siguen funcionando y descontando sus ingredientes;
        la nueva pantalla muestra un aviso y no las modifica.</p>
-    <p>En <b>Config → Ajustes</b>, apagar <b>Llevar inventario en este local</b> esconde
+    <p>En <b>Config → Mi local</b>, apagar <b>Llevar inventario en este local</b> esconde
        las herramientas de stock y suspende los topes y descuentos. Los productos siguen disponibles.</p>`,
 },
 {
@@ -422,7 +422,7 @@ window.GUIAS = [
     <h3>Cuánto cobrar por algo que compraste</h3>
     <p>En la ficha de <b>Inventario</b>, escribe el costo bruto por unidad (o por kilo).
        <b>Ganancia % sobre costo</b> ayuda a calcular el precio: costo $1.200 y ganancia 50% dan $1.800.</p>
-    <p>El botón <b>Sugerido</b> usa el margen de Ajustes sobre la venta: costo $1.200 y margen 50% dan $2.400.
+    <p>El botón <b>Sugerido</b> usa el margen de Config → Cobro sobre la venta: costo $1.200 y margen 50% dan $2.400.
        Los botones <b>$10</b> y <b>$50</b> redondean hacia arriba. El precio de venta que guardas manda.</p>
     <p>El costo queda guardado incluso sin inventario. Si el producto tiene insumo propio,
        es el mismo costo que valoriza sus existencias.</p>

@@ -397,6 +397,30 @@ def _texto_cp850(texto: str) -> str:
     return "".join(partes)
 
 
+def _envolver(texto: str, ancho: int) -> list[str]:
+    """Parte un texto en renglones de a lo más `ancho` columnas, sin cortar palabras. Una
+    palabra más larga que el renglón sí se corta: no hay otra forma de que entre."""
+    filas: list[str] = []
+    actual = ""
+    for palabra in texto.split():
+        while len(palabra) > ancho:
+            if actual:
+                filas.append(actual)
+                actual = ""
+            filas.append(palabra[:ancho])
+            palabra = palabra[ancho:]
+        if not actual:
+            actual = palabra
+        elif len(actual) + 1 + len(palabra) <= ancho:
+            actual += " " + palabra
+        else:
+            filas.append(actual)
+            actual = palabra
+    if actual:
+        filas.append(actual)
+    return filas or [""]
+
+
 def _en_columnas(izquierda: str, derecha: str, ancho: int) -> list[str]:
     """El importe entero a la derecha; si no cabe todo, se abrevia el nombre."""
     espacio = ancho - len(derecha) - 1
@@ -430,7 +454,12 @@ def _bloque_a_bytes(bloque, ancho: int) -> bytes:
         filas = [_texto_cp850(bloque["texto"])[: max(1, ancho // 2)]]
     elif tipo == "centro":
         salida.extend(b"\x1ba\x01")
-        filas = [_texto_cp850(bloque["texto"])[:ancho]]
+        if bloque.get("envolver"):
+            # Una frase que escribe el dueño (el pie del comprobante): puede ser larga, así que
+            # se parte entre palabras en vez de cortarse al final de la línea.
+            filas = _envolver(_texto_cp850(bloque["texto"]), ancho)
+        else:
+            filas = [_texto_cp850(bloque["texto"])[:ancho]]
     elif tipo == "aviso":           # NO ES BOLETA: centrado, doble alto y negrita
         salida.extend(b"\x1ba\x01\x1d!\x01\x1bE\x01")
         filas = [_texto_cp850(bloque["texto"])[:ancho]]

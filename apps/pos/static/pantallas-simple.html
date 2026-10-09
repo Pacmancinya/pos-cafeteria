@@ -171,7 +171,9 @@ html, body {
      que uso este mismo televisor. Si no lo rellena nadie, se deduce aca. */
   /* La sirve la propia caja: la carta esta en el mismo origen. */
   function donde() {
-    return "/api/v1/carta";
+    /* ?t=<numero> es el televisor en Config: solo sirve para que la caja sepa que esta conectado. */
+    var m = /[?&]t=(\d+)/.exec(window.location.search);
+    return "/api/v1/carta" + (m ? "?t=" + m[1] : "");
   }
 
 

@@ -11,8 +11,9 @@ La regla es proporcionada, no paranoica:
     El cajero no tiene ninguna fricción extra.
   · Desde cualquier otro equipo de la red → pide el PIN de red una vez y deja
     una galleta firmada con la llave de ESTA caja.
-  · La carta, la salud y el aviso de errores de las pantallas quedan abiertos:
-    los televisores no tienen teclado para escribir un PIN.
+  · La carta, la salud, los textos de cada televisor (`/api/v1/pantallas/config`) y el aviso
+    de errores de las pantallas quedan abiertos: los televisores no tienen teclado para
+    escribir un PIN.
 
 Desde la 2.19 el PIN de red lo elige cada local (`local.py`), la galleta va
 firmada, y hay freno de intentos (`freno.py`).
@@ -36,7 +37,7 @@ GALLETA = "pos_acceso"
 # colgado en la pared no tiene teclado. Por lo mismo va libre el aviso de
 # errores de las pantallas, que tiene su propio tope (api/diagnostico.py).
 LIBRES = ("/api/v1/carta", "/api/v1/salud", "/api/v1/diagnostico/evento",
-          "/pantallas", "/static/", "/entrar", "/favicon.ico")
+          "/api/v1/pantallas/config", "/pantallas", "/static/", "/entrar", "/favicon.ico")
 LOCALES = {"127.0.0.1", "::1", "localhost"}
 
 

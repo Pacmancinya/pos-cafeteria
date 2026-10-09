@@ -30,11 +30,15 @@ sys.path.insert(0, RAIZ)
 from tools.respaldo import CARPETA, ruta_de_la_base  # noqa: E402
 
 
-def _copiar(origen: str, destino: str) -> None:
+def _copiar(origen: str, destino: str, un_solo_archivo: bool = False) -> None:
     src = sqlite3.connect(origen)
     dst = sqlite3.connect(destino)
     try:
         src.backup(dst)
+        if un_solo_archivo:
+            # La base trabaja en modo WAL y la copia hereda ese modo: al abrirla dejaría
+            # archivos -wal y -shm al lado. Una copia de resguardo tiene que ser UN archivo.
+            dst.execute("PRAGMA journal_mode=DELETE")
     finally:
         dst.close()
         src.close()
@@ -55,7 +59,13 @@ def _uno(base: str, consulta: str):
 _IDENTIDAD = "SELECT valor FROM ajuste WHERE clave = 'instalacion_id'"
 
 
-def restaurar(respaldo: str, sin_revisar_local: bool = False) -> dict:
+def comprobar(respaldo: str, sin_revisar_local: bool = False) -> dict:
+    """Mira un respaldo SIN tocar nada: ¿está sano?, ¿cuántas ventas tiene?, ¿es de esta caja?
+
+    Lo comparten la línea de comandos (`restaurar`) y la pantalla de Config, que lo usa para
+    decirle al dueño cuántas ventas perdería ANTES de que confirme.
+    Devuelve {"ok": False, "detalle": ...} o {"ok": True, "ventas", "ventas_aca", "base"}.
+    """
     if not os.path.exists(respaldo):
         return {"ok": False, "detalle": f"No existe {respaldo}."}
     try:
@@ -94,11 +104,26 @@ def restaurar(respaldo: str, sin_revisar_local: bool = False) -> dict:
             return {"ok": False, "detalle": (
                 f"Ese respaldo {motivo}, y esta caja {estado}. Si estás seguro de que es el "
                 "correcto, repite con --sin-revisar-local.")}
+    return {"ok": True, "ventas": ventas, "ventas_aca": ventas_aca, "base": base}
+
+
+def restaurar(respaldo: str, sin_revisar_local: bool = False) -> dict:
+    visto = comprobar(respaldo, sin_revisar_local)
+    if not visto["ok"]:
+        return visto
+    ventas, base = visto["ventas"], visto["base"]
     guardada = None
     if os.path.exists(base):
         os.makedirs(CARPETA, exist_ok=True)
         guardada = os.path.join(CARPETA, f"antes-de-restaurar-{datetime.now():%Y-%m-%d_%H%M%S}.db")
-        _copiar(base, guardada)
+        # Nunca se escribe encima de una copia que ya existe: puede ser justo el respaldo que se
+        # está restaurando (volver a la copia de «antes de restaurar» dos veces en un segundo).
+        n = 1
+        while os.path.exists(guardada) or os.path.abspath(guardada) == os.path.abspath(respaldo):
+            n += 1
+            guardada = os.path.join(
+                CARPETA, f"antes-de-restaurar-{datetime.now():%Y-%m-%d_%H%M%S}-{n}.db")
+        _copiar(base, guardada, un_solo_archivo=True)
     _copiar(respaldo, base)
     return {"ok": True, "ventas": ventas, "guardada": guardada}
 

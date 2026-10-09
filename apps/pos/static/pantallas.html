@@ -2471,7 +2471,7 @@ async function traerPV() {
     return estadoPV;
   }
   try {
-    const r = await fetch(f.url, { cache: "no-store" });
+    const r = await fetch(f.url + (TV_ID && f.url.indexOf("?") < 0 ? "?t=" + TV_ID : ""), { cache: "no-store" });
     if (!r.ok) throw new Error("el servidor respondió " + r.status);
     const crudo = await r.json();
     // El nombre llega aunque la carta esté vacía: un local recién instalado,
@@ -2490,6 +2490,41 @@ async function traerPV() {
     estadoPV = { estado: "error", detalle: msg, hora: estadoPV.hora, productos: estadoPV.productos };
   }
   return estadoPV;
+}
+
+/* ---- lo que el dueño eligió en Config → Pantallas del local ----
+   Desde la 2.33 los textos, los avisos y lo de cada televisor se administran desde la caja
+   (Config) y se piden acá. `?t=<número>` en la dirección dice cuál televisor es; sin él, o sin nada
+   guardado en la caja, la pantalla se queda con lo suyo: las direcciones de siempre (?p=1, ?p=2,
+   ?tv=1) siguen andando igual. Solo se pisa lo que el dueño escribió. */
+const TV_ID = (() => { const n = parseInt(new URLSearchParams(location.search).get("t"), 10); return n > 0 ? n : null; })();
+
+async function traerConfigServidor() {
+  if (location.protocol === "file:" || $("#editor").classList.contains("is-open")) return;
+  try {
+    const r = await fetch("/api/v1/pantallas/config" + (TV_ID ? "?t=" + TV_ID : ""), { cache: "no-store" });
+    if (!r.ok) return;
+    const c = await r.json();
+    const t = c.textos || {};
+    ["kicker", "bajada", "marcaTxt", "tituloSug", "pieSug"].forEach((k) => { if (t[k]) CFG[k] = t[k]; });
+    if (t.cinta && t.cinta.length) CFG.cinta = t.cinta;
+    if (t.fuente_url) CFG.fuente = { url: t.fuente_url, cada: t.fuente_cada || 10 };
+    const tv = c.tv;
+    if (tv) {
+      CFG.tiempos = { vitrina: tv.t.vitrina * 1000, categoria: tv.t.cat * 1000, reco: tv.t.reco * 1000 };
+      CFG.fiestas = tv.fiestas;
+      CFG.margen = tv.margen;
+      CFG.modoTv = tv.modo;
+      if (tv.suave) document.body.classList.add("calma");
+      if (!/[?&]o=(vertical|horizontal)/.test(location.search)) setOrientacion(tv.orient);
+      fiestasPrendidas = null;
+      aplicarFiestas();
+      aplicarModoTv();
+    }
+    pintarVitrina();
+    pintarCabecera();
+    ajustar();
+  } catch (e) { /* sin caja o sin red: se queda con lo que tiene */ }
 }
 
 /* al arrancar: primero la copia guardada (para que la pantalla nunca esté vacía),
@@ -2595,9 +2630,10 @@ addEventListener("error", (e) => {
   pasoCombo();
   ajustar();       // recién ahora el tamaño real es el definitivo (con o sin consola)
   vigilarTamano();
-  iniciarPV();     // si hay punto de venta configurado, trae la carta
+  traerConfigServidor().then(iniciarPV);     // lo de Config primero; después, si hay punto de venta, trae la carta
   vigilarVersion();
   setInterval(vigilarVersion, 5 * 60000);
+  setInterval(traerConfigServidor, 5 * 60000);
 
   // interaccion de la vitrina
   // Tocar la vitrina salpica café y nada más. En el televisor del local esto no

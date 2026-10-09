@@ -60,7 +60,7 @@ def resolver(s: Session, codigo: str) -> CobroBalanza | None:
             return None
         return CobroBalanza(codigo=limpio, modo="", problema=(
             "El formato de la balanza guardado no se entiende, así que no se cobran "
-            "etiquetas. Revísalo y guárdalo de nuevo en Ayuda → Ajustes."))
+            "etiquetas. Revísalo y guárdalo de nuevo en Config → Impresora y balanza."))
     lectura = leer_balanza(codigo, preferencias["formato_balanza"])
     if lectura is None:
         return None
