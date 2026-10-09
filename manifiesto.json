@@ -8,7 +8,7 @@
   "Kofe.py": "0c02bb5cd175cb8f0015dbddcc0508791584efa6d58cc074b5abe534f99cfb33",
   "LEEME.md": "11ba29989c56c5cbedaf254af2d0e4abd635fa84bfb9c36c213a810bbd829e09",
   "README.md": "e23f83d94e7f719a0b16d9717c80d0d301eaf9a2d1af3d7e9a81be8a0cb2bd0e",
-  "VERSIONES.md": "aa0a33a39067b080252660cdf66ca768668a58d83bb9a5ca32797cfceeca6771",
+  "VERSIONES.md": "6405c12fa95629aa3922e8f498b5dda676614c2d1257236726130de40327c32b",
   "apps/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "apps/pos/__init__.py": "1eeef344ed28e4423c1a4ccc3acca62d9b4b52fe2aa06bbb44b766e498d3e95e",
   "apps/pos/acceso.py": "d3d0bfd8d7bc8152d3907b75942d415530009ee653cd752d75866799db4a57b8",
@@ -44,7 +44,7 @@
   "apps/pos/mudanza.py": "9de26597b1fa5bf7f0ec921a2eba6b37a951648e368c782a8772f7eeb647169f",
   "apps/pos/pantallas.py": "f287335320e2e685c2127617008179caa4cdc04da31f6c31240593bfe6b46849",
   "apps/pos/sesion.py": "277adf14b3b8edb12bb7d6d768d17fae7249da593498cb316290e1b628680ace",
-  "apps/pos/static/app.js": "905ac886e8e0815cbad1e2a177944082cd766e90a5c9234a8950c8515617c10b",
+  "apps/pos/static/app.js": "a85ed8afeda9d9114395abc52684275db23bc2cee6ad25c04f49b5957bdf1589",
   "apps/pos/static/config-logica.js": "bcbb6b0d6a3c59ff32a1de1ac735e3cd7e6ba3cd683f9aaf4b948528e46b1c45",
   "apps/pos/static/config.css": "276cc05eb724f8ccac60027d79d39e739460d5433385c87385a7026e30fb1205",
   "apps/pos/static/config.js": "1c250932faebf08d2755fbe6a9d005d9690a8232573d7bcf13c10368ac44f39b",
@@ -106,7 +106,7 @@
   "conftest.py": "73cbda6f4ae806c42c85639eb96bbe4e18c917802073463ce9f657334eef7c95",
   "core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "core/codigos.py": "bfff1756c9d7f356437bdc3e223da97039b11a859801ae583493756ed358954b",
-  "core/config.py": "f094a48adcde4b4bd28b8529042caa59afc2c7022a14f3a261288489d2d57c40",
+  "core/config.py": "ca29ed7d3cd2f3adb41d0f60ec11f61698705fb6dc6e08cfe66678464188c8c6",
   "core/fondo.py": "5edf11345b7fbe472d3c814443079e83931722f071304e0a224a5f52076aa53e",
   "core/planilla.py": "ec84b9fc85ac579da38c391ac17497675390cc82e6130fee7bc24d4d617de666",
   "core/schemas.py": "97e5bf647140bbe9847197ab57ef7ee82f075a6744d0462f335be38c5f522b3c",
@@ -138,8 +138,8 @@
   "tools/respaldo.py": "fdbe1be09c8b5cfd88d95b8ff83aca44c4cb48cbc25a212e7baf4df0d085aa9e",
   "tools/restaurar.py": "493e32557162db6874eef8c4fe52f252f4603125fa1f5f595db0beb4b31d900a",
   "tools/ventana.py": "fe54a4cd8b9ee5feb9ef5b16488b37f6cf2542fa2c85eb8234eb7795cb209fee",
-  "version-piloto.json": "0db82db4b9e46ad572427c71eee7fc403010a9979c925f5b10f654c87aa461ba",
+  "version-piloto.json": "fd2fce7399d1d54b35aeafcc60c63be7d3a416cd82ffd6831dab8db0ba985b9a",
   "version.json": "5201fe78b6a469c654d8a5b7e6c48540b3cf98b6df44a05539288aa9113a9748"
  },
- "version": "2.33"
+ "version": "2.34"
 }
