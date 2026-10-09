@@ -430,6 +430,39 @@ window.GUIAS = [
        Apagar el TV mantiene el producto disponible en Caja.</p>`,
 },
 {
+  id: "ventas",
+  titulo: "Ventas: Mi turno y Reportes",
+  resumen: "Cómo va tu caja, y cómo va el local.",
+  html: `
+    <h3>Mi turno</h3>
+    <p>Es lo primero que ves en <b>Ventas</b>: solo el turno que está abierto.
+       Cuánto llevas vendido, cuánta plata <b>debería haber en el cajón</b>
+       (fondo + ventas en efectivo + entradas − retiros − devoluciones), las
+       propinas, y la lista de tus ventas con un buscador. Desde la lista puedes
+       ver el detalle de una venta, <b>reimprimirla</b> o <b>anularla</b>.</p>
+    <ul>
+      <li><b>Retiro de caja</b> y <b>Entrada</b>: sacar plata para ir a comprar,
+          o meter cambio. Queda anotado con tu nombre, la hora y para qué.</li>
+      <li><b>Cerrar turno</b>: abre el cierre de siempre. Cuentas el efectivo
+          billete por billete, y recién al apretar <b>Ver si cuadra</b> la caja
+          te dice cuánto debería haber.</li>
+    </ul>
+
+    <h3>Reportes</h3>
+    <p>Para el dueño, o quien tenga el permiso <b>Ver reportes</b> (se da en
+       Equipo). Pide el PIN, y se cierra sola a los <b>5 minutos sin usarla</b>
+       o con <b>Salir de reportes</b>.</p>
+    <p>Muestra ventas, número de ventas, ticket promedio, ganancia estimada y
+       propinas de hoy, ayer, los últimos 7 días, el mes o las fechas que elijas,
+       comparados con el período anterior <b>a la misma hora</b>. Y además: a qué
+       hora se vende más, qué se vende y qué no, cómo le va a cada cajero y cómo
+       le cuadró el efectivo en cada turno. Tocando un turno ves su corte completo.</p>
+    <div class="ayuda"><b>La ganancia es estimada.</b> Es lo vendido menos lo que
+      cuesta cada producto, y solo de los productos que tienen costo cargado en
+      Inventario. Los que no lo tienen no entran en la cuenta (Reportes dice
+      cuántos son).</div>`,
+},
+{
   id: "respaldos",
   titulo: "Respaldos y datos para el contador",
   resumen: "Dónde queda todo y cómo se saca.",
@@ -440,9 +473,10 @@ window.GUIAS = [
        programa. Se guardan las últimas 30.</p>
 
     <h3>Para el contador</h3>
-    <p>Pestaña <b>Ventas</b> → <b>Descargar para el contador</b>. Baja dos
-       archivos que se abren con Excel: el resumen de ventas y el detalle por
-       producto. Puedes elegir día, semana o mes.</p>
+    <p>Pestaña <b>Ventas</b> → <b>Reportes</b> (pide tu PIN) → <b>Exportar</b>.
+       Baja dos archivos que se abren con Excel: el resumen de ventas y el
+       detalle por producto, del período que estés mirando (hoy, ayer, 7 días,
+       este mes, el mes pasado o un rango de fechas).</p>
 
     <div class="ayuda">Ese informe <b>no reemplaza la declaración</b>. Mientras
       las boletas se emitan por fuera, lo que dice la caja y lo que se declara

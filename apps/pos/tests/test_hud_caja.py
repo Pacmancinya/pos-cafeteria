@@ -58,7 +58,7 @@ const assert = require('node:assert/strict');
 const VISTAS = ['caja','dia','inventario','guias'];
 const location = {}; const $$ = () => [];
 let cargas = 0;
-const cargarInventario = () => { cargas++; }, periodoQueCorresponde = () => {}, cargarDia = () => {}, pintarGuias = () => {};
+const cargarInventario = () => { cargas++; }, Ventas = { abrir() {} }, pintarGuias = () => {};
 for (const ruta of ['stock','carta','inventario']) { verVista(ruta); assert.equal(location.hash,'#/inventario'); }
 assert.equal(cargas,3);
 verVista('caja'); assert.equal(location.hash,'#/caja');

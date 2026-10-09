@@ -358,6 +358,169 @@ def _estuvieron(s: Session, t: Turno) -> list[dict]:
     return sorted(gente.values(), key=lambda g: -g["minutos"])
 
 
+def _en_trozos(ids: list[int], n: int = 500):
+    """SQLite no acepta cualquier cantidad de parámetros en un IN (...)."""
+    for i in range(0, len(ids), n):
+        yield ids[i:i + n]
+
+
+def corte_del_turno(s: Session, t: Turno) -> dict:
+    """Todo lo de UN turno, listo para dibujar: es «Mi turno» y también el corte
+    que se abre desde el historial de Reportes (el mismo resumen, solo lectura).
+
+    Las cifras de plata salen de las MISMAS funciones del cierre
+    (`_efectivo_esperado`, `_por_medio`, `_propinas`): la pantalla, el papel y el
+    cierre no pueden discrepar. Lo único que se arma acá es el desglose por
+    categoría y la lista de ventas, que se leen con pocas consultas en vez de una
+    por venta.
+    """
+    from apps.pos.db.models import Categoria, Pago, Producto, VentaLinea
+
+    ventas = s.exec(select(Venta).where(Venta.turno_id == t.id)
+                    .order_by(Venta.numero.desc())).all()
+    ids = [v.id for v in ventas]
+    lineas: dict[int, list] = {}
+    pagos_mixtos: dict[int, list] = {}
+    for trozo in _en_trozos(ids):
+        for l in s.exec(select(VentaLinea).where(VentaLinea.venta_id.in_(trozo))
+                        .order_by(VentaLinea.id)).all():
+            lineas.setdefault(l.venta_id, []).append(l)
+        for p in s.exec(select(Pago).where(Pago.venta_id.in_(trozo))
+                        .order_by(Pago.id)).all():
+            pagos_mixtos.setdefault(p.venta_id, []).append(p)
+
+    def pagos_de(v: Venta) -> list[tuple[str, int]]:
+        filas = pagos_mixtos.get(v.id)
+        return [(p.medio, p.monto) for p in filas] if filas else [(v.medio_pago, v.total - v.descuento)]
+
+    # Categoría de cada línea: el producto ya no tiene por qué estar a la venta, pero
+    # sigue existiendo (la base nunca borra productos con ventas).
+    cat_de_producto: dict[int, int | None] = {}
+    nombre_cat: dict[int | None, str] = {None: "Sin categoría"}
+    pids = sorted({l.producto_id for ls in lineas.values() for l in ls if l.producto_id})
+    for trozo in _en_trozos(pids):
+        for p in s.exec(select(Producto).where(Producto.id.in_(trozo))).all():
+            cat_de_producto[p.id] = p.categoria_id
+    for c in s.exec(select(Categoria)).all():
+        nombre_cat[c.id] = c.nombre
+
+    por_categoria: dict[int | None, float] = {}
+    vendido = n = n_propina = 0
+    anuladas = {"n": 0, "total": 0}
+    devoluciones = 0
+    filas = []
+    for v in ventas:
+        pagos = pagos_de(v)
+        cobrado = v.total - v.descuento
+        anulada = v.estado != "pagada"
+        if anulada:
+            anuladas["n"] += 1
+            anuladas["total"] += cobrado
+            # Lo que se había cobrado en efectivo y vuelve al cliente. La venta ya
+            # no está en el efectivo esperado; se muestra para que la cuenta se lea.
+            devoluciones += sum(m for medio, m in pagos if medio == "efectivo")
+            if v.propina and v.medio_pago == "efectivo":
+                devoluciones += v.propina
+        else:
+            vendido += cobrado
+            n += 1
+            n_propina += 1 if v.propina else 0
+            # El descuento se reparte entre las líneas, o las categorías sumarían más
+            # que lo vendido.
+            for l in lineas.get(v.id, []):
+                neto = l.subtotal * cobrado / v.total if v.total else 0
+                cat = cat_de_producto.get(l.producto_id) if l.producto_id else None
+                por_categoria[cat] = por_categoria.get(cat, 0) + neto
+        filas.append({
+            "id": v.id,
+            "numero": v.numero,
+            "hora": a_local(v.creada_at).strftime("%H:%M"),
+            "medio_pago": v.medio_pago,
+            "medio": NOMBRE_MEDIO.get(v.medio_pago, v.medio_pago),
+            "pagos": [{"medio": m, "monto": x} for m, x in pagos],
+            "cobrado": cobrado,
+            "propina": v.propina,
+            "anulada": anulada,
+            "anulada_motivo": v.anulada_motivo if anulada else "",
+            "productos": [{"nombre": l.nombre, "cantidad": l.cantidad}
+                          for l in lineas.get(v.id, [])],
+        })
+
+    por_medio = _por_medio(s, t)
+    medios = [{"medio": m, "nombre": NOMBRE_MEDIO.get(m, m),
+               "n": por_medio.get(m, {}).get("cantidad", 0),
+               "total": por_medio.get(m, {}).get("ventas", 0)} for m in MEDIOS_PAGO]
+    propinas = _propinas(s, t)
+    propinas["n"] = n_propina
+    ventas_efectivo = _efectivo_del_turno(s, t)
+    retiros_total = _retiros_del_turno(s, t)
+    ingresos_total = _ingresos_del_turno(s, t)
+    esperado = _efectivo_esperado(s, t)
+    cerrado = t.cerrado_at is not None
+    quien_abrio = s.get(Usuario, t.abierto_por_id) if t.abierto_por_id else None
+
+    salida = {
+        "turno": {
+            "id": t.id,
+            "color": quien_abrio.color if quien_abrio else "",
+            "abrio": _nombre(s, t.abierto_por_id) or t.cajero,
+            "cajero": t.cajero,
+            "cerro": _nombre(s, t.cerrado_por_id),
+            "abierto_por_id": t.abierto_por_id,
+            "abierto_at": a_local(t.abierto_at).isoformat(),
+            "cerrado_at": a_local(t.cerrado_at).isoformat() if cerrado else None,
+            "abierto": not cerrado,
+            "nota": t.nota,
+        },
+        "vendido": vendido,
+        "n": n,
+        "ticket": round(vendido / n) if n else 0,
+        "anuladas": anuladas,
+        "propinas": propinas,
+        # La cuenta del cajón. Se lee: fondo + ventas en efectivo (con las que
+        # después se anularon) + entradas − retiros − devoluciones − propinas de
+        # tarjeta pagadas en efectivo = lo que debería haber. `esperado` es el del
+        # cierre, no una suma hecha acá.
+        "caja": {
+            "fondo": t.monto_inicial,
+            "ventas_efectivo": ventas_efectivo + devoluciones,
+            "entradas": ingresos_total,
+            "retiros": retiros_total,
+            "devoluciones": devoluciones,
+            "propinas_pagadas": t.propinas_pagadas,
+            "esperado": esperado,
+        },
+        "por_medio": medios,
+        "por_categoria": sorted(
+            ({"id": c, "nombre": nombre_cat.get(c, "Sin categoría"), "total": round(x)}
+             for c, x in por_categoria.items()), key=lambda f: -f["total"]),
+        "movimientos": _retiros_dict(s, t),
+        "ventas": filas,
+        "cierre": None,
+    }
+    if cerrado:
+        salida["cierre"] = {
+            "contado": t.efectivo_contado,
+            "diferencia": t.diferencia,
+            "conteo": _conteo(t.conteo_cierre),
+            "medios": _cuadre_de_medios(s, t),
+            "retiro": t.retiro,
+            "fondo_siguiente": t.fondo_siguiente,
+            "estuvieron": _estuvieron(s, t),
+        }
+    return salida
+
+
+@router.get("/{turno_id}/corte")
+def corte(turno_id: int, s: Session = Depends(get_session),
+          quien: dict = Depends(sesion.exige("ver_dia"))):
+    """«Mi turno»: el corte de un turno (el abierto, normalmente)."""
+    t = s.get(Turno, turno_id)
+    if not t:
+        raise HTTPException(404, "No existe ese turno")
+    return corte_del_turno(s, t)
+
+
 @router.get("/denominaciones")
 def denominaciones():
     """Los billetes y monedas con los que se cuenta la caja."""

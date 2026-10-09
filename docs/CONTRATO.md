@@ -854,6 +854,66 @@ comprobante.
 efectivo ya está en el cajón y se reparte de ahí; la de tarjeta la depositó el banco y hay
 que pagarla aparte. Sin esa distinción, o se reparte dos veces o no se reparte nunca.
 
+### Ventas: «Mi turno» y Reportes `[IMPL]` (2.33)
+La pestaña Ventas tiene dos partes. **Mi turno** es solo el turno abierto; **Reportes** es del
+dueño y pide el PIN. Reemplaza a «El día».
+```
+GET  /api/v1/turnos/{id}/corte           → todo lo de UN turno, listo para dibujar      (permiso ver_dia)
+
+POST /api/v1/reportes/entrar  {pin, usuario_id?}   → verifica el PIN y deja la galleta pos_reportes (5 min)
+POST /api/v1/reportes/salir                        → la borra
+GET  /api/v1/reportes/estado                       → {activo}; también es el «latido» que la renueva
+GET  /api/v1/reportes/resumen?periodo=&desde=&hasta=   → indicadores + comparación + series + medios + categorías
+GET  /api/v1/reportes/calor?…                      → mapa de calor día de la semana × hora (promedios)
+GET  /api/v1/reportes/productos?…                  → vendidos (cantidad y plata) y productos sin ventas
+GET  /api/v1/reportes/cajeros?…                    → ventas por persona y diferencias de arqueo
+GET  /api/v1/reportes/turnos?…                     → historial de turnos del período
+GET  /api/v1/reportes/turnos/{id}                  → el corte completo de un turno (el mismo de /turnos/{id}/corte)
+GET  /api/v1/reportes/exportar?tipo=ventas|detalle&…   → el CSV del contador del período elegido
+```
+`periodo` es `hoy | ayer | 7d | mes | mesp | rango` (`rango` lleva `desde` y `hasta`, hasta 400 días).
+
+**El acceso a Reportes.** Estar en la caja no alcanza: se pide el PIN **de nuevo** y lo verifica el
+servidor (`sesion.pin_calza`, con el mismo freno de intentos que el candado). Se escribe solo el PIN;
+sin `usuario_id` se prueba contra todos los usuarios activos. Si el PIN calza pero la persona no tiene
+`ver_reportes`, la respuesta es **403** con su nombre; si no calza, **401**; con la caja sin usuarios (modo
+provisorio) se entra sin PIN, porque no hay ninguno que pedir. La respuesta deja una galleta firmada
+(`pos_reportes`, HttpOnly, 5 minutos) que **se renueva con cada uso**: sin uso, se acaba. Todos los
+demás endpoints piden esa galleta (401 si falta o venció) y **vuelven a mirar el permiso en la base en
+cada petición** (403 si se lo quitaron). La galleta de la sesión y la de Reportes son distintas aunque
+usen la misma firma: una no sirve como la otra (`k: "rep"`). La pantalla sale con «Salir de reportes», a
+los 5 minutos sin uso y cuando aparece el candado (cambio de persona o bloqueo).
+
+**Quién lo tiene por defecto.** `ver_reportes` nace **solo en el rol dueño**: lo decidió el dueño del producto
+(Reportes muestra la ganancia y lo que vende cada cajero). El cajero sigue viendo su turno en Ventas → Mi turno
+(`ver_dia`); si el dueño quiere que alguno vea Reportes, se lo da en Equipo. A un **dueño** con permisos propios
+escritos con `ver_dia`, una migración (una sola vez, anotada en `Ajuste` como `migracion.ver_reportes`) le agrega
+`ver_reportes`, para que no pierda lo que veía; si después se lo quita, no se lo devuelve. Los cajeros no lo reciben.
+
+**Los cálculos son del servidor y son agregados.** Al navegador llegan las cifras, no las ventas. El día es
+el del local (America/Santiago): las ventas se agrupan por hora UTC y esa hora se lleva a hora local
+(Chile siempre tiene desfase en horas enteras), así que una venta de las 23:30 es de ese día aunque en UTC ya
+sea el siguiente. **Las anuladas no cuentan en nada** (se informan aparte). Todo en CLP enteros; el descuento
+de una venta se reparte entre sus líneas para que las categorías sumen lo vendido.
+
+**La comparación corta a la misma hora.** Un período en curso (hoy, 7 días, este mes, un rango que llega a hoy)
+se compara con el equivalente anterior **cortado a la misma hora** (hoy hasta las 14:22 contra el jueves pasado
+hasta las 14:22); `ayer` y `mes pasado` se comparan días completos. Si el local no tiene ventas de TODO el tramo
+anterior, `hay_previo` es falso y no se compara (compararlo a medias diría que creció cuando solo empezó).
+
+**Ganancia estimada** = ventas − costo, **solo de los productos con costo**. El costo es el de la ficha de
+Inventario: si el producto es su propio insumo, el costo de comprar UNA unidad; si tiene una receta de
+verdad, la suma de sus ingredientes; si no, `costo_referencia`. Un costo en cero es un costo que nadie cargó:
+el producto no entra en la cuenta. Tampoco entran las líneas de balanza (se cobran por peso) ni los cobros a
+mano. `resumen` informa `productos_sin_costo` y `venta_sin_costo` para que la pantalla diga cuánto queda
+fuera de la cuenta.
+
+**El corte de un turno** (`corte`) usa las MISMAS funciones del cierre (`_efectivo_esperado`, `_por_medio`,
+`_propinas`): fondo + ventas en efectivo + entradas − retiros − devoluciones − propinas pagadas del cajón =
+lo que debería haber. «Devoluciones» es el efectivo de las ventas que después se anularon: la venta anulada
+nunca estuvo en el efectivo esperado, pero se muestra para que la cuenta se lea de arriba abajo.
+«Entrada» es el `ingreso` de siempre (`POST /turnos/ingreso`, mismo libro `RetiroCaja`, `tipo="ingreso"`).
+
 ### Usuarios y sesión `[IMPL]`
 ```
 GET  /api/v1/candado                    → los nombres para la pantalla de entrada (libre)
@@ -890,6 +950,7 @@ exactamente una cosa — todos marcan su PIN una vez más.
 | Permiso | Dueño | Cajero |
 |---|:--:|:--:|
 | vender, anular, abrir caja, ver el día | ✅ | ✅ |
+| ver Reportes (`ver_reportes`, con PIN) | ✅ | ❌ (el dueño se lo puede dar persona por persona en Equipo) |
 | cerrar la caja que abrió esa misma persona | ✅ | ✅ |
 | cerrar una caja que abrió otro (`turno_cerrar_ajeno`) | ✅ | — |
 | ver la bodega y anotar compras y mermas | ✅ | ✅ |

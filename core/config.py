@@ -91,7 +91,7 @@ PERMISOS = {
         "vender", "anular", "anular_pasado",
         "turno_abrir", "turno_cerrar", "turno_cerrar_ajeno",
         "caja_retirar", "cobrar_varios",
-        "ver_dia", "ver_informes", "editar_carta",
+        "ver_dia", "ver_reportes", "ver_informes", "editar_carta",
         "inventario", "inventario_ajustar",
         "usuarios", "config",
     ),
@@ -112,6 +112,10 @@ PERMISOS = {
         # es un descuido dárselo: cada retiro queda firmado con su nombre y su
         # hora, y eso —no un permiso que se lo quite— es lo que lo hace honesto.
         "caja_retirar", "cobrar_varios",
+        # «Ver reportes» (Ventas → Reportes, con PIN) NO viene con el cajero: el dueño lo
+        # pidió así («Reportes es para el dueño»), porque muestra la ganancia y lo que
+        # vende cada cajero. El cajero sigue viendo su turno en Ventas → Mi turno; si el
+        # dueño quiere que alguno vea Reportes, se lo da persona por persona en Equipo.
         "ver_dia", "inventario",
     ),
 }
@@ -129,6 +133,7 @@ CATALOGO_DE_PERMISOS = (
     ("caja_retirar", "Sacar plata del cajón"),
     ("cobrar_varios", "Cobrar un monto a mano"),
     ("ver_dia", "Ver Ventas"),
+    ("ver_reportes", "Ver reportes"),
     ("ver_informes", "Ver los informes"),
     ("editar_carta", "Editar la carta y los precios"),
     ("inventario", "Ver Inventario y mover mercadería"),

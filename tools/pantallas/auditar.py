@@ -23,6 +23,10 @@ from pathlib import Path
 
 URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8791/"
 ETIQUETA = sys.argv[2] if len(sys.argv) > 2 else "antes"
+# Opcionales, para una caja de PRUEBA que SÍ tiene personas creadas: el id de quien entra y su PIN
+# (el mismo PIN abre Reportes). Sin esto se asume una caja sin usuarios (sesión provisoria).
+USUARIO = sys.argv[3] if len(sys.argv) > 3 else ""
+PIN = sys.argv[4] if len(sys.argv) > 4 else ""
 AQUI = Path.cwd() / "auditoria-pantallas"
 CAPTURAS = AQUI / "capturas" / ETIQUETA
 
@@ -109,7 +113,7 @@ MEDIR = r"""
     }
     if (vista) {
       // Lo que se sale a lo ancho DENTRO de la vista (tablas, barras de botones).
-      for (const el of vista.querySelectorAll('.barra-dia, .kpis, .dos-col, .panel, .ayuda-cuerpo, .bodega, .carta-editor, .tabla-wrap')) {
+      for (const el of vista.querySelectorAll('.barra-dia, .kpis, .dos-col, .panel, .ayuda-cuerpo, .bodega, .carta-editor, .tabla-wrap, .vt-cards, .vt-bajo, .rp-kpis, .rp-grid')) {
         if (!visible(el)) continue;
         const ov = getComputedStyle(el).overflowX;
         if (el.scrollWidth > el.clientWidth + 2 && ov !== 'auto' && ov !== 'scroll')
@@ -140,6 +144,13 @@ def main() -> None:
             pagina.on("pageerror", lambda e: errores.append(str(e)))
             pagina.goto(URL, wait_until="networkidle")
             pagina.wait_for_timeout(800)
+
+            if USUARIO:
+                pagina.evaluate("""async ([u, p]) => { await fetch('/api/v1/sesion/entrar', {method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({usuario_id: +u, pin: p})}); }""", [USUARIO, PIN])
+                pagina.reload(wait_until="networkidle")
+                pagina.wait_for_timeout(800)
 
             # Caja abierta para poder vender (sesión provisoria: sin usuarios).
             pagina.evaluate("""async () => {
@@ -174,7 +185,19 @@ def main() -> None:
             paso("cobrar", "abrirCobro()")
             paso("cobrar_mixto", "(() => { const m = document.querySelector('#pagoMixto'); m.click(); })()")
             paso("varios", cerrar + "; dialogoVarios()")
-            paso("el_dia", cerrar + "; verVista('dia')", 1500)
+            paso("ventas_mi_turno", cerrar + "; verVista('dia')", 1800)
+            paso("ventas_reportes_pin", "document.querySelector('[data-v-sub=\"reportes\"]').click()", 900)
+            if PIN:
+                # El PIN se manda al servidor igual que la pantalla; después se abre Reportes.
+                paso("ventas_reportes", """(async () => {
+                  await fetch('/api/v1/reportes/entrar', {method: 'POST',
+                    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: '%s'})});
+                  document.querySelector('[data-v-sub="reportes"]').click();
+                })()""" % PIN, 4500)
+                paso("ventas_corte_de_turno", """(() => {
+                  const f = document.querySelector('#htCuerpo tr[data-v-turno]'); if (f) f.click();
+                })()""", 1800)
+                paso("ventas_reportes_salir", cerrar + """; document.querySelector('[data-v-rp="salir"]').click()""", 900)
             paso("inventario", "verVista('inventario')", 1000)
             paso("ficha_editar", """(() => {
               const p = CATEGORIAS.flatMap(c => c.productos)[1];

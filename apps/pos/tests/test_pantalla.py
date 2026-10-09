@@ -34,6 +34,8 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -394,16 +396,19 @@ def test_el_aviso_se_ve_por_encima_de_las_pantallas_que_tapan_todo():
 
 
 # ---------------------------------------------------------------------------
-# El día no puede mostrar cifras que no son del momento que se está mirando
+# Ventas no puede mostrar cifras que no son del momento que se está mirando
 # ---------------------------------------------------------------------------
 """El local lo contó así: tenían la caja recién abierta y sin vender nada, y El
 día —que había quedado en «Mes»— igual mostraba «Vendido hoy» con plata, ticket
 promedio y efectivo. Los números eran del mes y eran ciertos. El problema era el
 rótulo y la falta de un modo que mirara SOLO el turno.
 
-Esto no se ve en ninguna prueba de API: el servidor devolvía lo que le pidieron.
-La mentira estaba en app.js.
+Desde la 2.33 la pestaña Ventas tiene dos partes: «Mi turno» (SOLO el turno abierto)
+y «Reportes» (con PIN, cada cifra con su período a la vista). Esto no se ve en
+ninguna prueba de API: el servidor devolvía lo que le pedían. La mentira estaba en
+el JavaScript.
 """
+VENTAS_JS = io.open(ESTATICOS / "ventas.js", encoding="utf-8").read()
 
 
 def _cuerpo_de(js: str, firma: str) -> str:
@@ -412,52 +417,91 @@ def _cuerpo_de(js: str, firma: str) -> str:
     return js[ini:js.find("\n}", ini)]
 
 
-def test_el_dia_no_dice_hoy_cuando_esta_mirando_el_mes():
-    """El rótulo tiene que salir del período, no estar escrito a mano."""
-    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    cuerpo = _cuerpo_de(js, "async function cargarDia()")
-    assert "<span>Vendido hoy</span>" not in cuerpo, (
-        "El rótulo del total vuelve a decir «Vendido hoy» siempre. Mirando el mes, "
-        "esa palabra hace leer un total de 30 días como la venta del día.")
-    for palabra in ("Vendido en la semana", "Vendido en el mes", "Vendido en el turno"):
-        assert palabra in cuerpo, f"falta el rótulo {palabra!r}"
+def test_mi_turno_pide_solo_el_turno_abierto_y_sin_turno_no_dibuja_ni_una_cifra():
+    """Un «$0» al lado de «Ticket promedio» también se lee como un dato."""
+    ini = VENTAS_JS.index("async function pintarTurno()")
+    cuerpo = VENTAS_JS[ini:VENTAS_JS.index("/* Vuelve a leer el turno", ini)]
+    assert "if (!t.abierto)" in cuerpo and "La caja está cerrada" in cuerpo, (
+        "sin caja abierta tiene que quedar un cartel, no cifras en cero.")
+    assert "Abrir turno" in cuerpo
+    assert cuerpo.index("if (!t.abierto)") < cuerpo.index("/corte"), (
+        "pide el corte antes de saber si hay un turno abierto: va a pintar ceros con cara de dato.")
+    assert "t.turno.id" in cuerpo, "el corte tiene que ser el del turno abierto, no el de un día."
 
 
-def test_sin_turno_elegido_el_dia_no_dibuja_ni_un_numero():
-    """Un «$0» al lado de «Ticket promedio» también se lee como un dato.
-
-    Con la caja cerrada y sin turno elegido no se muestra nada: es lo que pidió
-    el local con estas palabras, «cuando la caja esté cerrada que no se muestre».
-    """
-    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    cuerpo = _cuerpo_de(js, "async function cargarDia()")
-    assert "if (!turnoElegido) return nadaQueMirar" in cuerpo, (
-        "cargarDia sigue pidiendo el resumen sin turno elegido: va a pintar ceros "
-        "con cara de dato.")
-
-
-def test_el_selector_de_turno_no_se_para_solo_en_uno_cerrado():
-    """Elegirle uno cerrado es volver a mostrar cifras que no son de ahora."""
-    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    cuerpo = _cuerpo_de(js, "function pintarSelectorDeTurnos")
-    assert "!t.cerrado_at" in cuerpo, (
-        "el selector ya no busca el turno ABIERTO para pararse ahí; si cae en uno "
-        "cerrado, El día vuelve a mostrar plata de otro rato.")
-    assert "Elegí un turno" in cuerpo, (
-        "sin turno abierto tiene que quedar en un texto que no elige nada.")
+def test_mi_turno_rotula_la_plata_del_turno_y_no_dice_hoy():
+    assert "<h3>Vendido</h3>" in VENTAS_JS and "Vendido hoy" not in VENTAS_JS
+    assert "Turno de ${esc(t.abrio)}" in VENTAS_JS
 
 
 def test_la_cuenta_del_cajon_se_dibuja_entera_y_no_solo_los_retiros():
     """«Aparece lo sacado, pero no se resta», dijeron. Se restaba; no se veía.
 
-    Mirando un turno, la tabla muestra la cuenta completa —fondo, lo que entró,
-    cada retiro— para que el total se pueda seguir con el dedo.
+    La tarjeta «Dinero en caja» muestra la cuenta completa —fondo, ventas en
+    efectivo, entradas, retiros, devoluciones— para que el total se pueda seguir
+    con el dedo, y ese total es el del servidor (el mismo del cierre).
     """
+    for pedazo in ("Fondo inicial", "Ventas en efectivo", "Entradas", "Retiros", "Devoluciones",
+                   "Debería haber en el cajón", "k.esperado"):
+        assert pedazo in VENTAS_JS, f"falta {pedazo!r} en la cuenta del cajón"
+
+
+def test_reportes_no_pide_ni_una_cifra_sin_el_pin():
+    """El PIN lo verifica el servidor; la pantalla solo lo manda. Sin R.user no se llama
+    a ningún /reportes/<cifras>, y un 401 de esos endpoints devuelve al PIN."""
+    assert 'api("/reportes/entrar"' in VENTAS_JS
+    assert "R.pin ===" not in VENTAS_JS and "USUARIOS" not in VENTAS_JS, (
+        "el PIN no se compara en el navegador.")
+    ini = VENTAS_JS.index("async function cargarDatos()")
+    assert "rapi(" in VENTAS_JS[ini:ini + 600]
+    assert "async function abrirReportes()" in VENTAS_JS
+    abrir = VENTAS_JS[VENTAS_JS.index("async function abrirReportes()"):VENTAS_JS.index("async function entrarSinPin()")]
+    assert "if (R.user) return pintarReportes();" in abrir and "pintarPin();" in abrir
+
+
+def test_reportes_se_cierra_solo_a_los_cinco_minutos_y_con_el_candado():
+    assert "MINUTOS_SIN_USO = 5" in VENTAS_JS
+    assert "Reportes se cerró solo tras 5 minutos sin uso" in VENTAS_JS
     js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    cuerpo = _cuerpo_de(js, "function pintarLaPlataDelCajon")
-    for pedazo in ("Fondo con que se abrió", "Lo que entró en efectivo",
-                   "efectivo_en_caja"):
-        assert pedazo in cuerpo, f"falta {pedazo!r} en la cuenta del cajón"
+    ini = js.index("async function mostrarCandado(")
+    assert "Ventas.cerrarReportes()" in js[ini:ini + 400], (
+        "un cambio de persona tiene que cerrar Reportes: el acceso es de quien puso el PIN.")
+
+
+def test_un_401_de_reportes_no_se_confunde_con_una_sesion_perdida():
+    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
+    assert '!ruta.startsWith("/reportes")' in js, (
+        "api() trata todo 401 como sesión perdida y mostraría el candado cada vez que "
+        "Reportes pide el PIN.")
+
+
+def test_los_atributos_data_de_ventas_no_chocan_con_los_de_app_js():
+    """app.js tiene UN manejador de clics para toda la página (data-anular, data-imprimir,
+    data-periodo…). Los de ventas.js llevan todos el prefijo data-v-."""
+    import re
+    propios = set(re.findall(r"[\s\[]data-([a-z0-9-]+)(?==|\])", VENTAS_JS))
+    assert propios, "no encontré ningún data-*"
+    sueltos = sorted(n for n in propios if not n.startswith("v-"))
+    assert not sueltos, f"estos data-* no llevan el prefijo v-: {sueltos}"
+
+
+def test_los_archivos_de_ventas_se_piden_con_la_version():
+    html = io.open(ESTATICOS / "index.html", encoding="utf-8").read()
+    for archivo in ("ventas.css", "ventas-logica.js", "ventas.js"):
+        assert f"/static/{archivo}?v=__VERSION__" in html, archivo
+    assert html.index("ventas-logica.js") < html.index("/static/ventas.js"), (
+        "ventas.js usa VentasLogica: la lógica se carga primero.")
+    assert html.index("/static/app.js") < html.index("ventas-logica.js"), (
+        "ventas.js usa las funciones de app.js: se carga después.")
+
+
+def test_la_pantalla_de_ventas_en_node():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("No hay Node en este computador")
+    r = subprocess.run([node, str(Path(__file__).with_name("ventas_logica.cjs"))],
+                       capture_output=True, text=True, encoding="utf-8", timeout=60)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 # ---------------------------------------------------------------------------

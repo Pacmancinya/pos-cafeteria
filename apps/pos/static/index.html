@@ -6,6 +6,7 @@
 <title>Punto de venta</title>
 <link rel="stylesheet" href="/static/styles.css?v=__VERSION__">
 <link rel="stylesheet" href="/static/inventario.css?v=__VERSION__">
+<link rel="stylesheet" href="/static/ventas.css?v=__VERSION__">
 </head>
 <body>
 
@@ -101,45 +102,9 @@
   </aside>
 </main>
 
-<!-- ══════════ EL DÍA ══════════ -->
-<main class="vista" data-vista="dia">
-  <div class="panel">
-    <div class="barra-dia">
-      <label class="campo campo--linea"><span>Día</span>
-        <input type="date" id="fechaDia"></label>
-      <div class="periodos">
-        <button class="periodo" data-periodo="turno">Turno</button>
-        <button class="periodo is-on" data-periodo="dia">Día</button>
-        <button class="periodo" data-periodo="semana">Semana</button>
-        <button class="periodo" data-periodo="mes">Mes</button>
-      </div>
-      <!-- Solo aparece mirando por turno. Si el día tuvo dos cajas, acá se elige
-           cuál: las cifras de arriba son de la que esté elegida y de ninguna otra. -->
-      <label class="campo campo--linea" id="campoTurno" hidden><span>Qué turno</span>
-        <select id="selTurno"></select></label>
-      <div class="barra-dia__acc">
-        <button class="btn" id="btnHoy">Hoy</button>
-        <button class="btn" id="btnExportar">Descargar para el contador</button>
-        <button class="btn" id="btnRespaldar">Respaldar ahora</button>
-      </div>
-    </div>
-    <div class="kpis" id="kpis"></div>
-    <div class="dos-col">
-      <div>
-        <h3 id="tituloVentas">Ventas de hoy</h3>
-        <div class="tabla-wrap"><table class="tabla" id="tablaVentas"></table></div>
-        <!-- La plata que salió y entró del cajón a mano. Vacío cuando no hubo. -->
-        <div id="zonaCaja"></div>
-      </div>
-      <div>
-        <h3>Lo más vendido</h3>
-        <div class="tabla-wrap"><table class="tabla" id="tablaTop"></table></div>
-        <h3 style="margin-top:22px">Cierres de caja</h3>
-        <div class="tabla-wrap"><table class="tabla" id="tablaTurnos"></table></div>
-      </div>
-    </div>
-  </div>
-</main>
+<!-- ══════════ VENTAS: Mi turno | Reportes ══════════
+     Lo dibuja ventas.js. Reportes pide el PIN y solo deja entrar a quien tenga «Ver reportes». -->
+<main class="vista" data-vista="dia" id="vistaVentas"></main>
 
 <!-- ══════════ INVENTARIO ══════════ -->
 <main class="vista" data-vista="inventario" id="vistaInventario"></main>
@@ -265,6 +230,11 @@
   <div class="dialogo dialogo--ancho" id="dialogoBodega"></div>
 </div>
 
+<!-- Los diálogos de la pestaña Ventas (detalle de una venta, anular, retiro, corte de un turno). -->
+<div class="capa" id="capaVentas">
+  <div class="dialogo i-dlg" id="dialogoVentas"></div>
+</div>
+
 <!-- El candado NO es una vista: es una capa que tapa todo. Si fuera vista,
      escribir #/caja en la barra de direcciones la saltaría. -->
 <!-- ══════════ LA CAJA ESTÁ CERRADA ══════════
@@ -302,5 +272,7 @@
 <script src="/static/inventario-logica.js?v=__VERSION__"></script>
 <script src="/static/inventario.js?v=__VERSION__"></script>
 <script src="/static/app.js?v=__VERSION__"></script>
+<script src="/static/ventas-logica.js?v=__VERSION__"></script>
+<script src="/static/ventas.js?v=__VERSION__"></script>
 </body>
 </html>

@@ -113,6 +113,8 @@ def _venta_dict(v: Venta, con_lineas: bool = False, s: Session | None = None) ->
         ]
         if v.estado == "anulada":
             d["anulada_motivo"] = v.anulada_motivo
+            d["anulada_at"] = a_local(v.anulada_at).isoformat() if v.anulada_at else None
+            d["anulada_por"] = _nombre(s, v.anulada_por_id)
     return d
 
 

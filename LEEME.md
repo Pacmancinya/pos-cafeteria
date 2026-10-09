@@ -21,7 +21,7 @@ Para cerrarla, la cierras con la X.
 | Pestaña | Para qué |
 |---|---|
 | **Caja** | Cobrar. Tocas los productos, se van sumando, y aprietas **Cobrar**. |
-| **El día** | Cuánto se vendió (cualquier día, no solo hoy), en qué se pagó, lo más vendido, imprimir un comprobante y anular una venta mal hecha. |
+| **Ventas** | **Mi turno**: cómo va tu caja (lo vendido, cuánta plata debería haber en el cajón, tus ventas, retiros y entradas de plata), imprimir un comprobante, anular una venta mal hecha y cerrar el turno. **Reportes** (con PIN, para quien tenga el permiso «Ver reportes»): cuánto se vende por día y por hora, en qué se paga, qué se vende y qué no, ganancia estimada y cómo cuadra cada turno. |
 | **Carta** | Agregar productos, cambiar nombres y precios, o sacar algo de la venta. |
 | **Bodega** | Cuánto queda de cada insumo, qué hay que comprar y en qué se te va la plata. |
 
@@ -253,7 +253,7 @@ para conectarlas. Tiene un botón para copiarla.
   en este navegador; otros equipos o navegadores tienen sus propias preferencias.
 - Con una impresora de papel seleccionada se imprime sin preguntar. **Preguntar al
   navegador** conserva el diálogo de impresión; PDF y OneNote usan ese diálogo.
-- Después de cobrar, en **El día** cada venta tiene un botón **Imprimir**: sale un
+- Después de cobrar, en **Ventas → Mi turno** cada venta tiene un botón **Reimprimir**: sale un
   comprobante angosto, del ancho de una boleta.
 - Al **cerrar la caja** se imprime solo el papelito del cierre, con lo vendido, lo contado
   y la diferencia, mediante el diálogo del navegador. Ese es el que conviene pegar en el cuaderno.
@@ -266,12 +266,10 @@ para conectarlas. Tiene un botón para copiarla.
 
 ## Guardar una copia y pasarle los datos al contador
 
-En **El día**:
-
-- **Respaldar ahora** guarda una copia de todo en la carpeta `respaldos`. Además se guarda
-  solo cada vez que abres el programa y cada vez que cierras la caja.
-- **Descargar para el contador** baja dos archivos de Excel del día que tengas elegido:
-  uno con las ventas (con neto e IVA) y otro con el detalle de qué se vendió.
+- En **Config** (Ajustes) está **Respaldar ahora**: guarda una copia de todo en la carpeta
+  `respaldos`. Además se guarda solo cada vez que abres el programa y cada vez que cierras la caja.
+- En **Ventas → Reportes → Exportar** se bajan dos archivos de Excel del período que estés
+  mirando: uno con las ventas (con neto e IVA) y otro con el detalle de qué se vendió.
 
 > El respaldo queda en el mismo computador. Si se echa a perder el disco, se pierde igual:
 > conviene copiar esa carpeta a un pendrive de vez en cuando.
@@ -317,7 +315,7 @@ Si no hay internet, simplemente no aparece nada. También se puede desde
 
 ## Un par de cosas importantes
 
-- **Una venta cobrada no se edita, se anula.** En *El día* hay un botón **Anular** y te
+- **Una venta cobrada no se edita, se anula.** En *Ventas → Mi turno* hay un botón **Anular** y te
   pide el motivo. Queda registrado. Cambiar montos del pasado descuadraría la caja.
 - **Si sacas un producto de la carta, las ventas viejas no se tocan.** Siguen sumando
   igual, con el nombre y el precio que tenían ese día.

@@ -97,6 +97,38 @@ def poner_al_dia() -> list[str]:
                 f'CREATE INDEX IF NOT EXISTS "{indice}" ON "{tabla}" ("{columna}")'))
 
     hechos += _amarrar_insumos_a_su_producto()
+    hechos += _dar_ver_reportes_a_quien_veia_el_dia()
+    return hechos
+
+
+def _dar_ver_reportes_a_quien_veia_el_dia() -> list[str]:
+    """Una sola vez: un DUEÑO con permisos PROPIOS y «ver_dia» recibe «ver_reportes».
+
+    El permiso nuevo nace solo en el rol dueño (core.config.PERMISOS): Reportes es para
+    el dueño. Pero un dueño con una lista propia escrita solo tiene lo que dice su lista,
+    y sin esto perdería, al actualizar, lo que hoy ve. Los cajeros no lo reciben: se lo
+    da el dueño en Equipo si quiere. Corre UNA vez —queda anotado en la tabla
+    de ajustes— porque después el dueño puede quitárselo a propósito y no se lo puede
+    devolver el próximo arranque.
+    """
+    from apps.pos.db.models import Ajuste, Usuario
+    from sqlmodel import Session, select
+
+    hechos: list[str] = []
+    if not {"usuario", "ajuste"} <= set(inspect(engine).get_table_names()):
+        return hechos        # una base a medio armar: create_all las crea antes de llegar acá
+    with Session(engine) as s:
+        if s.get(Ajuste, "migracion.ver_reportes"):
+            return hechos
+        for u in s.exec(select(Usuario)).all():
+            claves = [p.strip() for p in (u.permisos or "").split(",") if p.strip()]
+            if (u.rol == "dueno" and claves and "ver_dia" in claves
+                    and "ver_reportes" not in claves):
+                u.permisos = ",".join(claves + ["ver_reportes"])
+                s.add(u)
+                hechos.append(f"usuario {u.id}: + ver_reportes")
+        s.add(Ajuste(clave="migracion.ver_reportes", valor="1"))
+        s.commit()
     return hechos
 
 
