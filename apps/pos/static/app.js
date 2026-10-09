@@ -243,7 +243,7 @@ async function cargarCarta() {
     return `<button class="rail__cat${c.id === catActiva && !busqueda ? " is-on" : ""}"
               data-cat="${c.id}" style="--c:${colorDeCat(c.id)}"
               title="${esc(c.nombre)} · ${n} ${n === 1 ? "producto" : "productos"}">
-              <span class="rail__ico">${dibujo({ k: dibujoDeCategoria(c) })}</span>
+              <span class="rail__ico">${dibujo({ k: dibujoDeCategoria(c), col: c.dibujo && c.color ? c.color : undefined })}</span>
               <span class="rail__txt">${esc(c.nombre)}</span>
             </button>`;
   }).join("");
@@ -258,6 +258,7 @@ async function cargarCarta() {
    sus productos a la venta (el empate lo gana el primero). Si ninguno tiene dibujo
    asignado, el plato genérico: «lo que no calza en nada». */
 function dibujoDeCategoria(c) {
+  if (c.dibujo) return c.dibujo;           // el que eligió el dueño manda
   const veces = {};
   let mejor = null;
   (c.productos || []).forEach((p) => {

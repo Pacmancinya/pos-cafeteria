@@ -5,6 +5,10 @@ Ese endpoint es la razón por la que el punto de venta es el dueño de los preci
 una sola lista, no dos.
 """
 from __future__ import annotations
+import re
+from pathlib import Path
+from typing import Optional
+
 from apps.pos import local as datos_local
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -106,6 +110,7 @@ def listar_categorias(s: Session = Depends(get_session)):
     return [
         {
             "id": c.id, "nombre": c.nombre, "orden": c.orden, "activa": c.activa,
+            "dibujo": c.dibujo or "", "color": c.color or "",
             "productos": [
                 {
                     "id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
@@ -128,10 +133,37 @@ def listar_categorias(s: Session = Depends(get_session)):
     ]
 
 
+_DIBUJOS_VALIDOS: Optional[set] = None
+
+
+def _dibujos_validos() -> set:
+    """Las claves de la biblioteca de dibujos (RECETAS en static/dibujos.js).
+
+    Se leen del propio archivo para que haya una sola lista: un dibujo nuevo
+    queda aceptado sin tocar el servidor.
+    """
+    global _DIBUJOS_VALIDOS
+    if _DIBUJOS_VALIDOS is None:
+        texto = (Path(__file__).resolve().parent.parent / "static" / "dibujos.js").read_text(encoding="utf-8")
+        bloque = texto.split("const RECETAS", 1)[-1]
+        _DIBUJOS_VALIDOS = set(re.findall(r'^\s*"([a-z0-9-]+)"\s*:\s*\{\s*k:', bloque, re.M))
+    return _DIBUJOS_VALIDOS
+
+
+def _datos_de_categoria(datos: CategoriaIn) -> dict:
+    """Los campos de la categoría con el dibujo ya revisado. None = no tocar."""
+    d = datos.model_dump()
+    if d["dibujo"] and d["dibujo"] not in _dibujos_validos():
+        raise HTTPException(422, "Ese dibujo no existe. Elige uno de la lista.")
+    if d["dibujo"] == "":
+        d["color"] = ""                      # automático: no queda un color suelto
+    return {k: v for k, v in d.items() if v is not None}
+
+
 @router.post("/categorias")
 def crear_categoria(datos: CategoriaIn, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("editar_carta"))):
-    c = Categoria(**datos.model_dump())
+    c = Categoria(**_datos_de_categoria(datos))
     s.add(c)
     s.commit()
     s.refresh(c)
@@ -144,7 +176,7 @@ def editar_categoria(cat_id: int, datos: CategoriaIn, s: Session = Depends(get_s
     c = s.get(Categoria, cat_id)
     if not c:
         raise HTTPException(404, "No existe esa categoría")
-    for k, v in datos.model_dump().items():
+    for k, v in _datos_de_categoria(datos).items():
         setattr(c, k, v)
     s.add(c)
     s.commit()

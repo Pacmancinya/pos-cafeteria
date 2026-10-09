@@ -1,6 +1,7 @@
 """Contratos de entrada y salida de la API (Pydantic v2)."""
 from __future__ import annotations
 
+import re
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -173,6 +174,31 @@ class CategoriaIn(BaseModel):
     nombre: str
     orden: int = 0
     activa: bool = True
+    # Ícono de la categoría en la columna de la caja. None = no tocarlo (editar solo
+    # el nombre no debe borrar el dibujo); "" = automático, según sus productos.
+    # Que el dibujo exista lo revisa el endpoint, que conoce la biblioteca.
+    dibujo: Optional[str] = None
+    color: Optional[str] = None
+
+    @field_validator("dibujo")
+    @classmethod
+    def dibujo_con_forma(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if not re.fullmatch(r"[a-z0-9-]{0,40}", v):
+            raise ValueError("Ese dibujo no existe. Elige uno de la lista.")
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def color_con_forma(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if v and not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Ese color no es válido.")
+        return v
 
     @field_validator("nombre")
     @classmethod

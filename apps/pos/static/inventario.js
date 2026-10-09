@@ -315,6 +315,8 @@ function invAbrirCategorias() {
     <div class="i-sub">${invBuscador("invBuscarCategorias", "Buscar categoría")}</div>
     <div class="inv-interior i-cuerpo">
     <div id="invListaCategorias">${CATEGORIAS.map((c) => `<div class="i-cat-fila inv-categoria-fila" data-inv-cat-fila="${c.id}" style="--c:${invColorCat(c.id)}">
+      <button type="button" class="i-cat-ico" data-inv-cat-dibujo="${c.id}" aria-label="Cambiar el ícono de ${esc(c.nombre)}"
+        title="${c.dibujo ? "Ícono elegido" : "Ícono automático"}: toca para cambiarlo">${dibujo({ k: dibujoDeCategoria(c), col: c.dibujo && c.color ? c.color : undefined })}</button>
       <input aria-label="Nombre de categoría" data-inv-cat-nombre value="${esc(c.nombre)}">
       <input aria-label="Orden de categoría" type="number" data-inv-cat-orden value="${c.orden}">
       <span class="i-cat-n">${(c.productos || []).length} ${(c.productos || []).length === 1 ? "producto" : "productos"}</span>
@@ -323,6 +325,34 @@ function invAbrirCategorias() {
     <div class="i-cat-fila i-cat-nueva"><input id="invCatNueva" aria-label="Nueva categoría" placeholder="Nueva categoría"><button class="i-btn i-btn--prin" id="invCatCrear">${INV_ICONO.mas}Agregar</button></div>
     </div><div class="dialogo__pie"><button class="i-btn i-btn--prin" data-cerrar-capa>Listo</button></div>`;
   $("#capaBodega").classList.add("is-on");
+}
+
+/* El ícono de una categoría: el mismo selector de dibujos de la ficha de producto, en el
+   mismo diálogo. Elegir guarda al tiro; «Automático» vuelve a calcularlo según los productos. */
+let invCatDibujoId = null;
+function invAbrirDibujoCategoria(id) {
+  const c = CATEGORIAS.find((x) => x.id === id);
+  if (!c) return;
+  invCatDibujoId = id;
+  $("#dialogoBodega").className = "dialogo inv-dialogo i-dlg i-dlg--medio";
+  $("#dialogoBodega").innerHTML = `<header class="i-cab"><div><h2>Ícono de «${esc(c.nombre)}»</h2><p>Así se ve en la columna de la caja.</p></div>
+      <button type="button" class="i-cerrar" data-cerrar-capa aria-label="Cerrar">${INV_ICONO.cierra}</button></header>
+    <div class="inv-interior i-cuerpo">
+      <button type="button" class="i-btn i-cat-auto ${c.dibujo ? "" : "is-on"}" data-inv-cat-auto="${id}">
+        <span class="i-cat-ico i-cat-ico--chico">${dibujo({ k: dibujoDeCategoria({ productos: c.productos }) })}</span>Automático (según sus productos)</button>
+      ${selectorDeDibujo(c.dibujo || "", c.color)}
+    </div><div class="dialogo__pie"><button type="button" class="i-btn i-btn--prin" data-inv-cat-volver>Listo</button></div>`;
+  if (!c.dibujo) $$(".dibujo-op").forEach((x) => x.classList.remove("is-on"));
+  $("#capaBodega").classList.add("is-on");
+}
+async function invGuardarDibujoCategoria(dib, color, cerrar) {
+  const c = CATEGORIAS.find((x) => x.id === invCatDibujoId);
+  if (!c) return;
+  await api(`/categorias/${c.id}`, { method: "PUT", body: JSON.stringify({
+    nombre: c.nombre, orden: c.orden, activa: c.activa, dibujo: dib, color: esDibujoDeBolsa(dib) ? color : "" }) });
+  await cargarCarta(); await cargarInventario();
+  if (cerrar) { invCatDibujoId = null; invAbrirCategorias(); }
+  else avisar("Ícono guardado");
 }
 
 /* ---------------------------------------------------------------- entrada, conteo y merma */
@@ -642,6 +672,18 @@ document.addEventListener("click", async (e) => {
       const nueva = await api("/categorias", { method: "POST", body: JSON.stringify({ nombre, orden: CATEGORIAS.length }) });
       await cargarCarta();
       invElegirCategoria(invCategoriaDe(nueva.id) || { id: nueva.id, nombre });
+    }
+    if (b.dataset.invCatDibujo) invAbrirDibujoCategoria(+b.dataset.invCatDibujo);
+    if (b.hasAttribute("data-inv-cat-volver")) { invCatDibujoId = null; invAbrirCategorias(); }
+    if (b.dataset.invCatAuto) await invGuardarDibujoCategoria("", "", true);
+    if (invCatDibujoId != null && b.closest("#dialogoBodega")) {
+      if (b.dataset.dibujo) {
+        const bolsa = esDibujoDeBolsa(b.dataset.dibujo);
+        await invGuardarDibujoCategoria(b.dataset.dibujo, bolsa ? ($("#fColor")?.value || "") : "", !bolsa);
+      } else if (b.hasAttribute("data-color-bolsa")) {
+        const k = $("#fDibujo")?.value;
+        if (esDibujoDeBolsa(k)) await invGuardarDibujoCategoria(k, b.dataset.colorBolsa || "", false);
+      }
     }
     if (b.dataset.dibujo || b.hasAttribute("data-color-bolsa")) invPrevia();
     if (b.id === "fGuardar") await invGuardarFicha();

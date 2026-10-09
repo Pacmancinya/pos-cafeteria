@@ -81,6 +81,9 @@ assert.equal(dibujoDeCategoria({ productos: [p('mug'), p('vaso'), p('vaso'), p('
 assert.equal(dibujoDeCategoria({ productos: [p('mug'), p('vaso')] }), 'mug', 'el empate lo gana el primero');
 assert.equal(dibujoDeCategoria({ productos: [p(''), p(null)] }), 'plato', 'sin dibujo asignado: genérico');
 assert.equal(dibujoDeCategoria({ productos: [] }), 'plato');
+assert.equal(dibujoDeCategoria({ dibujo: 'pan-baguette', productos: [p('mug')] }), 'pan-baguette',
+  'el dibujo elegido manda sobre el automático');
+assert.equal(dibujoDeCategoria({ dibujo: '', productos: [p('mug')] }), 'mug', 'vacío = automático');
 
 const clases = new Set();
 const rail = { scrollTop: 0, scrollHeight: 600, clientHeight: 400 };

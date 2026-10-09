@@ -248,7 +248,13 @@
 /* ---------- categorías ---------- */
 .i-cat-fila{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap;padding:4px 6px;border:1px solid var(--linea);border-radius:12px;border-left:5px solid var(--c,var(--linea))}
 .i-cat-fila input{border:1px solid var(--linea);border-radius:9px;min-height:44px;padding:0 10px;font:600 16px var(--f);min-width:0}
-.i-cat-fila input:first-child{flex:1}
+.i-cat-fila input:not([type=number]){flex:1}
+.i-cat-ico{display:grid;place-items:center;width:48px;height:44px;flex:none;padding:3px;border-radius:10px;
+  border:1px solid var(--linea);background:var(--c-fondo,#FBF6EE);cursor:pointer}
+.i-cat-ico svg{width:100%;height:100%;display:block}
+.i-cat-ico--chico{width:34px;height:30px;border:0;background:none;padding:0;cursor:inherit}
+.i-cat-auto{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.i-cat-auto.is-on{outline:2px solid var(--c-marca,#2E5E4E)}
 .i-cat-fila input[type=number]{width:80px}
 .i-cat-n{font-size:12.5px;color:var(--suave);white-space:nowrap}
 .i-cat-nueva{border-left-color:var(--linea);border-style:dashed}

@@ -21,6 +21,10 @@ class Categoria(SQLModel, table=True):
     nombre: str
     orden: int = 0
     activa: bool = True
+    # Ícono en la columna de la caja. Vacío = automático (el dibujo que más se repite
+    # entre sus productos). `color` solo se usa con dibujos que se tiñen (bolsas).
+    dibujo: str = ""
+    color: str = ""
 
     productos: List["Producto"] = Relationship(back_populates="categoria")
 
