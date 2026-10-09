@@ -1454,7 +1454,10 @@ function pintarCerrarCaja(tu) {
     ${ajena ? `<div class="aviso-ajena">Esta caja la abrió <b>${esc(tu.abrio)}</b>.
       La estás cerrando tú, y así va a quedar escrito en el cierre y en el
       registro del mes.</div>` : ""}
-    ${retirosDelTurnoHTML(tu)}
+    <!-- Sacar o meter plata ya no va acá: vive en Ventas → Mi turno → Movimientos de
+         caja (lo pidió el dueño de Kofe, 09-10-2026). Lo que debería haber en el cajón
+         SÍ se muestra antes de contar: también lo pidió así. -->
+    <div class="retiros__total">En el cajón debería haber: <b>${clp(tu.efectivo_esperado)}</b></div>
     <div class="cierre">
       <div class="cierre__col">
         <div class="cierre__paso"><b>1</b> Cuenta la plata del cajón</div>
