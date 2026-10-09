@@ -1,6 +1,6 @@
 {
-  "version": "2.33",
-  "nombre": "Pantallas nuevas",
-  "novedades": "La caja estrena su diseño: arriba quedan cuatro pestañas, Caja, Inventario, Ventas y Config. En la venta, las categorías van en una columna con su dibujo (que ahora se puede elegir), el buscador y «+ Varios» en una sola fila, el pedido usa todo el alto y se vacía con un basurero; con pantalla táctil, el teclado para multiplicar queda junto a Cobrar. Inventario junta la carta y la bodega en una sola lista con una ficha por producto: códigos de barra, precio con costo y ganancia, dibujo, si sale en los televisores y si lleva inventario, con entrada de mercadería, conteo y merma que se buscan por nombre o código. Ventas muestra el turno de quien está en la caja, y con el PIN del dueño, Reportes: lo vendido por día y por hora, la ganancia estimada, los productos que más y menos salen y los cuadres de cada cajero. Config ordena todos los ajustes con un buscador y suma el mensaje del ticket, las formas de pago y propinas que se usan, el color de cada persona, televisores con nombre y volver a un respaldo desde la pantalla. Tus ventas, tu carta y tu gente quedan igual.",
-  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.33.zip"
+  "version": "2.34",
+  "nombre": "Cierre más corto",
+  "novedades": "El cierre de caja ya no repite los botones para sacar o meter plata: eso se hace en Ventas → Mi turno → Movimientos de caja. El cierre muestra arriba cuánto debería haber en el cajón y va directo a contar.",
+  "zip": "https://github.com/Pacmancinya/pos-cafeteria/archive/refs/tags/v2.34.zip"
 }
