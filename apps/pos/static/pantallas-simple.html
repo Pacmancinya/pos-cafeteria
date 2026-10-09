@@ -217,7 +217,7 @@ html, body {
     x.onreadystatechange = function () {
       if (x.readyState !== 4) { return; }
       if (x.status === 200) {
-        try { alLlegar(JSON.parse(x.responseText)); }
+        try { alLlegar(filtrarTv(JSON.parse(x.responseText))); }
         catch (e) { fallo("La carta llego rota."); }
       } else {
         fallo("No se pudo hablar con la caja (" + x.status + ").");
@@ -225,6 +225,22 @@ html, body {
     };
     x.onerror = function () { fallo("No se pudo hablar con la caja."); };
     x.send();
+  }
+
+  function filtrarTv(datos) {
+    var categorias = [], i, j, c, productos;
+    for (i = 0; i < (datos.categorias || []).length; i++) {
+      c = datos.categorias[i]; productos = [];
+      for (j = 0; j < (c.productos || []).length; j++) {
+        if (c.productos[j].en_tv !== false) { productos.push(c.productos[j]); }
+      }
+      if (!productos.length) { continue; }
+      c.productos = productos;
+      if (c.destacado && c.destacado.en_tv === false) { delete c.destacado; }
+      categorias.push(c);
+    }
+    datos.categorias = categorias;
+    return datos;
   }
 
   function fallo(texto) {
@@ -240,7 +256,14 @@ html, body {
 
   /* ---- dibujar ---- */
   function pintar() {
-    if (!carta || !carta.categorias || !carta.categorias.length) { return; }
+    if (!carta || !carta.categorias) { return; }
+    if (!carta.categorias.length) {
+      $("local").innerHTML = esc(carta.local || "");
+      $("cat").innerHTML = "";
+      $("cuerpo").innerHTML = "";
+      $("destacado").style.display = "none";
+      return;
+    }
     if (cat >= carta.categorias.length) { cat = 0; }
 
     var c = carta.categorias[cat];

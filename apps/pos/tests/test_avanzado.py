@@ -143,16 +143,17 @@ def test_no_carga_encima_de_un_saldo_que_ya_se_contó(cliente, carta):
     assert len(_libro(i.id)) == 1
 
 
-def test_un_producto_con_receta_de_verdad_no_acepta_un_costo(cliente, carta):
-    """Un capuchino no tiene costo propio: tiene leche y café. Se ignora, no falla."""
+def test_costo_referencia_de_receta_no_modifica_ingredientes(cliente, carta):
+    """El costo de referencia no cambia el libro ni los costos de ingredientes."""
     leche = cliente.post("/api/v1/inventario/insumos", json={
         "nombre": "Leche", "unidad": "ml", "formato": "Caja 1 L",
         "compra_contenido": 1000, "compra_costo": 1200}).json()
     cliente.put(f"/api/v1/productos/{carta['latte']['id']}/receta", json={
         "lineas": [{"insumo_id": leche["id"], "cantidad": 200}]})
 
+    producto = {k: v for k, v in carta["latte"].items() if k != "llevar_cuenta"}
     r = cliente.put(f"/api/v1/productos/{carta['latte']['id']}", json={
-        **carta["latte"], "costo": 5000, "stock_inicial": 99})
+        **producto, "costo": 5000})
     assert r.status_code == 200, r.text
     with Session(engine) as s:
         assert s.get(Insumo, leche["id"]).compra_costo == 1200

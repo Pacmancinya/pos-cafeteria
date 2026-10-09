@@ -17,7 +17,7 @@ from apps.pos.balanza import plu_normalizado
 from apps.pos.db.session import get_session
 from core.codigos import normalizar, por_que_no_sirve
 from core.planilla import sin_tildes
-from core.config import AVISOS, NOMBRE_LOCAL
+from core.config import AVISOS, NOMBRE_LOCAL, costo_de, puede
 from core.schemas import CategoriaIn, ProductoIn
 
 router = APIRouter(prefix="/api/v1", tags=["carta"])
@@ -47,7 +47,7 @@ def carta(respuesta: Response, s: Session = Depends(get_session)):
 
     salida = []
     for c in cats:
-        prods = _productos_de(s, c.id)
+        prods = [p for p in _productos_de(s, c.id) if p.en_tv]
         if not prods:
             continue  # una categoría vacía rompe la pantalla; mejor no mandarla
         destacado = next((p for p in prods if p.destacado), None)
@@ -64,6 +64,7 @@ def carta(respuesta: Response, s: Session = Depends(get_session)):
                 "etiqueta": p.etiqueta or ("Por kilo" if por_kilo else None),
                 "dibujo": p.dibujo,
                 "color": p.color or None,
+                "en_tv": p.en_tv,
             }
 
         bloque = {"nombre": c.nombre, "productos": [_p(p) for p in normales]}
@@ -110,6 +111,7 @@ def listar_categorias(s: Session = Depends(get_session)):
                     "id": p.id, "nombre": p.nombre, "descripcion": p.descripcion,
                     "precio": p.precio, "activo": p.activo, "orden": p.orden,
                     "plu": p.plu, "precio_kilo": p.precio_kilo,
+                    "en_tv": p.en_tv,
                     "destacado": p.destacado, "badge": p.badge, "antes": p.antes,
                     "etiqueta": p.etiqueta, "dibujo": p.dibujo, "color": p.color,
                     # None = no se lleva stock de esto. Distinto de 0, que es
@@ -177,7 +179,7 @@ def borrar_categoria(cat_id: int, s: Session = Depends(get_session),
             409,
             f"«{c.nombre}» tiene {n} producto{'s' if n != 1 else ''} adentro. "
             "Muévelos a otra categoría o bórralos primero (cada producto se "
-            "cambia de categoría en su ficha, con el botón ···).")
+            "cambia de categoría en su ficha de Inventario).")
     s.delete(c)
     s.commit()
     return {"ok": True, "id": cat_id}
@@ -203,7 +205,97 @@ def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Product
 
 # Lo que ProductoIn trae de más y no es columna de Producto: son las cosas que
 # antes obligaban a ir a la Bodega a escribir todo de nuevo.
-EXTRAS = {"codigo", "tal_cual", "costo", "stock_inicial", "minimo", "llevar_cuenta"}
+EXTRAS = {"codigo", "codigos", "tal_cual", "costo", "stock_inicial", "minimo",
+          "llevar_cuenta", "hay_ahora", "stock_esperado"}
+
+
+def _receta_antigua(s: Session, p: Producto) -> bool:
+    filas = s.exec(select(Receta).where(Receta.producto_id == p.id)).all()
+    if not filas:
+        return False
+    i = s.get(Insumo, filas[0].insumo_id)
+    return not (len(filas) == 1 and filas[0].cantidad == 1 and i
+                and i.producto_id == p.id and i.unidad == "un")
+
+
+@router.get("/inventario/productos")
+def productos_inventario(s: Session = Depends(get_session),
+                        quien: dict = Depends(sesion.exige_entrar)):
+    if not any(puede(quien["rol"], permiso, quien.get("permisos", ""))
+               for permiso in ("editar_carta", "inventario")):
+        raise HTTPException(403, "No tienes permiso para ver Inventario")
+    propios = {i.producto_id: i for i in s.exec(select(Insumo)).all() if i.producto_id}
+    recetas = {}
+    for r in s.exec(select(Receta)).all():
+        recetas.setdefault(r.producto_id, []).append(r)
+    barras = {}
+    for b in s.exec(select(CodigoBarra)).all():
+        barras.setdefault(b.producto_id, []).append(
+            {"codigo": b.codigo, "cuantos": b.cuantos, "nota": b.nota})
+    filas = []
+    for p in s.exec(select(Producto).order_by(Producto.orden, Producto.id)).all():
+        i = propios.get(p.id)
+        lineas = recetas.get(p.id, [])
+        antigua = bool(lineas) and not (len(lineas) == 1 and lineas[0].cantidad == 1
+                                        and i and i.unidad == "un" and lineas[0].insumo_id == i.id)
+        cuenta = not antigua and p.llevar_cuenta is not False and bool(i and i.activo)
+        filas.append({**p.model_dump(), "codigos": barras.get(p.id, []),
+                      "receta_antigua": antigua, "cuenta": cuenta,
+                      "insumo_id": i.id if i else None,
+                      "stock": i.stock if i else 0, "contado": bool(i and i.contado),
+                      "minimo": i.minimo if i else 0,
+                      "compra_contenido": i.compra_contenido if i else 1,
+                      "formato": i.formato if i else "Unidad",
+                      "costo": costo_de(1, i.compra_costo, i.compra_contenido)
+                      if i else p.costo_referencia})
+    return {"productos": filas, "recetas_antiguas": any(p["receta_antigua"] for p in filas)}
+
+
+def _permiso_stock(s: Session, p: Producto | None, datos: ProductoIn, quien: dict):
+    def exigir(permiso):
+        if not puede(quien["rol"], permiso, quien.get("permisos", "")):
+            raise HTTPException(403, "No tienes permiso para cambiar el inventario del producto")
+    if "llevar_cuenta" in datos.model_fields_set:
+        anterior = p.llevar_cuenta if p else False
+        if datos.llevar_cuenta != anterior:
+            exigir("inventario")
+            if p and _receta_antigua(s, p):
+                raise HTTPException(409, "Este producto tiene una receta antigua: sigue funcionando sin cambios.")
+            if datos.llevar_cuenta and datos.hay_ahora is None:
+                # Prender la cuenta sin que nadie diga cuántos hay deja el producto
+                # en cero y con el tope duro puesto: la caja dejaría de venderlo.
+                propio = s.exec(select(Insumo).where(Insumo.producto_id == p.id)).first() if p else None
+                if not (propio and propio.contado):
+                    exigir("inventario_ajustar")
+    if datos.tal_cual or "minimo" in datos.model_fields_set:
+        exigir("inventario")
+    if datos.hay_ahora is not None or datos.stock_inicial:
+        exigir("inventario")
+        exigir("inventario_ajustar")
+
+
+def _guardar_codigos(s: Session, p: Producto, datos: ProductoIn):
+    if datos.codigos is None:
+        return
+    nuevos = {}
+    for b in datos.codigos:
+        problema = por_que_no_sirve(b.codigo)
+        if problema:
+            raise HTTPException(422, problema)
+        limpio = normalizar(b.codigo)
+        if limpio in nuevos:
+            raise HTTPException(422, "El código está repetido en la ficha")
+        ya = s.get(CodigoBarra, limpio)
+        if ya and ya.producto_id != p.id:
+            raise HTTPException(409, "Ese código ya pertenece a otro producto")
+        nuevos[limpio] = b
+    for b in s.exec(select(CodigoBarra).where(CodigoBarra.producto_id == p.id)).all():
+        if b.codigo not in nuevos:
+            s.delete(b)
+    for codigo, b in nuevos.items():
+        fila = s.get(CodigoBarra, codigo) or CodigoBarra(codigo=codigo, producto_id=p.id)
+        fila.cuantos, fila.nota = b.cuantos, b.nota
+        s.add(fila)
 
 
 def _validar_plu(s: Session, plu: str, salvo_id: int | None = None) -> None:
@@ -211,8 +303,6 @@ def _validar_plu(s: Session, plu: str, salvo_id: int | None = None) -> None:
         return
     if any(c not in "0123456789" for c in plu):
         raise HTTPException(422, "El PLU debe tener solo números del 0 al 9.")
-    from apps.pos.db.session import reservar_escritura
-    reservar_escritura(s)
     numero = plu_normalizado(plu)
     # También se reserva en los inactivos: reactivar una ficha no debe dejar
     # dos precios distintos para el mismo PLU. No se convierte a int: un PLU
@@ -223,25 +313,32 @@ def _validar_plu(s: Session, plu: str, salvo_id: int | None = None) -> None:
 
 
 def _a_la_bodega(s: Session, p: Producto, datos: ProductoIn, quien: dict) -> None:
-    """Le pasa al insumo del producto lo que se escribió en su ficha.
-
-    Ni el costo ni la cantidad son columnas del producto: viven en el insumo que
-    lo acompaña, que es el mismo que muestra la Bodega. Escribirlos acá es lo que
-    evita crear el producto, cerrar, entrar a la Bodega y escribir lo mismo otra
-    vez — que es exactamente lo que nadie hacía.
-
-    Un producto con receta de verdad (un capuchino: leche y café) no tiene insumo
-    propio, y entonces esto no hace nada. Está bien: su costo no se escribe, se
-    suma de sus ingredientes.
-    """
+    """Costo en el insumo propio o referencia sin stock; cantidades por el libro."""
     i = s.exec(select(Insumo).where(Insumo.producto_id == p.id)).first()
     if not i:
+        if datos.hay_ahora is not None:
+            raise HTTPException(422, "Activa el inventario antes de contar este producto")
+        if "costo" in datos.model_fields_set:
+            p.costo_referencia = datos.costo
         return
-    if datos.costo:
-        i.compra_costo = datos.costo
-    if datos.minimo:
+    if "costo" in datos.model_fields_set:
+        if datos.costo * i.compra_contenido > 9223372036854775807:
+            raise HTTPException(422, "El costo del envase es demasiado grande")
+        i.compra_costo = datos.costo * i.compra_contenido
+    if "minimo" in datos.model_fields_set:
         i.minimo = datos.minimo
     s.add(i)
+
+    if datos.hay_ahora is not None:
+        if not p.llevar_cuenta and p.llevar_cuenta is not None:
+            raise HTTPException(422, "Activa el inventario antes de contar este producto")
+        if datos.stock_esperado is None or i.stock != datos.stock_esperado:
+            raise HTTPException(409, "La cantidad cambió. Vuelve a abrir la ficha y revisa cuánto hay.")
+        tiene_historia = s.exec(select(Movimiento).where(Movimiento.insumo_id == i.id)).first()
+        if datos.hay_ahora != i.stock or not i.contado or not tiene_historia:
+            from apps.pos.api.inventario import anotar
+            anotar(s, i, "ajuste" if tiene_historia else "carga", datos.hay_ahora - i.stock,
+                   motivo="Cantidad contada en la ficha de Inventario", quien=quien)
 
     # «Inicial» quiere decir que no hay historia. El libro es la prueba: si el
     # insumo ya tiene movimientos, su saldo es real y sumarle una carga encima lo
@@ -268,6 +365,9 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
     —ficha sí, insumo no— es peor que no haberlo creado, porque se vende y no
     descuenta y nadie se entera hasta el conteo.
     """
+    from apps.pos.db.session import reservar_escritura
+    reservar_escritura(s)
+    _permiso_stock(s, None, datos, quien)
     _validar_plu(s, datos.plu)
     if not s.get(Categoria, datos.categoria_id):
         raise HTTPException(404, "No existe esa categoría")
@@ -332,6 +432,9 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
         habilitar_cuenta(s, p)
         s.flush()
         _a_la_bodega(s, p, datos, quien)
+    else:
+        _a_la_bodega(s, p, datos, quien)
+    _guardar_codigos(s, p, datos)
     s.commit()
     s.refresh(p)
     return p
@@ -340,11 +443,14 @@ def crear_producto(datos: ProductoIn, s: Session = Depends(get_session),
 @router.put("/productos/{prod_id}")
 def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("editar_carta"))):
+    from apps.pos.db.session import reservar_escritura
+    reservar_escritura(s)
     if "plu" in datos.model_fields_set:
         _validar_plu(s, datos.plu, prod_id)
     p = s.get(Producto, prod_id)
     if not p:
         raise HTTPException(404, "No existe ese producto")
+    _permiso_stock(s, p, datos, quien)
     # OJO: solo si le están CAMBIANDO el nombre.
     #
     # En la carta del local hay nueve productos llamados "Producto nuevo" desde
@@ -370,7 +476,7 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
     for k, v in datos.model_dump(exclude=EXTRAS).items():
         # La pantalla actual no manda estos campos: omitirlos conserva la
         # configuracion de balanza; enviarlos vacios permite borrarla.
-        if k in {"plu", "precio_kilo"} and k not in datos.model_fields_set:
+        if k in {"plu", "precio_kilo", "en_tv"} and k not in datos.model_fields_set:
             continue
         setattr(p, k, v)
 
@@ -387,8 +493,9 @@ def editar_producto(prod_id: int, datos: ProductoIn, s: Session = Depends(get_se
     # Lo de Avanzado: el costo que se escribió para sacar el precio es el mismo
     # con el que la Bodega valoriza lo que queda. Si el producto tiene su insumo,
     # se guarda ahí; si no, no se guarda en ninguna parte y solo sirvió de cuenta.
-    if datos.costo or datos.stock_inicial or datos.minimo:
+    if {"costo", "stock_inicial", "minimo", "hay_ahora"} & datos.model_fields_set:
         _a_la_bodega(s, p, datos, quien)
+    _guardar_codigos(s, p, datos)
 
     _un_solo_destacado(s, p)
     s.add(p)

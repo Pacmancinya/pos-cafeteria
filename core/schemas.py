@@ -125,6 +125,12 @@ class CerrarTurnoIn(BaseModel):
     propinas_pagadas: int = Field(default=0, ge=0)
 
 
+class CodigoProductoIn(BaseModel):
+    codigo: str
+    cuantos: int = Field(default=1, ge=1, strict=True)
+    nota: str = ""
+
+
 class ProductoIn(BaseModel):
     categoria_id: int
     nombre: str
@@ -132,6 +138,7 @@ class ProductoIn(BaseModel):
     precio: int = Field(default=0, ge=0)
     plu: str = ""
     precio_kilo: int = Field(default=0, ge=0, le=9223372036854775807, strict=True)
+    en_tv: bool = True
     activo: bool = True
     orden: int = 0
     destacado: bool = False
@@ -148,9 +155,12 @@ class ProductoIn(BaseModel):
     # lo demuestra: 148 ventas y UN insumo cargado. No es que el inventario no
     # importe — es que entrar costaba más de lo que daba.
     codigo: str = ""                       # el de barras, si lo escaneó
+    codigos: Optional[list[CodigoProductoIn]] = None
+    hay_ahora: Optional[int] = Field(default=None, ge=0, le=2147483647, strict=True)
+    stock_esperado: Optional[int] = Field(default=None, strict=True)
     tal_cual: bool = False                 # se compra y se vende igual: es su propio insumo
     llevar_cuenta: bool = False
-    costo: int = Field(default=0, ge=0)    # cuánto cuesta cada uno
+    costo: int = Field(default=0, ge=0, le=9223372036854775807)  # cuánto cuesta cada uno
     stock_inicial: int = Field(default=0, ge=0)
     minimo: int = Field(default=0, ge=0)   # bajo esto aparece en "Por comprar"
 
@@ -278,7 +288,10 @@ class TalCualIn(BaseModel):
 class CompraIn(BaseModel):
     insumo_id: int
     envases: int = Field(default=1, ge=1)
+    # La pantalla unificada recibe unidades; las integraciones anteriores siguen en envases.
+    cantidad: Optional[int] = Field(default=None, ge=1, le=2147483647, strict=True)
     compra_costo: Optional[int] = Field(default=None, ge=0)
+    costo_unitario: Optional[int] = Field(default=None, ge=0, le=9223372036854775807, strict=True)
     motivo: str = ""
 
 
@@ -302,6 +315,16 @@ class ConteoIn(BaseModel):
     """{"3": 4000, "7": 12} — lo que se contó de verdad, por insumo."""
     conteos: dict[str, int] = Field(default_factory=dict)
     nota: str = ""
+    esperados: Optional[dict[str, int]] = None
+
+    @field_validator("conteos", "esperados", mode="before")
+    @classmethod
+    def cantidades_enteras(cls, v, info):
+        if v is not None and (not isinstance(v, dict) or any(
+                type(n) is not int or (info.field_name == "conteos" and n < 0)
+                for n in v.values())):
+            raise ValueError("El conteo debe tener cantidades enteras no negativas")
+        return v
 
 
 # ---------------------------------------------------------------- importar

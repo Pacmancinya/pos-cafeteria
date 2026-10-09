@@ -21,7 +21,7 @@ const c = { console, document: { activeElement: null },
   $: (id) => elementos.get(id) || null,
   localStorage: { getItem: (k) => almacen.get(k), setItem: (k, v) => almacen.set(k, v) },
   CATEGORIAS: [], AJUSTES: {}, MINUTOS_QUIETO: 5, IVA: 0.19,
-  puedo: () => true, usarInventario: () => true,
+  puedo: () => true, usarInventario: () => true, invEscanear: () => false,
   avisar: (...a) => avisos.push(a),
   dialogoProductoNuevoPorCodigo: () => assert.fail('No debe abrir producto nuevo'),
   pintarTalCual() {}, pintarCodigos() {}, selectorDeDibujo: () => '<input id="fDibujo">', colorParaGuardar: (p) => p.color || '',
@@ -34,7 +34,7 @@ vm.runInContext(persistencia.replace('let carrito', 'var carrito'), c);
 vm.runInContext(fuente.match(/^const totalCarrito = .*;$/m)[0], c);
 for (const nombre of ['alEscanear', 'agregarBalanza', 'pintarCarrito', 'lineasParaVenta',
   'sumarAlPedido', 'productoDeLaCarta', 'cambiarCantidad', 'quitarLineaDelPedido', 'confirmarVenta',
-  'limpiarCarritoDeBorrados', 'abrirFichaProducto', 'costoConIva', 'bloqueSugerido',
+  'limpiarCarritoDeBorrados', 'costoConIva', 'bloqueSugerido',
   'dibujoFormatoBalanza', 'bloqueBalanza', 'leerFormatoBalanza', 'conectarBalanza',
   'guardarFormatoBalanza', 'probarEtiquetaBalanza', 'pintarAjustes']) {
   vm.runInContext(funcion(nombre), c);
@@ -128,48 +128,7 @@ const plano = (v) => JSON.parse(JSON.stringify(v));
   assert.deepEqual(avisos.at(-1), ['PLU desconocido', true]);
   assert.equal(c.carrito.length, 0);
 
-  // Ejecutamos Guardar de la ficha completa, tanto al crear como al editar.
-  const p = { id: 7, nombre: 'Jamón', precio: 1000, plu: '0007', precio_kilo: 8990 };
-  c.CATEGORIAS = [{ id: 1, activa: true, productos: [p] }];
-  c.PRODUCTO_EN_BLANCO = { nombre: '', precio: 0 };
-  c.catActiva = 1;
-  c.setTimeout = () => {};
-  c.puedo = (permiso) => permiso !== 'inventario';
-  const dialogo = poner('#dialogoProducto');
-  // El doble crea los campos insertados; los valores que se escriben se ponen abajo.
-  Object.defineProperty(dialogo, 'innerHTML', { get() { return this.html; }, set(html) {
-    this.html = html;
-    for (const [, id] of html.matchAll(/id="([^"]+)"/g)) poner('#' + id);
-  } });
-  poner('#capaProducto');
-  const envios = [];
-  c.api = async (ruta, opciones) => {
-    envios.push([ruta, opciones.method, JSON.parse(opciones.body)]);
-    return { id: 7 };
-  };
-  for (const nuevo of [false, true]) {
-    c.abrirFichaProducto(nuevo ? null : 7, 1);
-    assert.equal(/id="fBalanza" open/.test(dialogo.html), !nuevo);
-    elementos.get('#fNombre').value = 'Jamón';
-    elementos.get('#fPlu').value = '00x07';
-    const plu = elementos.get('#fPlu');
-    plu.oyentes.input({ target: plu });
-    assert.equal(plu.value, '0007');
-    elementos.get('#fPrecioKilo').value = '8.990';
-    await elementos.get('#fGuardar').onclick();
-    assert.equal(envios.at(-1)[1], nuevo ? 'POST' : 'PUT');
-    assert.equal(envios.at(-1)[2].plu, '0007');
-    assert.equal(envios.at(-1)[2].precio_kilo, 8990);
-  }
-  elementos.get('#fPlu').value = '';
-  elementos.get('#fPrecioKilo').value = '';
-  await elementos.get('#fGuardar').onclick();
-  assert.equal(envios.at(-1)[2].plu, '');
-  assert.equal(envios.at(-1)[2].precio_kilo, 0);
-  c.api = async () => { throw Error('Ese PLU ya está en otro producto'); };
-  await elementos.get('#fGuardar').onclick();
-  assert.deepEqual(avisos.at(-1), ['Ese PLU ya está en otro producto', true]);
-
+  // La ficha y sus precios por kilo se prueban en inventario_ui.cjs.
   assert.equal(c.dibujoFormatoBalanza(digi).split('\n')[1], 'PPNNNN$$$$$$V');
   // Un campo vacío o al revés no se dibuja como una superposición inventada.
   assert(c.dibujoFormatoBalanza({ ...digi, codigo: [null, 6] }).startsWith('Falta o está mal'));

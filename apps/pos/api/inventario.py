@@ -157,7 +157,8 @@ def habilitar_cuenta(s: Session, p: Producto) -> None:
                 i.producto_id = p.id
     if not i:
         i = Insumo(nombre=p.nombre, unidad="un", formato="Unidad",
-                   compra_contenido=1, producto_id=p.id, contado=True)
+                   compra_contenido=1, compra_costo=p.costo_referencia,
+                   producto_id=p.id, contado=True)
         s.add(i)
         s.flush()
     if i.unidad != "un":
@@ -408,14 +409,19 @@ def sacar_insumo(insumo_id: int, s: Session = Depends(get_session),
 def registrar_compra(datos: CompraIn, s: Session = Depends(get_session),
                      quien: dict = Depends(sesion.exige("inventario"))):
     """Llegó mercadería. Se registra en envases, que es como se compra."""
+    from apps.pos.db.session import reservar_escritura
+    reservar_escritura(s)
     i = s.get(Insumo, datos.insumo_id)
     if not i:
         raise HTTPException(404, "No existe ese insumo")
-    if datos.compra_costo is not None and datos.compra_costo != i.compra_costo:
+    costo = datos.costo_unitario * i.compra_contenido if datos.costo_unitario is not None else datos.compra_costo
+    if costo is not None and costo > 9223372036854775807:
+        raise HTTPException(422, "El costo del envase es demasiado grande")
+    if costo is not None and costo != i.compra_costo:
         # El último costo pasa a ser EL costo. Un promedio ponderado sería más
         # exacto y nadie en una cafetería lo entendería ni lo revisaría.
-        i.compra_costo = datos.compra_costo
-    cantidad = datos.envases * i.compra_contenido
+        i.compra_costo = costo
+    cantidad = datos.cantidad if datos.cantidad is not None else datos.envases * i.compra_contenido
     m = anotar(s, i, "compra", cantidad,
                motivo=datos.motivo or f"Llegaron {datos.envases} × {i.formato or 'envase'}",
                quien=quien)
@@ -429,6 +435,8 @@ def registrar_merma(datos: MermaIn, s: Session = Depends(get_session),
                     quien: dict = Depends(sesion.exige("inventario"))):
     """Se perdió algo. El motivo es obligatorio: una merma sin motivo no se
     distingue de un faltante."""
+    from apps.pos.db.session import reservar_escritura
+    reservar_escritura(s)
     i = s.get(Insumo, datos.insumo_id)
     if not i:
         raise HTTPException(404, "No existe ese insumo")
@@ -447,6 +455,16 @@ def conteo_fisico(datos: ConteoIn, s: Session = Depends(get_session),
     recién ahora. Los insumos que calzan no generan ninguna fila — un
     movimiento existe cuando algo pasó.
     """
+    from apps.pos.db.session import reservar_escritura
+    reservar_escritura(s)
+    if datos.esperados is not None:
+        for clave in datos.conteos:
+            try:
+                i = s.get(Insumo, int(clave))
+            except (TypeError, ValueError):
+                i = None
+            if not i or clave not in datos.esperados or datos.esperados[clave] != i.stock:
+                raise HTTPException(409, "El stock cambió durante el conteo. Reabre y revisa las cantidades.")
     diferencias, sin_cambios = [], 0
     for clave, contado in (datos.conteos or {}).items():
         try:
@@ -457,6 +475,8 @@ def conteo_fisico(datos: ConteoIn, s: Session = Depends(get_session),
             continue
         ajuste = int(contado) - i.stock
         if ajuste == 0:
+            i.contado = True
+            s.add(i)
             sin_cambios += 1
             continue
         esperado = i.stock

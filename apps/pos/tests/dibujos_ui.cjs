@@ -71,13 +71,14 @@ svgValido(dibujo({ k: 'mug', col: '#3A1B0C' }), 'mug');
 
 /* ---- el selector de la ficha del producto ---- */
 const inicio = appJs.indexOf('const GRUPOS_DIBUJO');
-const fin = appJs.indexOf('function categoriasPlegadasGuardadas');
+const fin = appJs.indexOf('/* Dirección que hay que pegar en las pantallas');
 assert(inicio > 0 && fin > inicio);
 const campos = new Map();
 const e = {
   console, dibujo,
   esc: (s) => String(s).replace(/[&<>"']/g, ''),
   sinTildes: (s) => String(s).toLowerCase(),
+  invBuscador: (id, texto) => `<input id="${id}" placeholder="${texto}">`,
   $: (id) => campos.get(id) || null,
   $$: () => [],
 };

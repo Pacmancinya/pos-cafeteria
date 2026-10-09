@@ -21,15 +21,15 @@ window.GUIAS = [
       <li><b>Crea a tu gente.</b> Tú ya eres el dueño. Agrega a cada cajero con
           su propio PIN: así la caja sabe quién hizo cada cosa.</li>
       <li><b>Arregla la carta.</b> Los productos que vienen son de ejemplo.
-          Cámbialos por los tuyos en <b>Inventario → Carta</b>. Si ya tienes la
+          Cámbialos por los tuyos en <b>Inventario</b>. Si ya tienes la
           lista en un Excel, no la copies a mano: mira la guía
           <i>Traer la carta de un Excel</i>.</li>
       <li><b>Vende.</b> Con eso ya funciona. Todo lo demás es opcional.</li>
-      <li data-con-inventario><b>Cuando tengas tiempo</b>, carga la bodega para saber cuánto te
+      <li data-con-inventario><b>Cuando tengas tiempo</b>, carga Inventario para saber cuánto te
           queda de cada cosa. Se puede hacer de a poco.</li>
     </ol>
     <div class="ayuda">No hace falta tener todo listo para empezar a cobrar. La
-      caja funciona con la carta a medias<span data-con-inventario> y con la bodega vacía</span>.</div>`,
+      caja funciona con la carta a medias<span data-con-inventario> y con Inventario vacío</span>.</div>`,
 },
 {
   id: "vender-sin-inventario",
@@ -54,7 +54,7 @@ window.GUIAS = [
 
     <h3>Cambiar un precio</h3>
     <ol>
-      <li>Pestaña <b>Inventario</b>, opción <b>Carta</b>.</li>
+      <li>Pestaña <b>Inventario</b>.</li>
       <li>Escribe el precio nuevo y aprieta <b>Guardar</b>.</li>
     </ol>
     <p>El precio va sin puntos: escribes <b>3400</b> y en la pantalla sale
@@ -63,7 +63,7 @@ window.GUIAS = [
 
     <h3>Agregar uno nuevo</h3>
     <ol>
-      <li>Pestaña <b>Inventario</b> → <b>Carta</b> → botón <b>+ Producto</b> en la categoría que
+      <li>Pestaña <b>Inventario</b> → botón <b>+ Nuevo producto</b>; elige la categoría que
           corresponda.</li>
       <li>Ponle nombre y precio.</li>
       <li>Elige el <b>dibujo</b>: hay más de 60 y se eligen viéndolos, no por el
@@ -80,7 +80,7 @@ window.GUIAS = [
   titulo: "Traer la carta de un Excel",
   resumen: "Si ya tienes tu lista escrita, no la copies a mano.",
   html: `
-    <p>Pestaña <b>Inventario</b> → <b>Carta</b> → <b>Traer la carta de un archivo</b>.</p>
+    <p>Pestaña <b>Inventario</b> → <b>Importar</b>.</p>
     <ol>
       <li>Sube el Excel o el CSV, <b>o pega la lista</b> copiada de donde la
           tengas: un Excel, un Word, un correo.</li>
@@ -104,17 +104,12 @@ window.GUIAS = [
   titulo: "Compré pasteles: ¿dónde los pongo?",
   resumen: "En un solo lugar. Ya no hay que escribirlo dos veces.",
   html: `
-    <p>En <b>Inventario → Carta → + Producto</b>, escribe el nombre y el precio y marca
-       <b>Llevar la cuenta de este</b>. La casilla empieza apagada.</p>
-    <p>Después abre <b>Inventario → Bodega</b>, busca el pastel por nombre o c?digo de barras,
-       t?calo y escribe cu?ntas unidades hay. Tambi?n puedes usar + y ?.</p>
-    <p>Toca <b>Guardar</b> y elige el motivo: <b>Lleg?</b>, <b>Se perdi?</b>,
-       <b>Conteo</b> o <b>Ajuste</b>. El cambio queda en <b>Ver movimientos</b>,
-       con la fecha y la persona que lo guard?.</p>
-    <p>Cada venta descuenta las unidades. Si no quedan, actualiza la cantidad
-       real en Inventario → Bodega antes de volver a cobrar.</p>
-    <p>Para preparaciones como panes, caf? o leche, deja la casilla apagada.
-       Solo llevas la cuenta de los productos que eliges.</p>`,
+    <p>En <b>Inventario → + Nuevo producto</b>, escribe el nombre, la categoría y el precio.
+       Activa <b>Este producto lleva inventario</b>, anota <b>Hay ahora</b> y el <b>Mínimo</b> y guarda.</p>
+    <p>Para las compras siguientes usa <b>Entrada de mercadería</b>: busca o escanea,
+       escribe cantidad y costo opcional, agrega los renglones y guarda.</p>
+    <p>Cada venta descuenta las unidades. <b>Por comprar</b> muestra los productos bajo el mínimo.
+       Para corregir el saldo físico usa <b>Conteo</b>; para pérdidas, <b>Merma</b> con su motivo.</p>`,
 },
 {
   id: "lector-de-codigos",
@@ -175,20 +170,14 @@ window.GUIAS = [
   titulo: "Que el stock baje solo al vender",
   resumen: "Para lo que preparas: café, jugos, sándwiches.",
   html: `
-    <p>En <b>Inventario → Bodega</b> busca por nombre o pasa el código por el lector.
-       Toca el producto para cambiar la cantidad, guarda y elige el motivo.</p>
-    <p>Solo aparecen los productos que llevan cuenta por unidades. Puedes marcar
-       o desmarcar <b>Llevar la cuenta de este</b> en su ficha de <b>Inventario → Carta</b>.</p>
-    <p>Las cuentas anteriores se conservan. En <b>Avanzado: insumos y recetas
-       anteriores</b> puedes consultar sus medidas, recetas y movimientos.</p>
-    <p><b>Ver movimientos</b> muestra por qu? cambi? cada saldo, cu?ndo y qui?n
-       lo hizo. Desmarcar un producto conserva ese historial.</p>
-    <p>La caja impide vender m?s unidades que las contadas. Los productos
-       antiguos que nunca se contaron conservan su funcionamiento hasta
-       registrar la cantidad real. Las recetas anteriores siguen descontando
-       sus ingredientes mientras no desmarques la cuenta del producto.</p>
-    <p>Los motivos <b>Conteo</b> y <b>Ajuste</b> requieren permiso para corregir
-       el stock. Si apagas <b>Llevar inventario en este local</b>, se oculta la opción Bodega de Inventario.</p>`,
+    <p>En <b>Inventario</b> abre la ficha y activa <b>Este producto lleva inventario</b>.
+       Anota el saldo contado y el mínimo. Apagar conserva el libro completo y permite vender sin tope.</p>
+    <p><b>Entrada de mercadería</b>, <b>Conteo</b> y <b>Merma</b> registran los cambios con su autor.
+       Contar requiere permiso para ajustar stock.</p>
+    <p>Las recetas antiguas siguen funcionando y descontando sus ingredientes;
+       la nueva pantalla muestra un aviso y no las modifica.</p>
+    <p>En <b>Config → Ajustes</b>, apagar <b>Llevar inventario en este local</b> esconde
+       las herramientas de stock y suspende los topes y descuentos. Los productos siguen disponibles.</p>`,
 },
 {
   id: "abrir-cerrar-caja",
@@ -316,7 +305,7 @@ window.GUIAS = [
       <li><b>Dueño:</b> todo. Precios, informes, usuarios, ajustar el stock,
           anular ventas de cajas ya cerradas.</li>
       <li><b>Cajero:</b> vende, anula lo del turno en curso, abre la caja y
-          cierra <b>la que abrió él</b>, mira la bodega y anota compras y
+          cierra <b>la que abrió él</b>, mira Inventario y anota compras y
           pérdidas.</li>
     </ul>
     <p>El cajero <b>sí</b> puede anular una venta del turno en curso. Prohibirlo
@@ -361,7 +350,7 @@ window.GUIAS = [
 
     <h3>Conectar un televisor</h3>
     <ol>
-      <li>Pestaña <b>Inventario</b> → <b>Carta</b>: ahí están las direcciones, con su botón de
+      <li>En <b>Config → Las pantallas del local</b> están las direcciones, con su botón de
           copiar.</li>
       <li>En el televisor, abre el navegador y entra a la que le toca:
         <ul>
@@ -431,56 +420,14 @@ window.GUIAS = [
       que la caja se lo agrega. Escribe lo que quieres cobrar.</div>
 
     <h3>Cuánto cobrar por algo que compraste</h3>
-    <p>Abre el producto —o créalo— y abajo, en la columna de la izquierda, toca
-       el <b>+</b> que dice <b>Sacar el precio desde lo que te cuesta</b>. Viene
-       plegado porque no hace falta para vender: si ya sabes tu precio, escríbelo
-       arriba y listo.</p>
-    <p>Escribe cuánto te cuesta a ti cada uno y aparece un recuadro verde con el
-       precio sugerido.</p>
-    <ul>
-      <li>El botón <b>Usar este precio</b> lo copia arriba. De ahí lo puedes
-          cambiar: es una sugerencia, no una orden.</li>
-      <li>Los botones de <b>margen</b> mueven el sugerido. Ese porcentaje queda
-          guardado para la próxima vez.</li>
-      <li>El sugerido siempre <b>sube</b> al múltiplo de $50 más cercano hacia
-          arriba: nadie cobra $2.437.</li>
-      <li data-con-inventario>Si el producto lleva la cuenta en Inventario → Bodega, el costo
-          queda guardado ahí —es el mismo con el que se valoriza lo que te
-          queda— y la próxima vez que abras la ficha ya está escrito.</li>
-    </ul>
-
-    <h3>La casilla «Ese precio ya trae IVA»</h3>
-    <p>Viene marcada, y para la mayoría así está bien: es el caso de ir al
-       supermercado o al mayorista y ver el precio final en la boleta.</p>
-    <p><b>Si compras con factura, desmárcala.</b> El precio de una factura es
-       <b>neto</b>, sin IVA. Si la dejas marcada, la caja cree que ese es el
-       precio final y te sugiere cobrar de menos: el 19% que falta te lo come el
-       IVA cuando vendas, y el margen que pediste no queda. Desmarcada, la caja
-       le suma el 19% antes de hacer la cuenta, y entonces el margen que pides es
-       el que de verdad te llevas.</p>
-    <ul>
-      <li>Factura de <b>$1.000</b> neto, casilla desmarcada, margen 50%: cobras
-          <b>$2.400</b>.</li>
-      <li>La misma factura con la casilla marcada te sugeriría $2.000 — y después
-          de enterar el IVA de esa venta te queda bastante menos de la mitad.</li>
-    </ul>
-
-    <h3>Ojo con qué significa el porcentaje</h3>
-    <p>Acá el margen es <b>sobre lo que vendes</b>, no sobre lo que te costó.
-       Es la confusión clásica y cuesta plata de verdad:</p>
-    <ul>
-      <li>Un pastel te cuesta <b>$1.200</b>.</li>
-      <li>Con <b>50% de margen</b> lo cobras <b>$2.400</b>: la mitad de cada
-          venta es tuya. Es cobrar el <b>doble</b> del costo.</li>
-      <li>Si alguien dice "le pongo un 50% al costo" está cobrando $1.800, y se
-          queda con $600 — la mitad de lo anterior.</li>
-    </ul>
-    <p>Por eso el recuadro te escribe siempre las dos formas: cuánta plata te
-       queda, y cuántas veces el costo es el precio. No tienes que acordarte de
-       la diferencia.</p>
-    <div class="ayuda">El margen que elijas es del local, no de este computador:
-      si abres la caja desde otro lado, es el mismo. Cambiarlo es cosa del
-      dueño.</div>`,
+    <p>En la ficha de <b>Inventario</b>, escribe el costo bruto por unidad (o por kilo).
+       <b>Ganancia % sobre costo</b> ayuda a calcular el precio: costo $1.200 y ganancia 50% dan $1.800.</p>
+    <p>El botón <b>Sugerido</b> usa el margen de Ajustes sobre la venta: costo $1.200 y margen 50% dan $2.400.
+       Los botones <b>$10</b> y <b>$50</b> redondean hacia arriba. El precio de venta que guardas manda.</p>
+    <p>El costo queda guardado incluso sin inventario. Si el producto tiene insumo propio,
+       es el mismo costo que valoriza sus existencias.</p>
+    <p>En <b>Dónde aparece</b> elige por separado <b>A la venta</b> y <b>En los televisores</b>.
+       Apagar el TV mantiene el producto disponible en Caja.</p>`,
 },
 {
   id: "respaldos",
@@ -505,6 +452,6 @@ window.GUIAS = [
 
     <h3>Si cambias de computador</h3>
     <p>Copia el archivo <b>pos.db</b> y la carpeta <b>respaldos</b>. Ahí está
-       todo: ventas, precios, usuarios y bodega.</p>`,
+       todo: ventas, precios, usuarios e inventario.</p>`,
 },
 ];

@@ -1641,6 +1641,11 @@ function pintarCabecera() {
 function pintarCategoria(i) {
   catIdx = i;
   const c = cats[i];
+  if (!c) {
+    $("#lista").innerHTML = "";
+    $("#destacado").innerHTML = "";
+    return;
+  }
   document.querySelectorAll(".tab").forEach((t, k) => {
     t.classList.toggle("is-on", k === i);
     if (k === i) { t.style.setProperty("--dwell", CFG.tiempos.categoria + "ms"); }
@@ -2376,7 +2381,7 @@ let tPV = null;
                                    "etiqueta":"Recomendado de hoy","dibujo":"mug"} } ],
      "avisos":["Lunes a sábado de 8:00 a 20:00"] }                                        */
 function desdePV(d) {
-  if (!d || !Array.isArray(d.categorias) || !d.categorias.length)
+  if (!d || !Array.isArray(d.categorias))
     throw new Error("no trae categorías");
   const armar = (p) => {
     if (!p || !p.nombre) throw new Error("hay un producto sin nombre");
@@ -2399,9 +2404,11 @@ function desdePV(d) {
   const categorias = d.categorias.map((c, i) => {
     if (!Array.isArray(c.productos) || !c.productos.length)
       throw new Error(`la categoría "${c.nombre || i + 1}" viene sin productos`);
-    const items = c.productos.slice(0, 8).map(armar);
+    const visibles = c.productos.filter((p) => p.en_tv !== false);
+    if (!visibles.length) return null;
+    const items = visibles.slice(0, 8).map(armar);
     n += items.length;
-    const dst = c.destacado && c.destacado.nombre ? c.destacado : null;
+    const dst = c.destacado && c.destacado.nombre && c.destacado.en_tv !== false ? c.destacado : null;
     return {
       id: "pv" + i,
       nombre: String(c.nombre || "Categoría " + (i + 1)).slice(0, 30),
@@ -2410,7 +2417,7 @@ function desdePV(d) {
         ? Object.assign(armar(dst), { badge: String(dst.etiqueta || "Recomendado de hoy").slice(0, 26) })
         : Object.assign(clonar(items[0]), { badge: "Recomendado de hoy" })
     };
-  });
+  }).filter(Boolean);
   return { categorias, avisos: Array.isArray(d.avisos) && d.avisos.length ? d.avisos.map(String) : null, n,
            local: typeof d.local === "string" ? d.local.slice(0, 40) : "" };
 }
@@ -2445,7 +2452,7 @@ function aplicarCarta(carta) {
   if (carta.avisos) CFG.cinta = carta.avisos;
   if (carta.local) ponerNombreEnLaTv(carta.local);
   cats = CFG.categorias;
-  catIdx = Math.min(catIdx, cats.length - 1);
+  catIdx = Math.max(0, Math.min(catIdx, cats.length - 1));
   pintarCabecera();
   pintarCategoria(catIdx);
   // La vitrina también sale de esta carta. Sin estas líneas el combo quedaría

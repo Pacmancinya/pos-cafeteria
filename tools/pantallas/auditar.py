@@ -175,18 +175,21 @@ def main() -> None:
             paso("cobrar_mixto", "(() => { const m = document.querySelector('#pagoMixto'); m.click(); })()")
             paso("varios", cerrar + "; dialogoVarios()")
             paso("el_dia", cerrar + "; verVista('dia')", 1500)
-            paso("carta", "verVista('carta')", 1000)
+            paso("inventario", "verVista('inventario')", 1000)
             paso("ficha_editar", """(() => {
               const p = CATEGORIAS.flatMap(c => c.productos)[1];
               abrirFichaProducto(p.id);
             })()""", 800)
-            paso("ficha_avanzado", """(() => {
-              document.querySelector('#fAvanzado').open = true;
-              const c = document.querySelector('#fCosto'); c.value = '1200';
+            paso("ficha_precios", """(() => {
+              const c = document.querySelector('#invCosto'); c.value = '1200';
               c.dispatchEvent(new Event('input', {bubbles: true}));
             })()""", 500)
-            paso("ficha_nuevo", cerrar + "; nuevoProducto()", 800)
-            paso("bodega", cerrar + "; verVista('inventario')", 1200)
+            paso("ficha_nuevo", cerrar + "; abrirFichaProducto(null)", 800)
+            paso("entrada", cerrar + "; invAbrirOperacion('entrada')", 1200)
+            paso("conteo", cerrar + "; invAbrirOperacion('conteo')", 1200)
+            paso("merma", cerrar + "; invAbrirOperacion('merma')", 1200)
+            paso("categorias", cerrar + "; invAbrirCategorias()", 800)
+            paso("inventario_actualizado", cerrar + "; verVista('inventario')", 1200)
             paso("ayuda", "verVista('guias')", 1000)
             paso("cierre_de_caja", "verVista('caja'); dialogoTurno()", 1500)
             paso("equipo", cerrar + "; dialogoEquipo()", 1200)

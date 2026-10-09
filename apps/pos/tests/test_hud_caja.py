@@ -34,14 +34,12 @@ def test_la_barra_tiene_cuatro_pestañas_en_este_orden():
                         ("dia", "Ventas"), ("guias", "Config")]
 
 
-def test_inventario_junta_carta_y_bodega_sin_rehacer_las_pantallas():
-    sub = HTML[HTML.index('id="subInventario"'):]
-    sub = sub[:sub.index("</div>")]
-    assert re.findall(r'class="subtab[^"]*" role="tab" data-vista="(\w+)"', sub) == ["carta", "inventario"]
-    # Las pantallas de siempre siguen donde estaban, con los mismos ids.
-    assert 'data-vista="carta"' in HTML and 'id="editorCarta"' in HTML
-    assert 'data-vista="inventario"' in HTML and 'id="tablaInsumos"' in HTML
-    assert 'id="btnConfigurar"' in HTML and ">Config<" in HTML
+def test_inventario_tiene_una_lista_sin_selector_ni_pantallas_anteriores():
+    assert 'id="subInventario"' not in HTML
+    assert 'data-vista="carta"' not in HTML
+    assert 'id="editorCarta"' not in HTML and 'id="tablaInsumos"' not in HTML
+    assert 'id="vistaInventario"' in HTML
+    assert 'id="btnConfigurar"' in HTML
 
 
 def test_el_dia_ya_no_se_llama_asi_en_ninguna_guia_ni_aviso_de_la_pantalla():
@@ -51,49 +49,21 @@ def test_el_dia_ya_no_se_llama_asi_en_ninguna_guia_ni_aviso_de_la_pantalla():
         assert "Configurar →" not in texto
 
 
-def test_la_regla_de_bodega_apagada_y_la_pestaña_inventario_en_node():
+def test_la_pestana_inventario_y_las_direcciones_anteriores_en_node():
     node = shutil.which("node")
     if not node:
-        pytest.skip("No hay Node en este computador")
-    funciones = ["function usarInventario(", "function destinoInventario(",
-                 "function pintarSubInventario(", "function verVista("]
-    prueba = "\n".join(_cuerpo_de(JS, f) for f in funciones)
-    prueba += r"""
+        pytest.skip("No hay Node")
+    prueba = _cuerpo_de(JS, "function verVista(") + r"""
 const assert = require('node:assert/strict');
-const VISTAS = ['caja', 'dia', 'carta', 'inventario', 'guias'];
-const GRUPO_INVENTARIO = ['carta', 'inventario'];
-let subInventario = null;
-let AJUSTES = {};
-const location = {};
-const el = (extra = {}) => ({ hidden: false, classList: { toggle() {} }, dataset: {}, ...extra });
-const barra = el({ hidden: true });
-const bodega = el();
-let activa = 'caja';
-const $ = (s) => ({ '#subInventario': barra, ".subtab[data-vista='inventario']": bodega,
-                    '.vista.is-on': { dataset: { vista: activa } } }[s] || null);
-const $$ = () => [];
-const periodoQueCorresponde = () => {}, cargarDia = () => {}, cargarBodega = () => {}, pintarGuias = () => {};
-const ir = (n) => { verVista(n); activa = location.hash.slice(2); };
-
-ir('stock');
-assert.equal(location.hash, '#/carta', 'la primera vez Inventario abre la Carta');
-assert.equal(barra.hidden, false); assert.equal(bodega.hidden, false);
-ir('inventario');
-assert.equal(location.hash, '#/inventario'); assert.equal(barra.hidden, false);
-ir('caja');
-assert.equal(barra.hidden, true, 'fuera de Inventario no hay selección');
-ir('stock');
-assert.equal(location.hash, '#/inventario', 'vuelve a la última que se miró');
-AJUSTES.usar_inventario = 0;            // Bodega apagada en este local
-ir('stock');
-assert.equal(location.hash, '#/carta', 'sin bodega, Inventario es la Carta');
-assert.equal(barra.hidden, true, 'sin bodega no hay selección Carta | Bodega');
-assert.equal(bodega.hidden, true);
-ir('inventario');
-assert.equal(location.hash, '#/caja', 'la dirección de la bodega no entra si está apagada');
-console.log('Inventario OK');
+const VISTAS = ['caja','dia','inventario','guias'];
+const location = {}; const $$ = () => [];
+let cargas = 0;
+const cargarInventario = () => { cargas++; }, periodoQueCorresponde = () => {}, cargarDia = () => {}, pintarGuias = () => {};
+for (const ruta of ['stock','carta','inventario']) { verVista(ruta); assert.equal(location.hash,'#/inventario'); }
+assert.equal(cargas,3);
+verVista('caja'); assert.equal(location.hash,'#/caja');
 """
-    r = subprocess.run([node, "-e", prueba], capture_output=True, text=True, encoding="utf-8", timeout=60)
+    r = subprocess.run([node, "-e", prueba], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
 
 

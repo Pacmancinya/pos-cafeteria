@@ -54,9 +54,9 @@ def _lo_que_no_alcanza(s: Session, lineas: list) -> str:
             quedan = insumo.stock
             if quedan <= 0:
                 return (f"«{nombre}» está en cero. Anota la mercadería que llegó en "
-                        "Bodega y vuelve a cobrar.")
+                        "Inventario y vuelve a cobrar.")
             return (f"De «{nombre}» quedan {quedan}. Estás vendiendo {cantidad}. "
-                    "Si llegó más, actualiza la cantidad en Bodega.")
+                    "Si llegó más, actualiza la cantidad en Inventario.")
     return ""
 
 

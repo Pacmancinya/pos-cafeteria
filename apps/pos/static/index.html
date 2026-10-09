@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Punto de venta</title>
 <link rel="stylesheet" href="/static/styles.css?v=__VERSION__">
+<link rel="stylesheet" href="/static/inventario.css?v=__VERSION__">
 </head>
 <body>
 
@@ -48,14 +49,6 @@
   <b>La caja no está respondiendo.</b>
   <span>Si no se arregla sola en un minuto, recarga. Si tampoco, cierra el programa y ábrelo de nuevo.</span>
   <button class="btn" data-recargar>Recargar</button>
-</div>
-
-<!-- Inventario junta dos pantallas de siempre: Carta y Bodega. Esta selección va solo
-     cuando se mira una de las dos y el local lleva bodega; sin bodega queda solo la
-     Carta (lo decide pintarSubInventario() en app.js). -->
-<div class="sub-tabs" id="subInventario" role="tablist" aria-label="Inventario" hidden>
-  <button type="button" class="subtab is-on" role="tab" data-vista="carta">Carta</button>
-  <button type="button" class="subtab" role="tab" data-vista="inventario">Bodega</button>
 </div>
 
 <!-- ══════════ CAJA ══════════ -->
@@ -148,60 +141,13 @@
   </div>
 </main>
 
-<!-- ══════════ CARTA ══════════ -->
-<main class="vista" data-vista="carta">
-  <div class="panel">
-    <div class="buscador">
-      <svg class="buscador__lupa" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>
-      </svg>
-      <input id="buscarCarta" type="search" placeholder="Buscar producto en la carta…"
-             aria-label="Buscar producto en la carta" autocomplete="off" spellcheck="false">
-      <button type="button" class="buscador__x" id="limpiarBuscarCarta" hidden
-              aria-label="Limpiar búsqueda de la carta">✕</button>
-    </div>
-    <p class="ayuda">Lo que cambies acá se ve en la caja y en las pantallas del local.
-      El precio se escribe sin puntos: <code>3400</code> se muestra como $3.400.</p>
-    <details class="conectar" id="pantallasLocal">
-      <summary>Las pantallas del local</summary>
-      <div id="conectar"></div>
-    </details>
-    <div id="editorCarta"></div>
-    <p class="ayuda" id="cartaSinResultados" role="status" hidden>No hay productos con ese nombre.</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-      <button class="btn" id="btnNuevaCat">+ Agregar categoría</button>
-      <button class="btn" id="btnImportar" data-permiso="editar_carta">Traer la carta de un archivo</button>
-    </div>
-  </div>
-</main>
-
-<!-- ══════════ BODEGA ══════════ -->
-<main class="vista" data-vista="inventario">
-  <div class="panel">
-    <div class="barra-dia">
-      <div>
-        <h3 style="margin-bottom:4px">Lo que hay en la bodega</h3>
-        <p class="ayuda" style="margin:0">Toca un producto para cambiar cuántos hay. Se descuenta solo al vender.</p>
-      </div>
-    </div>
-    <label class="campo"><span>Buscar en bodega</span>
-      <input id="buscarBodega" type="search" autocomplete="off"
-        placeholder="Nombre o código de barras"></label>
-    <div class="tabla-wrap"><table class="tabla" id="tablaInsumos"></table></div>
-    <details id="bodegaAvanzada" style="margin-top:24px">
-      <summary>Avanzado: insumos y recetas anteriores</summary>
-      <p class="ayuda">Aquí se conservan los insumos, sus medidas y sus movimientos.
-        Los productos anteriores sin conteo siguen aquí hasta que marques su cuenta en la Carta.</p>
-      <button class="btn" id="btnNuevoInsumo">+ Insumo</button>
-      <div class="tabla-wrap"><table class="tabla" id="tablaInsumosAnteriores"></table></div>
-      <div id="recetasAnteriores"></div>
-    </details>
-  </div>
-</main>
+<!-- ══════════ INVENTARIO ══════════ -->
+<main class="vista" data-vista="inventario" id="vistaInventario"></main>
 
 <!-- ══════════ AYUDA ══════════ -->
 <main class="vista" data-vista="guias">
   <div class="panel" id="panelAjustes"></div>
+  <div class="panel"><details class="conectar" id="pantallasLocal"><summary>Las pantallas del local</summary><div id="conectar"></div></details></div>
 
   <div class="panel panel--ayuda">
     <div class="ayuda-cabecera">
@@ -315,10 +261,6 @@
   <div class="dialogo" id="dialogoCodigo"></div>
 </div>
 
-<div class="capa" id="capaInsumo">
-  <div class="dialogo" id="dialogoInsumo"></div>
-</div>
-
 <div class="capa capa--firme" id="capaBodega">
   <div class="dialogo dialogo--ancho" id="dialogoBodega"></div>
 </div>
@@ -357,6 +299,8 @@
 <script src="/static/guias.js?v=__VERSION__"></script>
 <script src="/static/teclado.js?v=__VERSION__"></script>
 <script src="/static/escaner.js?v=__VERSION__"></script>
+<script src="/static/inventario-logica.js?v=__VERSION__"></script>
+<script src="/static/inventario.js?v=__VERSION__"></script>
 <script src="/static/app.js?v=__VERSION__"></script>
 </body>
 </html>

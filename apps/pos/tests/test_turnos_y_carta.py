@@ -56,7 +56,8 @@ def test_formato_de_la_carta(cliente, carta):
     # el destacado no se repite entre los productos normales
     assert "Mocha" not in [p["nombre"] for p in cafe["productos"]]
     p = cafe["productos"][0]
-    assert set(p) == {"nombre", "descripcion", "precio", "antes", "etiqueta", "dibujo", "color"}
+    assert set(p) == {"nombre", "descripcion", "precio", "antes", "etiqueta", "dibujo", "color", "en_tv"}
+    assert p["en_tv"] is True
 
 
 def test_la_carta_manda_cors(cliente, carta):

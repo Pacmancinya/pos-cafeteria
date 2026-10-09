@@ -705,9 +705,8 @@ def test_el_modo_sin_inventario_llega_al_carrito_los_formularios_y_la_ayuda(tmp_
     funciones = ["function usarInventario(", "function sumarAlPedido(",
                  "function cambiarCantidad(", "function productoDeLaCarta(",
                  "async function dialogoProductoNuevoPorCodigo(",
-                 "async function guardarProductoDelCodigo(", "async function pintarTalCual(",
-                 "function pintarGuias(", "function verVista(", "function aplicarInventario(",
-                 "function destinoInventario(", "function pintarSubInventario("]
+                 "async function guardarProductoDelCodigo(",
+                 "function pintarGuias("]
     prueba = "\n".join(_cuerpo_de(js, firma) + "\n}" for firma in funciones)
     prueba += "\nconst window = {};\n" + io.open(ESTATICOS / "guias.js", encoding="utf-8").read()
     prueba += r"""
@@ -780,42 +779,6 @@ let api = async (ruta, opciones) => { pedidos.push([ruta, JSON.parse(opciones.bo
       }
     }
   }
-  AJUSTES.usar_inventario = 0;
-  api = async () => { throw Error('No debe consultar inventario'); };
-  const zona = $('#zonaTalCual');
-  zona.innerHTML = 'Bodega';
-  await pintarTalCual(p);
-  assert.equal(zona.innerHTML, '');
-  assert.equal(zona.style.display, 'none');
-  pintarGuias('descuento-automatico');
-  assert.equal($('#listaGuias').innerHTML.includes('data-guia="descuento-automatico"'), false);
-  assert.equal($('#listaGuias').innerHTML.includes('data-guia="compre-pasteles"'), false);
-  assert.equal($('#textoGuia').innerHTML.includes('Por comprar'), false);
-  aplicarInventario();
-  // Sin bodega: la opción Bodega no existe y la selección Carta | Bodega se esconde.
-  assert.equal($(".subtab[data-vista='inventario']").hidden, true);
-  verVista('carta');
-  assert.equal($('#subInventario').hidden, true, 'sin bodega, Inventario es solo la Carta');
-  assert.equal(location.hash, '#/carta');
-  verVista('inventario');
-  assert.equal(location.hash, '#/caja');
-  subInventario = 'inventario';
-  assert.equal(destinoInventario(), 'carta', 'la pestaña Inventario abre la Carta si no hay bodega');
-  verVista('stock');
-  assert.equal(location.hash, '#/carta');
-  AJUSTES.usar_inventario = 1;
-  datos.set('.vista.is-on', { dataset: { vista: 'carta' } });   // se está mirando la Carta
-  aplicarInventario();
-  assert.equal($(".subtab[data-vista='inventario']").hidden, false);
-  assert.equal($('#subInventario').hidden, false, 'con bodega se ve Carta | Bodega');
-  subInventario = 'inventario';
-  assert.equal(destinoInventario(), 'inventario', 'la pestaña Inventario abre la última que se miró');
-  cargarBodega = () => {};             // con bodega prendida sí se carga
-  verVista('stock');
-  assert.equal(location.hash, '#/inventario');
-  verVista('caja');
-  assert.equal($('#subInventario').hidden, true, 'fuera de Inventario no se ve la selección');
-  assert.equal($('#listaGuias').innerHTML.includes('data-guia="descuento-automatico"'), true);
 })().catch((e) => { console.error(e); process.exitCode = 1; });
 """
     archivo = tmp_path / "inventario.js"
@@ -927,15 +890,8 @@ def test_una_respuesta_atrasada_no_pisa_el_plan_vigente():
 
 
 def test_agregar_un_producto_abre_la_ficha_completa():
-    """El duenno: "me da lata crear, luego cerrar y darle a editar"."""
-    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    cuerpo = _cuerpo(js, "function nuevoProducto")
-    assert "abrirFichaProducto(null" in cuerpo, (
-        "+ Producto tiene que abrir la ficha completa, no el formulario de tres campos")
-    # La LLAMADA, no la mención: el comentario de ahí nombra el diálogo corto para
-    # explicar por qué se queda, y eso no es usarlo.
-    assert "dialogoProductoNuevoPorCodigo(" not in cuerpo.replace(
-        "(dialogoProductoNuevoPorCodigo)", "")
+    js = (ESTATICOS / "inventario.js").read_text(encoding="utf-8")
+    assert 'b.id === "invNuevo"' in js and 'await abrirFichaProducto(null)' in js
 
 
 def test_el_formulario_corto_sigue_para_el_escaneo_en_medio_de_una_venta():
@@ -948,29 +904,16 @@ def test_el_formulario_corto_sigue_para_el_escaneo_en_medio_de_una_venta():
 
 
 def test_abrir_la_ficha_nueva_no_crea_nada_hasta_guardar():
-    """Es la regresion de los NUEVE "Producto nuevo" a mil pesos.
-
-    Antes la ficha creaba el producto al abrirse, asi que cerrarla sin guardar dejaba uno
-    en la carta del local, vendible y sin stock. Nada puede escribirse antes de Guardar.
-    """
-    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    ini = js.find("function abrirFichaProducto")
-    fin = js.find('$("#fGuardar").onclick')
-    assert ini != -1 and fin > ini
-    antes_de_guardar = js[ini:fin]
+    js = (ESTATICOS / "inventario.js").read_text(encoding="utf-8")
+    cuerpo = js[js.index("async function abrirFichaProducto"):js.index("function invPintarCodigos")]
     for escribe in ('method: "POST"', 'method: "PUT"', 'method: "DELETE"'):
-        assert escribe not in antes_de_guardar, (
-            f"la ficha escribe ({escribe}) antes de que se apriete Guardar: "
-            "asi aparecieron nueve productos fantasma en un local")
+        assert escribe not in cuerpo
 
 
 def test_los_codigos_de_un_producto_que_no_existe_se_guardan_para_despues():
-    """/productos/{id}/codigos necesita un id, y el producto nuevo todavia no tiene."""
-    js = io.open(ESTATICOS / "app.js", encoding="utf-8").read()
-    assert "CODIGOS_NUEVOS" in js
-    cuerpo = _cuerpo(js, "async function pegarCodigo")
-    assert "CODIGOS_NUEVOS.push" in cuerpo, (
-        "con el producto sin crear, el codigo se anota en memoria")
+    js = (ESTATICOS / "inventario.js").read_text(encoding="utf-8")
+    cuerpo = js[js.index("function invAgregarCodigo"):js.index("function invPrecio")]
+    assert "invCodigos.push" in cuerpo and "api(" not in cuerpo
 
 
 # ---------------------------------------------------------------------------

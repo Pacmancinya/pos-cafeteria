@@ -82,7 +82,7 @@ def leer(codigo: str, s: Session = Depends(get_session),
             if p:
                 return {"encontrado": False, "codigo": limpio,
                         "problema": f"«{p.nombre}» está guardado pero sacado de la venta. "
-                                    "Actívalo en la pestaña Carta."}
+                                    "Actívalo en Inventario."}
 
     cobro = resolver(s, codigo)
     if cobro:

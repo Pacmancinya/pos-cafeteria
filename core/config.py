@@ -131,7 +131,7 @@ CATALOGO_DE_PERMISOS = (
     ("ver_dia", "Ver Ventas"),
     ("ver_informes", "Ver los informes"),
     ("editar_carta", "Editar la carta y los precios"),
-    ("inventario", "Ver la bodega"),
+    ("inventario", "Ver Inventario y mover mercadería"),
     ("inventario_ajustar", "Corregir el stock"),
     ("usuarios", "Crear y editar personas"),
     ("config", "Cambiar los ajustes"),

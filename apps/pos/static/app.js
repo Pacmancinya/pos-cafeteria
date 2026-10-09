@@ -248,7 +248,7 @@ async function cargarCarta() {
   avisarRail();
   verCategoriaActiva();
   pintarGrilla();
-  pintarEditorCarta();
+  if ($(".vista.is-on")?.dataset.vista === "inventario") cargarInventario();
   limpiarCarritoDeBorrados();
 }
 
@@ -470,8 +470,8 @@ function sumarAlPedido(p, cuantos = 1) {
   const stock = tope ? tope.stock : p.stock;
   if (usarInventario() && stock != null && pide > stock) {
     avisar(stock > 0
-      ? `Solo quedan ${stock} de ${p.nombre}. Si llegó más, anótalo en Inventario → Bodega.`
-      : `${p.nombre} está en cero. Anota la mercadería en Inventario → Bodega para venderlo.`, true);
+      ? `Solo quedan ${stock} de ${p.nombre}. Si llegó más, anótalo en Inventario con «Entrada de mercadería».`
+      : `${p.nombre} está en cero. Anota la mercadería en Inventario con «Entrada de mercadería» para venderlo.`, true);
     return;
   }
 
@@ -544,15 +544,9 @@ async function alEscanear(codigo) {
     prueba.value = codigo;
     return probarEtiquetaBalanza();
   }
-  if ($(".vista.is-on")?.dataset.vista === "inventario" && usarInventario()) {
-    $("#buscarBodega").value = codigo;
-    pintarBodega();
-    return;
-  }
+  if (invEscanear(codigo)) return;
   // Con un diálogo abierto que no sea el de la carta, el escaneo no es para
   // vender: puede ser el dueño pegándole un código a un producto.
-  const ficha = $("#capaProducto.is-on") && $("#fCodigo");
-  if (ficha) return ponerCodigoEnFicha(codigo);
 
   if (!puedo("vender")) return;
 
@@ -642,7 +636,7 @@ async function dialogoProductoNuevoPorCodigo(codigo, categoriaId) {
     <p class="ayuda" style="margin-bottom:0">${codigo
       ? "Queda guardado con su código: la próxima vez que lo pases por el lector, entra solo al pedido."
       : usarInventario()
-        ? "Si llevas la cuenta, anota cuántos hay en Bodega. Todo se cuenta por unidades."
+        ? "Si llevas la cuenta, anota cuántos hay en Inventario. Todo se cuenta por unidades."
         : "Queda en la carta, listo para vender."}</p>
     <div class="dialogo__pie">
       <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
@@ -692,64 +686,13 @@ async function guardarProductoDelCodigo(codigo) {
       agregarPorId(p);
       avisar(`${nombre} queda guardado. Ya está en el pedido.`);
     } else {
-      avisar(`${nombre} queda guardado${inventario.llevar_cuenta ? ". Anota cuántos hay en Bodega." : ", listo para vender."}`);
+      avisar(`${nombre} queda guardado${inventario.llevar_cuenta ? ". Anota cuántos hay en Inventario." : ", listo para vender."}`);
     }
   } catch (e) { avisar(e.message, true); }
 }
 
 /* Escanear con la ficha de un producto abierta: el código se le pega a ESE
    producto. Es como se le agrega el código del pack de 6 a algo que ya existe. */
-let FICHA_ABIERTA = null;
-
-async function pintarCodigos(productoId) {
-  FICHA_ABIERTA = productoId;
-  const caja = $("#fCodigos");
-  if (!caja) return;
-  let lista = [];
-  if (productoId == null) {
-    // Producto nuevo: todavía no hay a quién preguntarle, así que se muestran los que
-    // se juntaron en esta ficha.
-    lista = CODIGOS_NUEVOS.map((c) => ({ codigo: c, cuantos: 1 }));
-  } else {
-    try { lista = await api(`/productos/${productoId}/codigos`); } catch (e) { }
-  }
-  caja.innerHTML = lista.length
-    ? lista.map((c) => `<div class="codigo-fila">
-        <code>${esc(c.codigo)}</code>
-        ${c.cuantos > 1 ? `<span class="codigo-cuantos">× ${c.cuantos}</span>` : ""}
-        <button class="btn btn--chico btn--fantasma" data-sacar-codigo="${esc(c.codigo)}">Sacar</button>
-      </div>`).join("")
-    : `<p class="ayuda" style="margin:0 0 8px;font-size:13px">Todavía no tiene ninguno.</p>`;
-}
-
-async function pegarCodigo(productoId) {
-  const campo = $("#fCodigo");
-  const codigo = (campo.value || "").trim();
-  if (!codigo) return avisar("Pasa el producto por el lector, o escribe el número", true);
-  if (productoId == null || productoId === "") {
-    // El producto todavía no existe: el código se anota y se adjunta al guardarlo.
-    if (!CODIGOS_NUEVOS.includes(codigo)) CODIGOS_NUEVOS.push(codigo);
-    campo.value = "";
-    await pintarCodigos(null);
-    return avisar("Anotado. Queda puesto cuando guardes el producto.");
-  }
-  try {
-    await api(`/productos/${productoId}/codigos`, { method: "POST",
-      body: JSON.stringify({ codigo, cuantos: 1 }) });
-    campo.value = "";
-    await pintarCodigos(productoId);
-    avisar("Código guardado");
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function ponerCodigoEnFicha(codigo) {
-  const campo = $("#fCodigo");
-  if (!campo) return;
-  campo.value = codigo;
-  campo.dispatchEvent(new Event("input", { bubbles: true }));
-  avisar("Código leído. Se guarda al apretar Guardar.");
-}
-
 /* Agrega al pedido algo que vino del escáner, aunque la grilla no lo tenga
    cargado todavía: el producto puede ser de una categoría que no está abierta. */
 function agregarPorId(prod) {
@@ -1389,8 +1332,7 @@ function selectorDeDibujo(elegido, color) {
     <div class="campo"><span>Dibujo en la pantalla</span>
       <input type="hidden" id="fDibujo" value="${esc(elegido || "mug")}">
       <input type="hidden" id="fColor" value="${esc(col)}">
-      <input id="buscarDibujo" class="dibujos__buscar" type="text" autocomplete="off"
-             placeholder="Buscar dibujo: cerveza, torta, lata...">
+      ${invBuscador("buscarDibujo", "Buscar dibujo: cerveza, torta, lata...")}
       <div class="bolsa-color" id="filaColorBolsa" ${esDibujoDeBolsa(elegido) ? "" : "hidden"}>
         <span class="bolsa-color__tit">Color de la bolsa</span>
         <div class="bolsa-color__fila">
@@ -1419,429 +1361,6 @@ function selectorDeDibujo(elegido, color) {
           </div>`).join("")}
       </div>
     </div>`;
-}
-
-function categoriasPlegadasGuardadas() {
-  try {
-    const ids = JSON.parse(localStorage.getItem("pos.carta.plegadas") || "[]");
-    return new Set(Array.isArray(ids) ? ids.filter(Number.isInteger) : []);
-  } catch (e) { return new Set(); }
-}
-
-const categoriasPlegadas = categoriasPlegadasGuardadas();
-
-// Sólo ocultamos filas: buscar o plegar no descarta nombres/precios sin guardar.
-function filtrarEditorCarta() {
-  const q = sinTildes($("#buscarCarta").value.trim());
-  $("#limpiarBuscarCarta").hidden = !q;
-  let hallados = 0;
-  $$("#editorCarta .grupo").forEach((grupo) => {
-    let coincidencias = 0;
-    grupo.querySelectorAll("[data-fila]").forEach((fila) => {
-      const nombre = fila.querySelector('[data-campo="nombre"]').value;
-      fila.hidden = !!q && !sinTildes(nombre).includes(q);
-      if (!fila.hidden) coincidencias++;
-    });
-    grupo.hidden = !!q && coincidencias === 0;
-    hallados += coincidencias;
-    const plegada = !q && categoriasPlegadas.has(+grupo.dataset.grupo);
-    grupo.querySelector(".grupo__productos").hidden = plegada;
-    const boton = grupo.querySelector("[data-plegar-cat]");
-    if (boton) boton.setAttribute("aria-expanded", String(!plegada));
-  });
-  $("#cartaSinResultados").hidden = !q || hallados > 0;
-}
-
-function alternarCategoriaCarta(id) {
-  const grupo = $(`#editorCarta [data-grupo="${id}"]`);
-  if (!grupo) return;
-  const productos = grupo.querySelector(".grupo__productos");
-  productos.hidden = !productos.hidden;
-  grupo.querySelector("[data-plegar-cat]").setAttribute("aria-expanded", String(!productos.hidden));
-  if (productos.hidden) categoriasPlegadas.add(id);
-  else categoriasPlegadas.delete(id);
-  try { localStorage.setItem("pos.carta.plegadas", JSON.stringify([...categoriasPlegadas])); } catch (e) {}
-}
-
-function pintarEditorCarta() {
-  $("#editorCarta").innerHTML = CATEGORIAS.map((c) => `
-    <div class="grupo" data-grupo="${c.id}">
-      <div class="grupo__top">
-        <h3><button type="button" class="grupo__plegar" data-plegar-cat="${c.id}"
-                    aria-expanded="true" aria-controls="productos-carta-${c.id}">
-          <span class="grupo__flecha" aria-hidden="true">▾</span>${esc(c.nombre)}</button></h3>
-        <div class="grupo__acc">
-          <button class="btn btn--chico btn--fantasma" data-cat-editar="${c.id}"
-                  data-permiso="editar_carta">Editar</button>
-          <button class="btn btn--chico btn--fantasma" data-cat-borrar="${c.id}"
-                  data-permiso="editar_carta">Borrar</button>
-          <button class="btn btn--chico" data-nuevo-en="${c.id}">+ Producto</button>
-        </div>
-      </div>
-      <div class="grupo__productos" id="productos-carta-${c.id}">
-      ${c.productos.map((p) => `
-        <div class="fila${p.activo ? "" : " inactivo"}" data-fila="${p.id}">
-          <input type="text" value="${esc(p.nombre)}" data-campo="nombre">
-          <div class="num"><input type="text" inputmode="numeric" value="${p.precio}" data-campo="precio"></div>
-          <label class="marca"><input type="checkbox" data-campo="activo" ${p.activo ? "checked" : ""}> A la venta</label>
-          <div class="fila__acc">
-            <button class="btn btn--chico" data-guardar="${p.id}">Guardar</button>
-            <button class="btn btn--chico" data-editar="${p.id}" title="Todos los datos">···</button>
-          </div>
-        </div>`).join("") || `<p class="ayuda" style="margin:0 0 8px">Esta categoría todavía no tiene productos.</p>`}
-      </div>
-    </div>`).join("");
-  // El editor se redibuja cada vez que cambia la carta, después de que
-  // pintarQuien ya corrió, así que los botones que solo puede el dueño hay que
-  // apagarlos acá o aparecen prendidos para el cajero hasta el próximo login.
-  $$("#editorCarta [data-permiso]").forEach((b) => {
-    const falta = !puedo(b.dataset.permiso);
-    b.disabled = falta;
-    b.title = falta ? "Esto lo hace el dueño" : "";
-  });
-  filtrarEditorCarta();
-}
-
-/* ---- editar y borrar una categoría ----
-   Hasta la 2.11 una categoría solo se podía crear: el nombre no se podía
-   corregir y borrarla no existía. Editar cambia el nombre (y de paso el orden,
-   que es en qué lugar del rail aparece). Borrar es de verdad —la fila se va—
-   pero solo si está vacía: un producto no puede quedar sin categoría. */
-function editarCategoria(id) {
-  const c = CATEGORIAS.find((x) => x.id === id);
-  if (!c) return;
-  const top = document.querySelector(`[data-grupo="${id}"] .grupo__top`);
-  if (!top) return;
-  top.innerHTML = `
-    <div class="grupo__editar">
-      <input type="text" id="catNombre" value="${esc(c.nombre)}" autocomplete="off"
-             style="font-size:17px;font-weight:700">
-      <label class="grupo__orden">Orden
-        <input type="text" inputmode="numeric" id="catOrden" value="${c.orden}"></label>
-      <button class="btn btn--chico btn--cobrar" data-cat-guardar="${id}">Guardar</button>
-      <button class="btn btn--chico btn--fantasma" data-cat-cancelar>Cancelar</button>
-    </div>`;
-  setTimeout(() => { const n = $("#catNombre"); if (n) { n.focus(); n.select(); } }, 40);
-}
-
-function guardarCategoria(id) {
-  const c = CATEGORIAS.find((x) => x.id === id);
-  if (!c) return;
-  const nombre = ($("#catNombre").value || "").trim();
-  if (!nombre) return avisar("Escribe un nombre para la categoría", true);
-  const orden = soloNumeros(($("#catOrden") || {}).value || 0);
-  // activa va tal como está: el PUT pisa todos los campos, así que si no lo
-  // mandáramos, una categoría apagada se prendería sola al cambiarle el nombre.
-  api(`/categorias/${id}`, { method: "PUT",
-    body: JSON.stringify({ nombre, orden, activa: c.activa }) })
-    .then(() => { avisar("Categoría guardada"); cargarCarta(); })
-    .catch((e) => avisar(e.message, true));
-}
-
-function borrarCategoria(id) {
-  const c = CATEGORIAS.find((x) => x.id === id);
-  if (!c) return;
-  const cuantos = (c.productos || []).length;
-  if (cuantos) {
-    return avisar(`«${c.nombre}» tiene ${cuantos} producto${cuantos === 1 ? "" : "s"} `
-      + "adentro. Muévelos a otra categoría o bórralos primero.", true);
-  }
-  if (!confirm(`¿Borrar la categoría «${c.nombre}»? Está vacía, así que no se pierde nada.`)) return;
-  api(`/categorias/${id}`, { method: "DELETE" })
-    .then(() => { avisar("Categoría borrada"); cargarCarta(); })
-    .catch((e) => avisar(e.message, true));
-}
-
-/* Ficha completa del producto: acá viven los datos que usan las PANTALLAS del
-   local (el dibujo, la etiqueta, el destacado), que no caben en la lista. */
-/* Los códigos de un producto que TODAVÍA NO EXISTE. Se juntan acá mientras la ficha está
-   abierta y se adjuntan recién después de crearlo: /productos/{id}/codigos necesita un id,
-   y el producto no tiene uno hasta que se aprieta Guardar. */
-let CODIGOS_NUEVOS = [];
-
-const PRODUCTO_EN_BLANCO = {
-  id: null, nombre: "", precio: 0, descripcion: "", etiqueta: "", badge: "",
-  antes: null, dibujo: "", color: "", destacado: false, activo: true, orden: 0,
-  llevar_cuenta: false,
-};
-
-/* `id` nulo = producto nuevo. La ficha es la MISMA: el dueño pedía llenar todo de una vez
-   en vez de crear, cerrar y volver a entrar a editar.
-
-   Lo que no cambia: nada se crea hasta Guardar. Ver el comentario de nuevoProducto(). */
-function abrirFichaProducto(id, categoriaId) {
-  const nuevo = id == null;
-  CODIGOS_NUEVOS = [];
-  const cat = nuevo
-    ? (CATEGORIAS.find((c) => c.id === (categoriaId || catActiva))
-       || CATEGORIAS.filter((c) => c.activa)[0])
-    : CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
-  const p = nuevo ? { ...PRODUCTO_EN_BLANCO, categoria_id: cat && cat.id }
-                  : cat.productos.find((x) => x.id === id);
-  const cats = CATEGORIAS
-    .map((c) => `<option value="${c.id}"${cat && c.id === cat.id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("");
-
-  // Dos columnas, como el cobro y el cierre. A la izquierda lo que ES el
-  // producto —nombre, precio, códigos, cuántos hay—; a la derecha cómo SE VE en
-  // las pantallas del local. El selector de dibujos es lo más alto de todo y
-  // ocupaba media pantalla en medio del formulario: puesto en su propia columna
-  // deja de empujar todo lo demás para abajo.
-  $("#dialogoProducto").className = "dialogo dialogo--ficha";
-  $("#dialogoProducto").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>${nuevo ? "Producto nuevo" : esc(p.nombre)}</h2>
-
-    <div class="ficha">
-      <div class="ficha__col">
-        <div class="fila2">
-          <label class="campo"><span>Nombre</span>
-            <input id="fNombre" type="text" value="${esc(p.nombre)}"></label>
-          <label class="campo"><span>Precio</span>
-            <input id="fPrecio" type="text" inputmode="numeric"
-                   value="${p.precio || ""}" placeholder="0"></label>
-        </div>
-        <label class="campo"><span>Categoría</span><select id="fCat">${cats}</select></label>
-        <label class="campo"><span>Descripción (se ve en la pantalla del menú)</span>
-          <input id="fDesc" type="text" value="${esc(p.descripcion)}"></label>
-
-        <div class="campo">
-          <span>Códigos de barra</span>
-          <div id="fCodigos"></div>
-          <div class="codigo-poner">
-            <!-- inputmode="none" a propósito: con "numeric" el teclado en
-                 pantalla se abre encima cada vez que el lector "escribe" acá. -->
-            <input id="fCodigo" type="text" inputmode="none" autocomplete="off"
-                   placeholder="Pasa el producto por el lector">
-            <button class="btn btn--chico" data-pegar-codigo="${p.id == null ? "" : p.id}">Agregar</button>
-          </div>
-          <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Un producto puede
-            tener varios: la lata suelta y el pack de 6 traen códigos distintos.</p>
-        </div>
-
-        <div class="tal-cual" id="zonaTalCual" data-producto="${p.id == null ? "" : p.id}"></div>
-
-        <details class="avanzado" id="fAvanzado">
-          <summary>Sacar el precio desde lo que te cuesta</summary>
-          <div class="avanzado__cuerpo">
-            <label class="campo"><span>¿Cuánto te cuesta a ti?</span>
-              <input id="fCosto" type="text" inputmode="numeric" placeholder="0"></label>
-            <label class="marca" style="margin-bottom:6px">
-              <input type="checkbox" id="fCostoConIva" checked>
-              Ese precio ya trae IVA</label>
-            <p class="ayuda" id="fCostoNota" style="margin:0 0 10px;font-size:12.5px"></p>
-            <div id="fSugerido"></div>
-          </div>
-        </details>
-        <details class="avanzado" id="fBalanza"${p.plu ? " open" : ""}>
-          <summary>Se vende por peso (balanza)</summary>
-          <div class="avanzado__cuerpo">
-            <label class="campo"><span>Número en la balanza (PLU)</span>
-              <input id="fPlu" type="text" inputmode="numeric" pattern="[0-9]*"
-                     value="${esc(p.plu || "")}"></label>
-            <label class="campo"><span>Precio por kilo</span>
-              <input id="fPrecioKilo" type="text" inputmode="numeric"
-                     value="${p.precio_kilo || ""}" placeholder="0"></label>
-            <p class="ayuda">Si la balanza imprime una etiqueta con el número del producto,
-              la caja lo reconoce y cobra el peso por el precio por kilo.
-              Déjalo vacío si este producto no se pesa.</p>
-          </div>
-        </details>
-      </div>
-
-      <div class="ficha__col">
-        ${selectorDeDibujo(p.dibujo, p.color)}
-        <div class="fila2">
-          <label class="campo"><span>Etiqueta (opcional)</span>
-            <input id="fEtiqueta" type="text" value="${esc(p.etiqueta)}"
-                   placeholder="Nuevo, Sin lactosa..."></label>
-          <label class="campo"><span>Precio antes (oferta)</span>
-            <input id="fAntes" type="text" inputmode="numeric" value="${p.antes || ""}"
-                   placeholder="vacío si no hay"></label>
-        </div>
-        <label class="marca" style="margin-bottom:10px">
-          <input type="checkbox" id="fDestacado" ${p.destacado ? "checked" : ""}>
-          Mostrar en el recuadro grande de la pantalla</label>
-        <label class="campo"><span>Texto del recuadro grande</span>
-          <input id="fBadge" type="text" value="${esc(p.badge)}"
-                 placeholder="Recomendado de hoy"></label>
-        <label class="marca"><input type="checkbox" id="fActivo"
-          ${p.activo ? "checked" : ""}> A la venta</label>
-      </div>
-    </div>
-
-    <div class="dialogo__pie">
-      ${nuevo ? "" : `<button class="btn btn--peligro" id="fBorrar">Borrar para siempre</button>`}
-      <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
-      <button class="btn btn--cobrar" id="fGuardar" style="width:auto">Guardar</button>
-    </div>`;
-  $("#capaProducto").classList.add("is-on");
-  pintarTalCual(p);
-  pintarCodigos(p.id);
-  $("#fPlu").addEventListener("input", (e) => {
-    e.target.value = e.target.value.replace(/[^0-9]/g, "");
-  });
-  if (nuevo) setTimeout(() => $("#fNombre") && $("#fNombre").focus(), 60);
-
-  const costoReal = () => costoConIva(
-    soloNumeros(($("#fCosto") || {}).value || 0),
-    !$("#fCostoConIva") || $("#fCostoConIva").checked);
-  const pintarNotaCosto = () => {
-    const nota = $("#fCostoNota");
-    if (!nota) return;
-    const escrito = soloNumeros(($("#fCosto") || {}).value || 0);
-    const conIva = $("#fCostoConIva");
-    nota.innerHTML = !escrito
-      ? "Lo que pagas por cada uno. Si compras con factura, ese precio viene sin "
-        + "IVA: desmarca la casilla y yo le sumo el 19%."
-      : (!conIva || conIva.checked
-        ? `Hago la cuenta con <b>${clp(escrito)}</b> cada uno.`
-        : `${clp(escrito)} sin IVA son <b>${clp(costoConIva(escrito, false))}</b> `
-          + "con IVA. Hago la cuenta con ese.");
-  };
-  const dibujarSugerido = () => {
-    const caja = $("#fSugerido");
-    if (!caja) return;
-    pintarNotaCosto();
-    caja.innerHTML = bloqueSugerido(costoReal(), "fPrecio");
-    if (costoReal()) refrescarSugerido();
-  };
-  if ($("#fCosto")) $("#fCosto").addEventListener("input", dibujarSugerido);
-  if ($("#fCostoConIva")) $("#fCostoConIva").addEventListener("change", dibujarSugerido);
-  dibujarSugerido();
-
-  /* Si el producto ya lleva su cuenta, el costo NO es un dato nuevo: está en la
-     Bodega y es el mismo con el que se valoriza lo que queda. Se trae de ahí para
-     que la sugerencia hable del costo de verdad y no de uno escrito de memoria.
-     Va después de dibujar y sin esperarlo: la ficha se usa igual sin esto. */
-  if (!nuevo && puedo("inventario")) {
-    api(`/productos/${id}/receta`).then((r) => {
-      const campo = $("#fCosto");
-      if (!campo || campo.value || FICHA_ABIERTA !== id) return;   // cerró o ya escribió
-      if (!r || !r.costo_total) return;
-      campo.value = r.costo_total;
-      dibujarSugerido();
-    }).catch(() => { });        // sin permiso o sin receta: se escribe a mano
-  }
-
-  $("#fGuardar").onclick = async () => {
-    const antes = soloNumeros($("#fAntes").value);
-    if (nuevo && !$("#fNombre").value.trim()) {
-      return avisar("Ponle un nombre antes de guardar", true);
-    }
-    try {
-      const cuerpo = JSON.stringify({
-        categoria_id: +$("#fCat").value,
-        nombre: $("#fNombre").value.trim() || p.nombre,
-        descripcion: $("#fDesc").value.trim(),
-        precio: soloNumeros($("#fPrecio").value),
-        plu: $("#fPlu").value.replace(/[^0-9]/g, ""),
-        precio_kilo: soloNumeros($("#fPrecioKilo").value),
-        activo: $("#fActivo").checked,
-        orden: p.orden,
-        destacado: $("#fDestacado").checked,
-        badge: $("#fBadge").value.trim(),
-        antes: antes || null,
-        etiqueta: $("#fEtiqueta").value.trim(),
-        dibujo: $("#fDibujo").value,
-        color: colorParaGuardar(p),
-        ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked !== p.llevar_cuenta
-          ? { llevar_cuenta: $("#fCuenta").checked } : {}),
-        // El costo y la cantidad no son columnas del producto: el servidor se los
-        // pasa a su insumo, que es el mismo que muestra la Bodega.
-        ...(costoReal() ? { costo: costoReal() } : {}),
-        ...(usarInventario() && $("#fCuenta") && $("#fCuenta").checked && !p.llevar_cuenta
-          ? { stock_inicial: soloNumeros(($("#fStockInicial") || {}).value || 0) } : {}),
-      });
-      const guardado = nuevo
-        ? await api("/productos", { method: "POST", body: cuerpo })
-        : await api(`/productos/${id}`, { method: "PUT", body: cuerpo });
-
-      // Los códigos se adjuntan RECIÉN ahora, que el producto ya tiene id. Si alguno
-      // falla no se pierde el producto: ya está creado y solo se dice cuál no entró.
-      const fallaron = [];
-      for (const c of (nuevo ? CODIGOS_NUEVOS : [])) {
-        try {
-          await api(`/productos/${guardado.id}/codigos`, {
-            method: "POST", body: JSON.stringify({ codigo: c, cuantos: 1 }) });
-        } catch (e) { fallaron.push(c); }
-      }
-      CODIGOS_NUEVOS = [];
-      $("#capaProducto").classList.remove("is-on");
-      await cargarCarta();
-      avisar(fallaron.length
-        ? `Guardado, pero no pude ponerle ${fallaron.length === 1 ? "el código" : "los códigos"} `
-          + `${fallaron.join(", ")}. Agrégalo editándolo.`
-        : (nuevo ? "Producto creado" : "Guardado"), fallaron.length > 0);
-    } catch (e) { avisar(e.message, true); }
-  };
-
-  if ($("#fBorrar")) $("#fBorrar").onclick = async () => {
-    // Borrar es para SIEMPRE y no es lo mismo que esconder. Si solo lo quieren
-    // sacar de la venta un rato, está la casilla «A la venta» de acá arriba, que
-    // se vuelve a marcar cuando quieran. Esto no.
-    if (!confirm(`¿Borrar «${p.nombre}» para siempre?\n\n`
-      + "Esto NO se puede deshacer. Las ventas viejas no se tocan (siguen "
-      + "cuadrando), pero el producto desaparece de la carta.\n\n"
-      + "¿Solo quieres dejar de venderlo por ahora? Cierra esto y desmarca "
-      + "«A la venta»: eso sí se puede deshacer.")) return;
-    try {
-      await api(`/productos/${id}`, { method: "DELETE" });
-      $("#capaProducto").classList.remove("is-on");
-      await cargarCarta();
-      avisar("Producto borrado");
-    } catch (e) { avisar(e.message, true); }
-  };
-}
-
-/* Preguntar PRIMERO, crear después.
-
-   Antes creaba un producto llamado "Producto nuevo" a $1.000 y recién ahí abría
-   la ficha. Si alguien cerraba la ficha, el producto quedaba igual: en la carta
-   del local quedaron NUEVE productos llamados "Producto nuevo" a $1.000, todos
-   sin stock, todos vendibles sin límite.
-
-   Ahora no existe nada hasta que se aprieta Guardar. */
-function nuevoProducto(catId) {
-  if (!CATEGORIAS.filter((c) => c.activa).length) {
-    return avisar("Primero crea una categoría", true);
-  }
-  // La ficha COMPLETA, no el formulario de tres campos: el dueño pedía poder ponerle el
-  // dibujo, la descripción y los códigos de una vez, en lugar de crear, cerrar y editar.
-  //
-  // El formulario corto NO se va: sigue siendo el de escanear un código desconocido en
-  // medio de una venta (dialogoProductoNuevoPorCodigo), donde con la fila esperando se
-  // quiere poner nombre y precio y seguir cobrando.
-  abrirFichaProducto(null, catId);
-}
-
-async function nuevaCategoria() {
-  const nombre = prompt("¿Cómo se llama la categoría nueva?");
-  if (!nombre || !nombre.trim()) return;
-  try {
-    await api("/categorias", { method: "POST", body: JSON.stringify({
-      nombre: nombre.trim(), orden: CATEGORIAS.length, activa: true }) });
-    await cargarCarta();
-    avisar("Categoría creada. Agrégale productos con + Producto.");
-  } catch (e) { avisar(e.message, true); }
-}
-
-async function guardarProducto(id) {
-  const fila = document.querySelector(`[data-fila="${id}"]`);
-  const cat = CATEGORIAS.find((c) => c.productos.some((p) => p.id === id));
-  const p = cat.productos.find((x) => x.id === id);
-  const cuerpo = {
-    ...p,
-    nombre: fila.querySelector('[data-campo="nombre"]').value.trim() || p.nombre,
-    precio: soloNumeros(fila.querySelector('[data-campo="precio"]').value),
-    activo: fila.querySelector('[data-campo="activo"]').checked,
-    categoria_id: cat.id,
-  };
-  delete cuerpo.id;
-  try {
-    await api(`/productos/${id}`, { method: "PUT", body: JSON.stringify(cuerpo) });
-    avisar("Guardado. Las pantallas del local lo toman en su próxima revisión.");
-    await cargarCarta();
-  } catch (e) { avisar(e.message, true); }
 }
 
 /* Dirección que hay que pegar en las pantallas del local. La mostramos acá para
@@ -3076,307 +2595,6 @@ document.addEventListener("input", (e) => {
   if (e.target && e.target.id === "fColorLibre") elegirColorBolsa(e.target.value);
 });
 
-/* ---------------- bodega ----------------
-   Lo que hay guardado y el libro de lo que entró y salió. El stock se descuenta
-   solo al vender, según la receta de cada producto — y un producto sin receta
-   se vende igual y no mueve nada. Eso último es lo que permite empezar con dos
-   insumos cargados en vez de tener que cargar la bodega entera antes de servir. */
-let BODEGA = { insumos: [], valor_total: 0 };
-
-const unidadCorta = { g: "g", ml: "ml", un: "un" };
-
-async function cargarBodega() {
-  if (!usarInventario()) return;
-  try {
-    // Se arma entero y RECIÉN ahí se reemplaza. Asignando BODEGA antes de pedir
-    // /bodega, dos cargas seguidas (entrar a Bodega mientras otra carga seguía en
-    // curso) dejaban a una leyendo BODEGA.productos sin definir: error y tabla vacía.
-    const nueva = await api("/inventario");
-    nueva.productos = (await api("/bodega")).insumos;
-    BODEGA = nueva;
-  } catch (e) { return avisar(e.message, true); }
-  pintarBodega();
-  $("#buscarBodega").oninput = pintarBodega;
-  $("#tablaInsumosAnteriores").innerHTML = BODEGA.insumos.filter((i) =>
-    !BODEGA.productos.some((p) => p.id === i.id)).map((i) => `
-    <tr><td>${esc(i.nombre)}</td><td>${esc(i.muestra)}</td><td>
-      <button class="btn btn--chico" data-cantidad-bodega="${i.id}">Cambiar cantidad</button>
-      <button class="btn btn--chico" data-libro="${i.id}">Ver movimientos</button>
-      <button class="btn btn--chico" data-insumo="${i.id}">Editar insumo</button>
-    </td></tr><tr id="editarCantidad${i.id}" hidden><td colspan="3"></td></tr>`).join("");
-  $("#recetasAnteriores").innerHTML = CATEGORIAS.flatMap((c) => c.productos).map((p) =>
-    `<button class="btn btn--chico" data-ver-receta="${p.id}">Receta: ${esc(p.nombre)}</button>`).join(" ");
-}
-
-function filtrarBodega(filas, consulta) {
-  const nombre = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  const q = nombre(consulta);
-  return filas.filter((i) => nombre(i.nombre).includes(q) || (i.codigos || []).includes(consulta.trim()));
-}
-
-function pintarBodega() {
-  const filas = filtrarBodega(BODEGA.productos || [], $("#buscarBodega").value || "");
-  $("#tablaInsumos").innerHTML = filas.length ? `
-    <tr><th>Producto</th><th class="num">Cantidad</th><th></th></tr>
-    ${filas.map((i) => `<tr>
-      <td><button class="btn btn--fantasma" data-cantidad-bodega="${i.id}">${esc(i.nombre)}</button></td>
-      <td class="num"><button class="btn btn--fantasma" data-cantidad-bodega="${i.id}">${i.stock} un</button></td>
-      <td><button class="btn btn--chico" data-libro="${i.id}">Ver movimientos</button></td>
-    </tr><tr id="editarCantidad${i.id}" hidden><td colspan="3"></td></tr>`).join("")}`
-    : '<tr><td class="vacio">No hay productos para mostrar. Marca «Llevar la cuenta de este» en su ficha de la Carta.</td></tr>';
-}
-
-function editarCantidadBodega(id) {
-  const i = (BODEGA.productos || []).find((p) => p.id === id)
-    || BODEGA.insumos.find((p) => p.id === id);
-  if (!i) return;
-  const fila = $("#editarCantidad" + id);
-  fila.hidden = false;
-  fila.querySelector("td").innerHTML = `
-    <label class="campo"><span>Cuántos hay de ${esc(i.nombre)} (${esc(i.unidad || "un")})</span>
-      <div class="cantidad-bodega">
-        <button class="btn" data-paso-bodega="-1" data-id="${id}" aria-label="Restar uno">−</button>
-        <input id="cantidadBodega${id}" type="number" min="0" max="2147483647" step="1" inputmode="numeric" value="${Math.max(0, i.stock)}">
-        <button class="btn" data-paso-bodega="1" data-id="${id}" aria-label="Sumar una unidad">+</button>
-        <button class="btn" data-pedir-motivo="${id}">Guardar</button>
-        <button class="btn btn--fantasma" data-cancelar-cantidad="${id}">Cancelar</button>
-      </div></label>
-    <div id="motivoBodega${id}" hidden>
-      <p>¿Por qué cambió?</p>
-      ${[["llego", "Llegó"], ["se perdio", "Se perdió"], ["conteo", "Conteo"], ["ajuste", "Ajuste"]].map(([valor, titulo]) =>
-        `<button class="btn" data-guardar-cantidad="${id}" data-razon="${valor}">${titulo}</button>`).join(" ")}
-    </div>`;
-  $("#cantidadBodega" + id).oninput = () => { $("#motivoBodega" + id).hidden = true; };
-  $("#cantidadBodega" + id).focus();
-  $("#cantidadBodega" + id).select();
-}
-
-function cantidadBodegaValida(id) {
-  const campo = $("#cantidadBodega" + id);
-  const n = Number(campo.value);
-  if (!campo.value.trim() || !Number.isInteger(n) || n < 0 || n > 2147483647) {
-    avisar("Escribe una cantidad entera de unidades, desde cero", true);
-    return null;
-  }
-  return n;
-}
-
-async function guardarCantidadBodega(id, motivo) {
-  const cantidad = cantidadBodegaValida(id);
-  if (cantidad === null) return;
-  const principal = BODEGA.productos.find((p) => p.id === id);
-  const i = principal || BODEGA.insumos.find((p) => p.id === id);
-  const fila = $("#editarCantidad" + id);
-  if (fila.dataset.guardando) return;
-  fila.dataset.guardando = "1";
-  fila.querySelectorAll("button, input").forEach((b) => { b.disabled = true; });
-  try {
-    const ruta = principal ? `/bodega/${id}/cantidad` : `/inventario/insumos/${id}/cantidad`;
-    await api(ruta, { method: "PUT", body: JSON.stringify({
-      cantidad, stock_esperado: i.stock, motivo }) });
-    await cargarBodega();
-    await cargarCarta();
-    avisar("Cantidad guardada en el libro");
-  } catch (e) {
-    avisar(e.message, true);
-    delete fila.dataset.guardando;
-    fila.querySelectorAll("button, input").forEach((b) => { b.disabled = false; });
-  }
-}
-
-async function verRecetaAnterior(id) {
-  try {
-    const r = await api(`/productos/${id}/receta`);
-    $("#dialogoBodega").innerHTML = `
-      <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-      <h2>Receta anterior</h2>
-      <p class="ayuda">Los ingredientes y sus medidas se conservan.</p>
-      <table class="tabla">${r.lineas.map((l) => `<tr><td>${esc(l.nombre)}</td><td>${esc(l.muestra)}</td></tr>`).join("") || '<tr><td>Sin receta</td></tr>'}</table>`;
-    $("#capaBodega").classList.add("is-on");
-  } catch (e) { avisar(e.message, true); }
-}
-
-/* ---- el libro de un insumo: contesta "¿por qué me faltan 3 litros?" ---- */
-async function verLibro(insumoId) {
-  const d = await api(`/inventario/insumos/${insumoId}/movimientos`);
-  $("#dialogoBodega").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>${esc(d.insumo.nombre)}</h2>
-    <p class="ayuda">Queda <b>${esc(d.insumo.muestra)}</b>. Cada línea dice qué pasó,
-      cuánto quedó después y quién lo hizo.</p>
-    <div class="tabla-wrap" style="max-height:52vh">
-      <table class="tabla">
-        <tr><th>Cuándo</th><th>Qué pasó</th><th class="num">Cuánto</th>
-            <th class="num">Quedó</th><th>Quién</th></tr>
-        ${d.movimientos.length ? d.movimientos.map((m) => `
-          <tr>
-            <td>${esc(m.fecha.slice(8, 10))}-${esc(m.fecha.slice(5, 7))}
-                <small style="color:var(--suave)">${esc(m.fecha.slice(11, 16))}</small></td>
-            <td><span class="pill">${esc(m.tipo)}</span> ${esc(m.motivo)}</td>
-            <td class="num ${m.cantidad < 0 ? "mal" : "ok"}">${esc(m.muestra)}</td>
-            <td class="num">${esc(m.saldo_muestra)}</td>
-            <td>${esc(m.quien || "—")}</td>
-          </tr>`).join("") : '<tr><td colspan="5" class="vacio">Sin movimientos todavía.</td></tr>'}
-      </table>
-    </div>`;
-  $("#capaBodega").classList.add("is-on");
-}
-
-/* ---- llegó mercadería ---- */
-function dialogoCompra() {
-  if (!BODEGA.insumos.length) return avisar("Primero agrega un insumo", true);
-  $("#dialogoBodega").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>Llegó mercadería</h2>
-    <p class="ayuda">Se anota en envases, que es como se compra: 6 cajas de leche,
-      no 6.000 mililitros.</p>
-    ${selectorDeInsumo("cInsumo")}
-    <label class="campo"><span>¿Cuántos envases llegaron?</span>
-      <input id="cEnvases" type="text" inputmode="numeric" data-teclado="entero" value="1"></label>
-    <label class="campo"><span>¿Cuánto costó cada envase? (opcional)</span>
-      <input id="cCosto" type="text" inputmode="numeric" placeholder="Deja vacío si no cambió"></label>
-    <div class="dialogo__pie">
-      <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
-      <button class="btn btn--cobrar" id="guardarCompra" style="width:auto">Guardar</button>
-    </div>`;
-  $("#capaBodega").classList.add("is-on");
-}
-
-/* ---- se perdió algo ---- */
-function dialogoMerma() {
-  if (!BODEGA.insumos.length) return avisar("Primero agrega un insumo", true);
-  $("#dialogoBodega").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>Se perdió algo</h2>
-    <p class="ayuda">Anotarlo es lo que hace que el conteo cuadre después. Una
-      pérdida sin motivo no se distingue de un faltante, por eso el motivo es
-      obligatorio.</p>
-    ${selectorDeInsumo("mInsumo")}
-    <label class="campo"><span>¿Cuánto?</span>
-      <input id="mCantidad" type="text" inputmode="numeric" data-teclado="entero"
-             placeholder="0"><span class="ayuda" id="mUnidad"></span></label>
-    <div class="rapidos" id="motivosRapidos">
-      <button data-motivo="Se cayó">Se cayó</button>
-      <button data-motivo="Se venció">Se venció</button>
-      <button data-motivo="Se probó / calibración">Se probó</button>
-      <button data-motivo="Consumo del personal">Nos lo tomamos</button>
-    </div>
-    <label class="campo"><span>¿Qué pasó?</span>
-      <input id="mMotivo" type="text" placeholder="Se cayó la bandeja"></label>
-    <div class="dialogo__pie">
-      <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
-      <button class="btn btn--cobrar" id="guardarMerma" style="width:auto">Guardar</button>
-    </div>`;
-  $("#capaBodega").classList.add("is-on");
-}
-
-/* ---- contar la bodega: a ciegas, como el arqueo de caja ---- */
-function dialogoConteo() {
-  if (!BODEGA.insumos.length) return avisar("Todavía no hay nada que contar", true);
-  $("#dialogoBodega").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>Contar la bodega</h2>
-    <p class="ayuda">Escribe lo que hay de verdad. No te muestro lo que debería
-      haber hasta el final, a propósito: si lo vieras antes, es humano acomodar
-      el conteo para que calce.</p>
-    <div class="arqueo">
-      ${BODEGA.insumos.map((i) => `
-        <div class="arqueo__fila" data-conteo-fila="${i.id}">
-          <div class="arqueo__valor">${esc(i.nombre)}<small>${esc(unidadCorta[i.unidad] || i.unidad)}</small></div>
-          <div class="arqueo__cant">
-            <input type="text" inputmode="numeric" data-teclado="entero"
-                   data-conteo="${i.id}" placeholder="0">
-          </div>
-          <div class="arqueo__sub">—</div>
-        </div>`).join("")}
-    </div>
-    <div id="zonaConteo"></div>
-    <div class="dialogo__pie">
-      <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
-      <button class="btn btn--cobrar" id="guardarConteo" style="width:auto">Ver si cuadra</button>
-    </div>`;
-  $("#capaBodega").classList.add("is-on");
-}
-
-async function guardarConteo() {
-  const conteos = {};
-  $$("[data-conteo]").forEach((c) => {
-    const v = (c.value || "").trim();
-    if (v !== "") conteos[c.dataset.conteo] = soloNumeros(v);
-  });
-  if (!Object.keys(conteos).length) return avisar("No contaste nada todavía", true);
-  try {
-    const r = await api("/inventario/conteo", { method: "POST",
-      body: JSON.stringify({ conteos, nota: "Conteo de la bodega" }) });
-    $("#capaBodega").classList.remove("is-on");
-    await cargarBodega();
-    if (!r.ajustados) return avisar("Cuadra todo: no había ninguna diferencia");
-    avisar(`${r.ajustados} ${r.ajustados === 1 ? "insumo no cuadraba" : "insumos no cuadraban"}`
-           + ` · ${clp(Math.abs(r.costo_del_descuadre))} de diferencia`, true);
-  } catch (e) { avisar(e.message, true); }
-}
-
-function selectorDeInsumo(id) {
-  return `<label class="campo"><span>¿Cuál?</span>
-    <select id="${id}">
-      ${BODEGA.insumos.map((i) => `<option value="${i.id}">${esc(i.nombre)} — queda ${esc(i.muestra)}</option>`).join("")}
-    </select></label>`;
-}
-
-/* ---- la ficha de un insumo ---- */
-function dialogoInsumo(insumoId) {
-  const i = BODEGA.insumos.find((x) => x.id === insumoId) || {
-    nombre: "", unidad: "un", minimo: 0, formato: "", compra_contenido: 1, compra_costo: 0 };
-  const nuevo = !insumoId;
-  $("#dialogoInsumo").innerHTML = `
-    <button class="dialogo__x" data-cerrar-capa aria-label="Cerrar">✕</button>
-    <h2>${nuevo ? "Insumo nuevo" : esc(i.nombre)}</h2>
-    <label class="campo"><span>¿Qué es?</span>
-      <input id="iNombre" type="text" value="${esc(i.nombre)}" placeholder="Leche entera"></label>
-    <label class="campo"><span>¿En qué se mide?</span>
-      <select id="iUnidad" ${nuevo ? "" : "disabled"}>
-        <option value="un"${i.unidad === "un" ? " selected" : ""}>Unidades (alfajores, botellas)</option>
-        <option value="ml"${i.unidad === "ml" ? " selected" : ""}>Mililitros (leche, jarabes)</option>
-        <option value="g"${i.unidad === "g" ? " selected" : ""}>Gramos (café, harina)</option>
-      </select></label>
-    <label class="campo"><span>¿Cómo se compra?</span>
-      <input id="iFormato" type="text" value="${esc(i.formato)}" placeholder="Caja de 1 litro"></label>
-    <label class="campo"><span>¿Cuánto trae cada envase? (en ${esc(i.unidad)})</span>
-      <input id="iContenido" type="text" inputmode="numeric" value="${i.compra_contenido || 1}"></label>
-    <label class="campo"><span>¿Cuánto cuesta el envase?</span>
-      <input id="iCosto" type="text" inputmode="numeric" value="${i.compra_costo || ""}" placeholder="0"></label>
-    <label class="campo"><span>Avísame cuando queden menos de (en ${esc(i.unidad)})</span>
-      <input id="iMinimo" type="text" inputmode="numeric" value="${i.minimo || ""}" placeholder="0"></label>
-    ${nuevo ? `<label class="campo"><span>¿Cuánto hay ahora mismo? (en ${esc(i.unidad)})</span>
-      <input id="iInicial" type="text" inputmode="numeric" placeholder="0"></label>` : ""}
-    <div class="dialogo__pie">
-      ${nuevo ? "" : `<button class="btn btn--peligro" data-sacar-insumo="${insumoId}">Sacar de la bodega</button>`}
-      <button class="btn btn--fantasma" data-cerrar-capa>Cancelar</button>
-      <button class="btn btn--cobrar" data-guardar-insumo="${insumoId || 0}" style="width:auto">Guardar</button>
-    </div>`;
-  $("#capaInsumo").classList.add("is-on");
-}
-
-async function guardarInsumo(insumoId) {
-  const cuerpo = {
-    nombre: ($("#iNombre").value || "").trim(),
-    unidad: $("#iUnidad").value,
-    formato: ($("#iFormato").value || "").trim(),
-    compra_contenido: Math.max(1, soloNumeros($("#iContenido").value)),
-    compra_costo: soloNumeros($("#iCosto").value),
-    minimo: soloNumeros($("#iMinimo").value),
-  };
-  if (!cuerpo.nombre) return avisar("Ponle un nombre", true);
-  if ($("#iInicial")) cuerpo.stock_inicial = soloNumeros($("#iInicial").value);
-  try {
-    await api(insumoId ? `/inventario/insumos/${insumoId}` : "/inventario/insumos",
-              { method: insumoId ? "PUT" : "POST", body: JSON.stringify(cuerpo) });
-    $("#capaInsumo").classList.remove("is-on");
-    await cargarBodega();
-    avisar("Guardado");
-  } catch (e) { avisar(e.message, true); }
-}
-
 /* ---------------- traer la carta de otro lado ----------------
    Un local nuevo llega con su lista en un Excel. Escribir cuarenta productos a
    mano es la razón más tonta por la que alguien no empieza a usar el sistema.
@@ -3516,7 +2734,7 @@ async function aplicarImportacion() {
       sacar_lo_que_no_vino: !!($("#sacarSobrantes") || {}).checked })});
     $("#capaImportar").classList.remove("is-on");
     await cargarCarta();
-    pintarEditorCarta();
+  if ($(".vista.is-on")?.dataset.vista === "inventario") cargarInventario();
     avisar(r.aviso);
   } catch (e) { avisar(e.message, true); }
 }
@@ -4267,8 +3485,8 @@ function pintarAjustes() {
         <input type="checkbox" id="ajInventario" ${usarInventario() ? "checked" : ""}>
         Llevar inventario en este local</label>
       <p class="ayuda" style="margin:8px 0 0">Apágalo si solo quieres vender, sin llevar
-        la cuenta de lo que queda. Se esconden Bodega y Por comprar, y no se pide costo
-        ni existencias al agregar productos. Lo que ya tenías anotado se conserva:
+        la cuenta de lo que queda. Se esconden las herramientas de stock y Por comprar.
+        Inventario conserva la lista y la ficha de productos. Lo que ya tenías anotado se conserva:
         al prenderlo de nuevo, retomas desde esos saldos.</p>
     </div>
 
@@ -4675,24 +3893,14 @@ function usarInventario() {
 }
 
 function aplicarInventario() {
-  const activo = usarInventario();
   const interruptor = $("#ajInventario");
-  if (interruptor) interruptor.checked = activo;
-  if (!activo) {
-    if ($(".vista.is-on")?.dataset.vista === "inventario") verVista("caja");
-    ["#capaBodega", "#capaInsumo"].forEach((id) => $(id).classList.remove("is-on"));
+  if (interruptor) interruptor.checked = usarInventario();
+  if (!usarInventario()) {
+    $("#capaBodega").classList.remove("is-on");
+    $("#capaProducto").classList.remove("is-on");
+    invFiltro = "todos";
   }
-  // Sin bodega, Inventario queda solo con la Carta: se esconde la selección Carta | Bodega.
-  pintarSubInventario();
-  const zona = $("#zonaTalCual");
-  if (zona) {
-    zona.style.display = activo ? "" : "none";
-    if (!activo) zona.innerHTML = "";
-    else {
-      const p = productoDeLaCarta(+zona.dataset.producto);
-      if (p) pintarTalCual(p);
-    }
-  }
+  if ($(".vista.is-on")?.dataset.vista === "inventario") cargarInventario();
   pintarGuias();
 }
 
@@ -4789,46 +3997,13 @@ function elegirMargen(pct) {
   }, 700);
 }
 
-async function pintarTalCual(p) {
-  const zona = $("#zonaTalCual");
-  if (!zona) return;
-  zona.style.display = usarInventario() ? "" : "none";
-  if (!usarInventario()) { zona.innerHTML = ""; return; }
-  /* La cantidad se pregunta UNA vez: cuando se empieza a contar algo que no se
-     contaba. Si ya se lleva la cuenta, el número vive en la Bodega — volver a
-     escribirlo acá lo sumaría encima de lo que ya hay. */
-  const empieza = !p.llevar_cuenta;
-  zona.innerHTML = `<label class="marca"><input id="fCuenta" type="checkbox" ${p.llevar_cuenta ? "checked" : ""}>
-    Llevar la cuenta de este</label>` + (empieza ? `
-    <div id="fCuantosHay" hidden>
-      <label class="campo" style="margin:10px 0 0"><span>¿Cuántos hay ahora?</span>
-        <input id="fStockInicial" type="text" inputmode="numeric" placeholder="0"></label>
-      <p class="ayuda" style="margin:6px 0 0;font-size:12.5px">Para partir con la
-        cuenta al día. Si no sabes, déjalo vacío y cuéntalos en Bodega cuando
-        puedas.</p>
-    </div>` : "");
-  const casilla = $("#fCuenta");
-  if (casilla && casilla.addEventListener) {
-    casilla.addEventListener("change", () => {
-      const caja = $("#fCuantosHay");
-      if (caja) caja.hidden = !casilla.checked;
-    });
-  }
-}
-
-/* ---------------- arranque y eventos ---------------- */
 function reloj() {
   $("#reloj").textContent = new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /* Ruteo por hash: refrescar la página no devuelve al cajero a la caja sin
    avisar, y se puede dejar "El día" abierto en otra pestaña. */
-const VISTAS = ["caja", "dia", "carta", "inventario", "guias"];
-/* La pestaña «Inventario» de la barra («stock» en el HTML) junta dos de esas vistas, las
-   de siempre: Carta y Bodega. Cada una conserva su nombre en la dirección (#/carta,
-   #/inventario), así que nada de lo que apunta a ellas cambió. */
-const GRUPO_INVENTARIO = ["carta", "inventario"];
-
+const VISTAS = ["caja", "dia", "inventario", "guias"];
 /* En Windows el contenido web no puede quitar el marco de la aplicación.
    El puente usa la ventana nativa; en navegador usamos su API de pantalla completa. */
 let pantallaCompletaNativa = false;
@@ -4894,44 +4069,16 @@ function ponerBarra(oculta) {
 window.addEventListener("pywebviewready", sincronizarPantallaCompleta);
 document.addEventListener("fullscreenchange", pintarPantallaCompleta);
 
-/* Cuál de las dos (Carta o Bodega) abre la pestaña Inventario: la que se miró por
-   última vez en este equipo. Sin bodega en el local, siempre la Carta. */
-let subInventario = null;
-function destinoInventario() {
-  let sub = subInventario;
-  if (!sub) {
-    try { sub = localStorage.getItem("pos.sub_inventario"); } catch (e) { sub = null; }
-  }
-  return sub === "inventario" && usarInventario() ? "inventario" : "carta";
-}
-
-/* La selección «Carta | Bodega» de arriba de Inventario. */
-function pintarSubInventario(actual) {
-  const barra = $("#subInventario");
-  if (!barra) return;
-  actual = actual || $(".vista.is-on")?.dataset.vista;
-  const bodega = usarInventario();
-  barra.hidden = !(GRUPO_INVENTARIO.includes(actual) && bodega);
-  const boton = $(".subtab[data-vista='inventario']");
-  if (boton) boton.hidden = !bodega;
-  $$(".subtab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === actual));
-}
-
 function verVista(nombre, empujarHash = true) {
-  if (nombre === "stock") nombre = destinoInventario();
+  // Las direcciones anteriores siguen abriendo la lista unificada.
+  if (nombre === "stock" || nombre === "carta") nombre = "inventario";
   if (!VISTAS.includes(nombre)) nombre = "caja";
-  if (nombre === "inventario" && !usarInventario()) nombre = "caja";
-  const pestana = GRUPO_INVENTARIO.includes(nombre) ? "stock" : nombre;
+  const pestana = nombre === "inventario" ? "stock" : nombre;
   $$(".tab").forEach((b) => b.classList.toggle("is-on", b.dataset.vista === pestana));
   $$(".vista").forEach((v) => v.classList.toggle("is-on", v.dataset.vista === nombre));
-  if (GRUPO_INVENTARIO.includes(nombre)) {
-    subInventario = nombre;
-    try { localStorage.setItem("pos.sub_inventario", nombre); } catch (e) {}
-  }
-  pintarSubInventario(nombre);
   if (empujarHash) location.hash = "#/" + nombre;
   if (nombre === "dia") { periodoQueCorresponde(); cargarDia(); }
-  if (nombre === "inventario") cargarBodega();
+  if (nombre === "inventario") cargarInventario();
   if (nombre === "guias") pintarGuias();
 }
 
@@ -4948,7 +4095,7 @@ document.addEventListener("click", (e) => {
   // El <main> de cada vista también lo lleva, y con `cerca("data-vista")` este
   // primer if se tragaba TODOS los clics de adentro: no se podía ni agregar un
   // producto al pedido.
-  const pestana = t.closest(".tab[data-vista], .subtab[data-vista]");
+  const pestana = t.closest(".tab[data-vista]");
   if (pestana) return verVista(pestana.dataset.vista);
   if (cerca("data-cat")) {
     catActiva = +cerca("data-cat").dataset.cat;
@@ -4966,7 +4113,6 @@ document.addEventListener("click", (e) => {
   if (cerca("data-mas")) return cambiarCantidad(+cerca("data-mas").dataset.mas, 1);
   if (cerca("data-menos")) return cambiarCantidad(+cerca("data-menos").dataset.menos, -1);
   if (cerca("data-quitar-linea")) return quitarLineaDelPedido(+cerca("data-quitar-linea").dataset.quitarLinea);
-  if (cerca("data-plegar-cat")) return alternarCategoriaCarta(+cerca("data-plegar-cat").dataset.plegarCat);
   if (cerca("data-anular")) return anular(+cerca("data-anular").dataset.anular);
   if (cerca("data-imprimir")) return imprimir(`/comprobante/${cerca("data-imprimir").dataset.imprimir}`);
   if (cerca("data-ver-cierre")) return dialogoCierre(+cerca("data-ver-cierre").dataset.verCierre);
@@ -4979,13 +4125,6 @@ document.addEventListener("click", (e) => {
     $$(".periodo").forEach((b) => b.classList.toggle("is-on", b.dataset.periodo === periodo));
     return cargarDia();
   }
-  if (cerca("data-guardar")) return guardarProducto(+cerca("data-guardar").dataset.guardar);
-  if (cerca("data-editar")) return abrirFichaProducto(+cerca("data-editar").dataset.editar);
-  if (cerca("data-nuevo-en")) return nuevoProducto(+cerca("data-nuevo-en").dataset.nuevoEn);
-  if (cerca("data-cat-editar")) return editarCategoria(+cerca("data-cat-editar").dataset.catEditar);
-  if (cerca("data-cat-guardar")) return guardarCategoria(+cerca("data-cat-guardar").dataset.catGuardar);
-  if (cerca("data-cat-cancelar")) return pintarEditorCarta();
-  if (cerca("data-cat-borrar")) return borrarCategoria(+cerca("data-cat-borrar").dataset.catBorrar);
   if (cerca("data-paga")) {
     const campo = $("#pagaCon");
     campo.value = cerca("data-paga").dataset.paga;
@@ -5036,15 +4175,9 @@ document.addEventListener("click", (e) => {
     return calcularVuelto();
   }
   if (t.id === "limpiarBuscar") { $("#buscar").value = ""; $("#buscar").focus(); return buscar(""); }
-  if (t.id === "limpiarBuscarCarta") {
-    $("#buscarCarta").value = "";
-    $("#buscarCarta").focus();
-    return filtrarEditorCarta();
-  }
   if (t.closest("#btnPantallaCompleta")) return alternarPantallaCompleta();
   if (t.closest("#btnEsconderBarra")) return ponerBarra(true);
   if (t.closest("#btnMostrarBarra")) return ponerBarra(false);
-  if (t.id === "btnNuevaCat") return nuevaCategoria();
   if (t.id === "btnHoy") { $("#fechaDia").value = hoyISO(); turnoElegido = null; return cargarDia(); }
   if (t.id === "btnExportar") {
     const [d1, d2] = rangoDelPeriodo($("#fechaDia").value || hoyISO());
@@ -5137,20 +4270,6 @@ document.addEventListener("click", (e) => {
   // ---- el lector de codigos ----
   if (cerca("data-guardar-codigo"))
     return guardarProductoDelCodigo(cerca("data-guardar-codigo").dataset.guardarCodigo);
-  if (cerca("data-pegar-codigo"))
-    return pegarCodigo(+cerca("data-pegar-codigo").dataset.pegarCodigo);
-  if (cerca("data-sacar-codigo")) {
-    const c = cerca("data-sacar-codigo").dataset.sacarCodigo;
-    if (FICHA_ABIERTA == null) {
-      // Producto nuevo: el código solo está anotado acá, no hay nada que borrar en la base.
-      CODIGOS_NUEVOS = CODIGOS_NUEVOS.filter((x) => x !== c);
-      return pintarCodigos(null);
-    }
-    return api("/codigos/" + encodeURIComponent(c), { method: "DELETE" })
-      .then(() => { avisar("Código sacado"); pintarCodigos(FICHA_ABIERTA); })
-      .catch((e) => avisar(e.message, true));
-  }
-
   // ---- cuanto cobrar ----
   if (cerca("data-usar-sugerido")) {
     const caja = cerca("data-usar-sugerido").closest(".sugerido");
@@ -5183,41 +4302,6 @@ document.addEventListener("click", (e) => {
   if (cerca("data-revivir-usuario"))
     return revivirUsuario(+cerca("data-revivir-usuario").dataset.revivirUsuario);
 
-  // ---- bodega ----
-  if (cerca("data-cantidad-bodega")) return editarCantidadBodega(+cerca("data-cantidad-bodega").dataset.cantidadBodega);
-  if (cerca("data-cancelar-cantidad")) {
-    $("#editarCantidad" + cerca("data-cancelar-cantidad").dataset.cancelarCantidad).hidden = true;
-    return;
-  }
-  if (cerca("data-paso-bodega")) {
-    const b = cerca("data-paso-bodega");
-    const campo = $("#cantidadBodega" + b.dataset.id);
-    campo.value = Math.min(2147483647, Math.max(0, (Number(campo.value) || 0) + Number(b.dataset.pasoBodega)));
-    $("#motivoBodega" + b.dataset.id).hidden = true;
-    return;
-  }
-  if (cerca("data-pedir-motivo")) {
-    const id = +cerca("data-pedir-motivo").dataset.pedirMotivo;
-    if (cantidadBodegaValida(id) !== null) $("#motivoBodega" + id).hidden = false;
-    return;
-  }
-  if (cerca("data-guardar-cantidad")) {
-    const b = cerca("data-guardar-cantidad");
-    return guardarCantidadBodega(+b.dataset.guardarCantidad, b.dataset.razon);
-  }
-  if (cerca("data-ver-receta")) return verRecetaAnterior(+cerca("data-ver-receta").dataset.verReceta);
-  if (cerca("data-libro")) return verLibro(+cerca("data-libro").dataset.libro);
-  if (cerca("data-insumo")) return dialogoInsumo(+cerca("data-insumo").dataset.insumo);
-  if (cerca("data-guardar-insumo"))
-    return guardarInsumo(+cerca("data-guardar-insumo").dataset.guardarInsumo || 0);
-  if (cerca("data-sacar-insumo")) {
-    const id = +cerca("data-sacar-insumo").dataset.sacarInsumo;
-    if (!confirm("¿Sacar este insumo de la bodega? Los movimientos viejos se conservan.")) return;
-    return api(`/inventario/insumos/${id}`, { method: "DELETE" })
-      .then(() => { $("#capaInsumo").classList.remove("is-on"); cargarBodega(); avisar("Listo"); })
-      .catch((err) => avisar(err.message, true));
-  }
-  if (cerca("data-motivo")) { $("#mMotivo").value = cerca("data-motivo").dataset.motivo; return; }
   if (cerca("data-dibujo")) {
     const b = cerca("data-dibujo");
     $("#fDibujo").value = b.dataset.dibujo;
@@ -5236,30 +4320,6 @@ document.addEventListener("click", (e) => {
     else avisar("Selecciona la dirección y cópiala con Ctrl+C");
     return;
   }
-  if (t.id === "btnNuevoInsumo") return dialogoInsumo(0);
-  if (t.id === "btnCompra") return dialogoCompra();
-  if (t.id === "btnMerma") return dialogoMerma();
-  if (t.id === "btnConteo") return dialogoConteo();
-  if (t.id === "guardarConteo") return guardarConteo();
-  if (t.id === "guardarCompra") {
-    return api("/inventario/compras", { method: "POST", body: JSON.stringify({
-      insumo_id: +$("#cInsumo").value,
-      envases: Math.max(1, soloNumeros($("#cEnvases").value)),
-      compra_costo: $("#cCosto").value ? soloNumeros($("#cCosto").value) : null }) })
-      .then((r) => { $("#capaBodega").classList.remove("is-on"); cargarBodega();
-        avisar(`Anotado · quedan ${r.muestra}`); })
-      .catch((err) => avisar(err.message, true));
-  }
-  if (t.id === "guardarMerma") {
-    return api("/inventario/mermas", { method: "POST", body: JSON.stringify({
-      insumo_id: +$("#mInsumo").value,
-      cantidad: soloNumeros($("#mCantidad").value),
-      motivo: ($("#mMotivo").value || "").trim() }) })
-      .then((r) => { $("#capaBodega").classList.remove("is-on"); cargarBodega();
-        avisar(`Anotado · se perdieron ${clp(r.costo)}`); })
-      .catch((err) => avisar(err.message, true));
-  }
-
   // ---- traer la carta ----
   if (t.id === "btnImportar") return dialogoImportar();
   if (t.id === "leerCarta") return leerTexto();
@@ -5291,10 +4351,6 @@ $("#mixtoGrid").addEventListener("input", (e) => {
 });
 
 $("#buscar").addEventListener("input", (e) => buscar(e.target.value));
-$("#buscarCarta").addEventListener("input", filtrarEditorCarta);
-$("#buscarCarta").addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { e.target.value = ""; filtrarEditorCarta(); }
-});
 $("#buscar").addEventListener("keydown", (e) => {
   if (e.key === "Escape") { e.target.value = ""; buscar(""); }
 });

@@ -1,0 +1,54 @@
+/* La lista usa el alto útil; los paneles desplazan solo su contenido. */
+#vistaInventario{flex-direction:column;gap:10px;padding:12px;min-height:0;overflow:hidden}
+#vistaInventario.is-on{display:flex}
+.inv-barra,.inv-filtros{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.inv-acciones{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.inv-acciones[hidden]{display:none}
+.inv-barra .btn--cobrar{width:auto}
+.inv-barra .btn,.inv-filtros .btn{font-size:14px;padding:0 12px;min-height:48px}
+#invNuevo{background:var(--clay)}
+.inv-busca{flex:1;min-width:240px;margin:0}
+.inv-dialogo .inv-busca input{padding-left:44px;padding-right:48px}
+.inv-categorias{display:flex;gap:8px;overflow-x:auto;flex-shrink:0;padding-bottom:2px}
+.inv-categorias .btn{flex-shrink:0;border-radius:24px}
+.inv-acciones .is-on,.inv-categorias .is-on{background:var(--clay);color:white}
+.inv-tabla{min-height:0;flex:1;overflow:auto;border:1px solid var(--linea);border-radius:12px;background:var(--papel)}
+.inv-tabla thead{position:sticky;top:0;background:var(--crema);z-index:1}
+.inv-tabla .tabla td{padding:5px 10px}
+.inv-producto{display:flex;align-items:center;gap:14px;width:100%;min-height:48px;text-align:left;border:0;background:none;color:inherit;cursor:pointer;font:inherit}
+.inv-producto{padding:0}
+#vistaInventario [hidden],.inv-dialogo [hidden]{display:none!important}
+.inv-producto small,.inv-tabla td small{display:block;font-size:12px;color:var(--suave)}
+.inv-dibujo{width:48px;height:48px;flex-shrink:0;border-radius:10px;background:var(--crema);display:flex;align-items:center;justify-content:center}
+.inv-dibujo svg{width:44px;height:44px}
+.inv-bajo,.inv-bajo small{color:#a8382f!important;font-weight:700}
+.inv-comprar{color:#a8382f}
+.inv-legado,#invTotal{margin:0;flex-shrink:0}
+.capa:has(.inv-dialogo){align-items:center;overflow:hidden;padding:12px}
+.inv-dialogo{display:flex;flex-direction:column;max-height:calc(100dvh - 24px);max-height:calc(100vh - 24px);width:min(100%,960px);padding:20px 20px 0;overflow:hidden;margin:auto}
+.inv-dialogo h2{margin:0 0 14px;flex-shrink:0}
+.inv-interior{overflow:auto;min-height:0;padding:4px 4px 16px;scroll-padding-bottom:12px}
+.inv-busca input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+.inv-dialogo>.dialogo__pie{position:static;flex-shrink:0;margin:0 -20px;padding:12px 20px;background:var(--papel);border-top:1px solid var(--linea);display:flex;gap:8px;justify-content:flex-end}
+.inv-dialogo>.dialogo__pie .btn--cobrar{width:auto}
+.inv-campos{border:0;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;min-width:0}
+.inv-campos section{min-width:0}
+.inv-campos h3{margin:18px 0 12px}
+.inv-campos h3:first-child{margin-top:0}
+.inv-precios{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.inv-precios .campo:last-child{grid-column:1/-1}
+.inv-previa{border:1px solid var(--linea);border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;margin-bottom:12px;background:var(--crema)}
+.inv-previa svg{width:90px;height:90px}
+.inv-codigo-nuevo,.inv-chip{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.inv-chip{display:inline-flex;padding:2px 8px;background:var(--crema);border-radius:20px;margin-right:4px}
+.inv-dialogo input,.inv-dialogo select{max-width:100%;min-width:0}
+.inv-codigo-nuevo input,.inv-categoria-fila input,.inv-entrada-fila input{border:1px solid var(--linea);border-radius:8px;min-height:48px;padding:8px;font:inherit}
+.inv-codigo-nuevo input{flex:1;width:150px}
+.inv-sugerencias{display:grid;gap:4px;max-height:180px;overflow:auto}
+.inv-sugerencia{text-align:left}
+.inv-categoria-fila,.inv-entrada-fila{display:flex;align-items:center;gap:8px;margin:10px 0;flex-wrap:wrap}
+.inv-categoria-fila input:first-child,.inv-entrada-fila b{flex:1}
+.inv-categoria-fila input[type=number]{width:90px}
+#invConteoFilas input{width:100px;border:1px solid var(--linea);border-radius:8px;min-height:48px;padding:8px;font:inherit}
+.inv-ficha .dibujos{max-height:260px;overflow:auto}
+@media(max-width:760px){.inv-campos{grid-template-columns:1fr}.inv-dialogo{padding:12px 12px 0}.inv-dialogo>.dialogo__pie{margin:0 -12px;padding:10px 12px}.inv-filtros{align-items:stretch}.inv-tabla th:nth-child(2),.inv-tabla td:nth-child(2){display:none}.inv-acciones .btn{font-size:13px}}

@@ -488,6 +488,60 @@ limpia, y está bien — quien puede reiniciar la caja ya está frente a ella.
 
 ## 2. Modelo de datos `[IMPL]`
 
+### Inventario unificado
+
+La lista y la ficha de **Inventario** reemplazan las pantallas de edición Carta y
+Bodega. Los endpoints anteriores se conservan para compatibilidad. La ficha no
+edita recetas ni muestra insumos sin producto. Si existen recetas antiguas muestra
+un aviso; sus descuentos al vender y las devoluciones al anular siguen usando el
+libro y las recetas existentes. No se convierten en productos por unidades al guardar
+un nombre o precio, y el nuevo interruptor no se ofrece para esas preparaciones.
+
+- **Costo:** por unidad, en pesos brutos. Si existe `Insumo.producto_id`, su única
+  autoridad es `compra_costo / compra_contenido`; la ficha guarda el costo unitario
+  multiplicado por el contenido del envase, sin cambiarlo. Puede borrarse dejando
+  costo cero. Sin insumo propio se guarda `Producto.costo_referencia` (default 0),
+  sin crear inventario. Al habilitar unidades se toma ese costo para el nuevo insumo.
+  El costo de referencia de una preparación no modifica sus ingredientes.
+- **Precios:** Ganancia % en la ficha significa `(venta / costo - 1) * 100`.
+  El sugerido conserva la definición del margen de Ajustes **sobre venta**
+  (decisión 11). Ambos redondeos, $10 y $50, suben al múltiplo siguiente.
+  `Producto.precio` o `precio_kilo` siguen siendo los precios autorizados al cobrar.
+- **TV:** `Producto.en_tv`, default true, independiente de `activo`.
+  `/carta` omite productos y destacados con el flag apagado y categorías sin
+  productos visibles; ambos clientes TV también filtran un `en_tv=false` explícito.
+  Apagar el TV no quita el producto de la caja.
+- **Interruptor:** usa `llevar_cuenta`, preservando el NULL de las bases anteriores.
+  Apagar conserva Insumo, Receta y Movimiento; la lista muestra «—» y no bloquea
+  ventas por stock. Prender reutiliza el mismo insumo y libro. «Hay ahora» exige
+  `inventario` e `inventario_ajustar`, compara `stock_esperado` dentro de una reserva
+  de escritura y llama a `anotar`: carga sin historia, ajuste por diferencia si ya
+  existe historia. Guardar dos veces no vuelve a cargar el saldo. El mínimo acepta 0.
+  Editar nombre, precio o dibujo no cuenta automáticamente un saldo antiguo: el
+  NULL y `contado` se conservan hasta que la persona modifica «Hay ahora» o usa Conteo.
+  Las fichas antiguas con precio por unidad y por kilo conservan su PLU y ambos
+  precios si no se cambia explícitamente la forma de venta.
+- **Ajuste del local:** `usar_inventario=0` esconde herramientas, filtros de stock y
+  el interruptor de la ficha. Inventario conserva productos, categorías e importación.
+  No cambia las elecciones de cada producto ni borra historial. Conserva el efecto
+  existente en la caja: no impone el tope duro ni descuenta stock mientras el ajuste
+  global esté apagado. Al reactivarlo vuelven los descuentos, incluidas las recetas.
+- **Permisos:** catálogo, categorías, códigos, costo y TV piden `editar_carta`.
+  Cambiar la elección de cuenta o el mínimo también pide `inventario`; contar pide
+  además `inventario_ajustar`. Compras y mermas mantienen `inventario`. La lista se
+  puede consultar con `editar_carta` o `inventario`; la ficha es de solo lectura si
+  falta el primero. Los controles se ocultan o deshabilitan según esos permisos.
+- **Movimientos:** la entrada de mercadería reutiliza `/inventario/compras`, que
+  admite `cantidad` en unidades base o el `envases` anterior. El costo de compra
+  sigue expresado por envase; el opcional `costo_unitario` de la nueva pantalla se
+  convierte en el servidor con el contenido vigente, bajo la misma reserva de escritura.
+  `/inventario/conteo` admite `esperados` para rechazar
+  todo el conteo si cambió una fila mientras se contaba; solo se envían filas contadas.
+  Se conserva `/bodega/{id}/cantidad` para las integraciones anteriores.
+
+La migración aditiva existente agrega `producto.en_tv DEFAULT 1` y
+`producto.costo_referencia DEFAULT 0`. No reescribe ventas, saldos ni movimientos.
+
 Tabla `apps/pos/db/models.py`. SQLModel sobre SQLite (archivo `pos.db`), migrable a
 Postgres cambiando `DB_URL` sin tocar código.
 
@@ -496,7 +550,7 @@ Categoria(id, nombre, orden, activa)
     # "Café caliente", "Fríos", "Pastelería"…
 
 Producto(id, categoria_id→Categoria, nombre, descripcion, precio, plu, precio_kilo,
-         activo, llevar_cuenta, orden, destacado, badge,
+         activo, en_tv, costo_referencia, llevar_cuenta, orden, destacado, badge,
          antes, etiqueta, dibujo, color)
     # precio  = bruto en CLP (entero)
     # plu = identificador textual de balanza; vacío si no es de balanza
