@@ -215,7 +215,9 @@ html, body {
     var x = new XMLHttpRequest();
     // La hora al final es para que el televisor no sirva una copia guardada:
     // hay navegadores de TV que ignoran las cabeceras de cache.
-    x.open("GET", donde() + "?t=" + (new Date()).getTime(), true);
+    /* donde() ya puede traer "?t=<televisor>": la hora va con "&" y con otro nombre,
+       o la caja recibiria "t=1?t=1699..." */
+    x.open("GET", donde() + (donde().indexOf("?") < 0 ? "?" : "&") + "_=" + (new Date()).getTime(), true);
     x.onreadystatechange = function () {
       if (x.readyState !== 4) { return; }
       if (x.status === 200) {

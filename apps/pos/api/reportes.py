@@ -63,19 +63,26 @@ def _persona(u: Usuario | None) -> dict:
             "rol_nombre": NOMBRE_ROL.get(u.rol, u.rol), "color": u.color}
 
 
-def _dar_acceso(respuesta: Response, usuario_id: int | None) -> None:
+def _dar_acceso(respuesta: Response, usuario_id: int | None, presencia_id=None) -> None:
     # `k` distingue esta galleta de la de la sesión: son del mismo tipo y la misma
-    # firma, y una no tiene que servir como la otra.
+    # firma, y una no tiene que servir como la otra. `pre` la amarra a la presencia de
+    # quien estaba en la caja al escribir el PIN (como la de Config): si entra otra
+    # persona dentro de los 5 minutos, el navegador conserva la galleta pero ya no vale.
     respuesta.set_cookie(
         GALLETA,
-        sesion._firmar({"k": "rep", "uid": usuario_id, "t": sesion.ahora().isoformat()}),
+        sesion._firmar({"k": "rep", "uid": usuario_id, "pre": presencia_id,
+                        "t": sesion.ahora().isoformat()}),
         max_age=MINUTOS_DE_ACCESO * 60, httponly=True, samesite="lax")
 
 
-def _quien_tiene_acceso(request: Request, s: Session) -> tuple[bool, Usuario | None, str]:
+def _quien_tiene_acceso(request: Request, s: Session,
+                        quien: dict | None = None) -> tuple[bool, Usuario | None, str]:
     """(vale, usuario, motivo). No renueva nada: solo mira."""
     carga = sesion._abrir(request.cookies.get(GALLETA, ""))
     if not carga or carga.get("k") != "rep":
+        return False, None, "Reportes pide el PIN."
+    if quien is not None and carga.get("pre") != quien.get("presencia_id"):
+        # Entró otra persona a la caja después de escribir el PIN.
         return False, None, "Reportes pide el PIN."
     try:
         emitida = datetime.fromisoformat(carga["t"])
@@ -104,10 +111,10 @@ def exige_reportes(request: Request, respuesta: Response,
                    s: Session = Depends(get_session),
                    quien: dict = Depends(sesion.exige_entrar)) -> dict:
     """La puerta de todos los endpoints de reportes: sesión, PIN reciente y permiso."""
-    vale, u, motivo = _quien_tiene_acceso(request, s)
+    vale, u, motivo = _quien_tiene_acceso(request, s, quien)
     if not vale:
         raise HTTPException(401, motivo)
-    _dar_acceso(respuesta, u.id if u else None)     # se renueva con cada uso
+    _dar_acceso(respuesta, u.id if u else None, quien.get("presencia_id"))     # se renueva con cada uso
     return _persona(u)
 
 
@@ -119,7 +126,7 @@ def entrar(datos: EntrarIn, respuesta: Response, request: Request,
     if not sesion.hay_usuarios(s):
         if not puede(quien.get("rol", ""), PERMISO, quien.get("permisos", "")):
             raise HTTPException(403, "Este equipo no puede ver reportes.")
-        _dar_acceso(respuesta, None)
+        _dar_acceso(respuesta, None, quien.get("presencia_id"))
         return {"ok": True, "usuario": _persona(None), "minutos": MINUTOS_DE_ACCESO}
 
     # El mismo freno que el candado: diez mil PIN de 4 dígitos no se prueban, y esta
@@ -145,7 +152,7 @@ def entrar(datos: EntrarIn, respuesta: Response, request: Request,
     if not con_permiso:
         raise HTTPException(403, f"{coinciden[0].nombre} no tiene permiso para ver reportes.")
     u = con_permiso[0]
-    _dar_acceso(respuesta, u.id)
+    _dar_acceso(respuesta, u.id, quien.get("presencia_id"))
     return {"ok": True, "usuario": _persona(u), "minutos": MINUTOS_DE_ACCESO}
 
 
@@ -164,12 +171,12 @@ def estado(request: Request, respuesta: Response, s: Session = Depends(get_sessi
     if not quien.get("rol"):
         return {"activo": False}
     try:
-        vale, u, motivo = _quien_tiene_acceso(request, s)
+        vale, u, motivo = _quien_tiene_acceso(request, s, quien)
     except HTTPException:
         return {"activo": False}
     if not vale:
         return {"activo": False, "motivo": motivo}
-    _dar_acceso(respuesta, u.id if u else None)
+    _dar_acceso(respuesta, u.id if u else None, quien.get("presencia_id"))
     return {"activo": True, "usuario": _persona(u), "minutos": MINUTOS_DE_ACCESO}
 
 

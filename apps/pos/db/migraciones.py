@@ -98,6 +98,38 @@ def poner_al_dia() -> list[str]:
 
     hechos += _amarrar_insumos_a_su_producto()
     hechos += _dar_ver_reportes_a_quien_veia_el_dia()
+    hechos += _dar_config_a_quien_administraba_el_equipo()
+    return hechos
+
+
+def _dar_config_a_quien_administraba_el_equipo() -> list[str]:
+    """Una sola vez: quien tiene permisos PROPIOS con «usuarios» pero sin «config» recibe «config».
+
+    Hasta la 2.32 «usuarios» bastaba para crear y editar personas, y con eso se podía darse
+    «config» a uno mismo. Desde la 2.33 Equipo vive dentro de Config y las dos puertas piden
+    «config» (más el PIN): quien tenía una lista propia con «usuarios» y sin «config» se
+    quedaba sin poder entrar a Equipo, y sin nadie que pudiera devolverle el permiso. Darle
+    «config» no le entrega nada que no pudiera darse solo; solo evita el callejón sin salida.
+    Corre UNA vez (queda anotado en la tabla de ajustes): después el dueño puede quitárselo
+    a propósito, y el próximo arranque no se lo puede devolver.
+    """
+    from apps.pos.db.models import Ajuste, Usuario
+    from sqlmodel import Session, select
+
+    hechos: list[str] = []
+    if not {"usuario", "ajuste"} <= set(inspect(engine).get_table_names()):
+        return hechos
+    with Session(engine) as s:
+        if s.get(Ajuste, "migracion.config_con_usuarios"):
+            return hechos
+        for u in s.exec(select(Usuario)).all():
+            claves = [p.strip() for p in (u.permisos or "").split(",") if p.strip()]
+            if claves and "usuarios" in claves and "config" not in claves:
+                u.permisos = ",".join(claves + ["config"])
+                s.add(u)
+                hechos.append(f"usuario {u.id}: + config")
+        s.add(Ajuste(clave="migracion.config_con_usuarios", valor="1"))
+        s.commit()
     return hechos
 
 

@@ -36,7 +36,7 @@ def _productos_de(s: Session, cat_id: int, solo_activos: bool = True):
 
 
 @router.get("/carta")
-def carta(respuesta: Response, s: Session = Depends(get_session), t: Optional[int] = None):
+def carta(respuesta: Response, s: Session = Depends(get_session), t: Optional[str] = None):
     """Formato exacto que esperan las pantallas de `menu-cafeteria`.
 
     CORS abierto a propósito: sin esto el navegador de la pantalla rechaza la
@@ -48,7 +48,9 @@ def carta(respuesta: Response, s: Session = Depends(get_session), t: Optional[in
     """
     respuesta.headers["Access-Control-Allow-Origin"] = "*"
     respuesta.headers["Cache-Control"] = "no-store"
-    pantallas.marcar_visto(t)
+    # `t` es opcional y lo manda un televisor: un valor raro (o un número de más) nunca puede
+    # tumbar la carta con un 422, así que se lee con tolerancia.
+    pantallas.marcar_visto(int(t) if t and t.isdigit() and len(t) < 9 else None)
 
     cats = s.exec(
         select(Categoria).where(Categoria.activa == True).order_by(Categoria.orden, Categoria.id)  # noqa: E712
