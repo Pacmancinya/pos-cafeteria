@@ -209,6 +209,16 @@ def editar(usuario_id: int, datos: UsuarioIn, s: Session = Depends(get_session),
     if u.rol == "dueno" and datos.rol != "dueno" and _ultimo_dueno(s, usuario_id):
         raise HTTPException(409, "Es el único dueño: si lo bajas a cajero, nadie "
                                  "podría volver a crear usuarios.")
+    if u.rol == "dueno" and not datos.activo and _ultimo_dueno(s, usuario_id):
+        raise HTTPException(409, "Es el único dueño. Nombra a otro antes de sacarlo.")
+    # Config y Equipo se administran DESDE Config: si nadie activo queda con «config» y
+    # «usuarios», nadie puede volver a entrar a devolverlos y el local queda sin poder
+    # cambiar un ajuste ni crear a una persona. Se mira el equipo como quedaría.
+    if not _queda_quien_administre(s, usuario_id, datos.rol,
+                                   _permisos_guardados(datos.rol, propios), datos.activo):
+        raise HTTPException(409, "Tiene que quedar al menos una persona que pueda entrar a "
+                                 "Config y administrar el equipo. Dale esos permisos a otra "
+                                 "antes de quitárselos a esta.")
 
     u.nombre, u.rol = datos.nombre, datos.rol
     u.permisos = _permisos_guardados(datos.rol, propios)
@@ -232,6 +242,9 @@ def sacar(usuario_id: int, s: Session = Depends(get_session),
         raise HTTPException(404, "No existe ese usuario")
     if _ultimo_dueno(s, usuario_id):
         raise HTTPException(409, "Es el único dueño. Nombra a otro antes de sacarlo.")
+    if not _queda_quien_administre(s, usuario_id, u.rol, u.permisos or "", False):
+        raise HTTPException(409, "Es la única persona que puede entrar a Config y administrar "
+                                 "el equipo. Dale esos permisos a otra antes de sacarla.")
     u.activo = False
     sesion.cerrar_presencias_abiertas(s, u.id, "salir")
     s.add(u)
@@ -248,6 +261,18 @@ def _nombre_repetido(s: Session, nombre: str, salvo_id: int | None) -> bool:
         select(Usuario).where(Usuario.nombre == nombre, Usuario.activo == True)  # noqa: E712
     ).first()
     return bool(otro and otro.id != salvo_id)
+
+
+def _queda_quien_administre(s: Session, usuario_id: int, rol: str, permisos: str,
+                            activo: bool) -> bool:
+    """¿Después de este cambio queda alguien activo con «config» y «usuarios»?"""
+    for otro in _activos(s):
+        r, p = (rol, permisos) if otro.id == usuario_id else (otro.rol, otro.permisos or "")
+        if otro.id == usuario_id and not activo:
+            continue
+        if puede(r, "config", p) and puede(r, "usuarios", p):
+            return True
+    return False
 
 
 def _ultimo_dueno(s: Session, usuario_id: int) -> bool:

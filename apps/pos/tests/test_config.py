@@ -639,3 +639,44 @@ def test_exportar_para_el_contador_sirve_con_el_pin_de_config(cliente, config_re
     _entrar_a_config(cliente, "3333")
     assert cliente.get("/api/v1/exportar/ventas").status_code == 200
     assert cliente.get("/api/v1/exportar/detalle").status_code == 200
+
+
+# ===================================================== nunca sin quien administre
+def test_el_dueno_no_puede_quitarse_el_permiso_de_config(cliente, config_real):
+    """Config se administra desde Config: si el único que entra se lo quita, nadie vuelve."""
+    u = _dueno(cliente)
+    _entrar_a_config(cliente)
+    r = cliente.put(f"/api/v1/usuarios/{u['id']}", json={
+        "nombre": "Ruperto", "rol": "dueno", "permisos": "vender,usuarios"})
+    assert r.status_code == 409 and "Config" in r.json()["detail"]
+    assert cliente.post("/api/v1/config/salir").status_code == 200
+    _entrar_a_config(cliente)                     # sigue pudiendo entrar
+
+
+def test_el_unico_dueno_no_se_desactiva_por_la_edicion(cliente, config_real):
+    u = _dueno(cliente)
+    _entrar_a_config(cliente)
+    r = cliente.put(f"/api/v1/usuarios/{u['id']}", json={
+        "nombre": "Ruperto", "rol": "dueno", "activo": False})
+    assert r.status_code == 409
+
+
+def test_si_otro_puede_administrar_si_se_puede_quitar(cliente, config_real):
+    u = _dueno(cliente)
+    _entrar_a_config(cliente)
+    _cajero(cliente, permisos="vender,usuarios,config")
+    r = cliente.put(f"/api/v1/usuarios/{u['id']}", json={
+        "nombre": "Ruperto", "rol": "dueno", "permisos": "vender,usuarios"})
+    assert r.status_code == 200, r.text
+
+
+def test_no_se_saca_a_la_unica_persona_que_administra(cliente, config_real):
+    """Un segundo dueño sin «config» no cuenta como alguien que pueda volver a Config."""
+    _dueno(cliente)
+    _entrar_a_config(cliente)
+    otro = cliente.post("/api/v1/usuarios", json={
+        "nombre": "Socio", "pin": "3333", "rol": "dueno", "permisos": "vender"}).json()
+    cajera = _cajero(cliente, permisos="vender,usuarios,config")
+    # Con Ruperto todavía puede: sacar a la cajera está bien.
+    assert cliente.delete(f"/api/v1/usuarios/{cajera['id']}").status_code == 200
+    assert otro["rol"] == "dueno"
