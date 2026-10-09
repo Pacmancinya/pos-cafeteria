@@ -225,7 +225,7 @@ def _guardar_cantidad(s: Session, insumo_id: int, datos: CantidadBodegaIn,
     if not i or not i.activo:
         raise HTTPException(404, "No existe ese insumo activo")
     if solo_bodega and (i.unidad != "un" or not p or not p.activo or p.llevar_cuenta is False):
-        raise HTTPException(404, "Este producto no lleva cuenta en la bodega")
+        raise HTTPException(404, "Este producto no lleva inventario")
     if i.stock != datos.stock_esperado:
         raise HTTPException(409, "La cantidad cambió. Vuelve a abrir el producto y revisa cuánto hay.")
     diferencia = datos.cantidad - i.stock
@@ -356,8 +356,8 @@ def crear_insumo(datos: InsumoIn, s: Session = Depends(get_session),
                  quien: dict = Depends(sesion.exige("inventario"))):
     repetido = _insumo_repetido(s, datos.nombre, None)
     if repetido:
-        raise HTTPException(409, f"Ya hay algo que se llama {repetido.nombre} en la bodega."
-                            + ("" if repetido.activo else " Está sacado de la bodega:"
+        raise HTTPException(409, f"Ya hay algo que se llama {repetido.nombre} en el inventario."
+                            + ("" if repetido.activo else " Está sacado del inventario:"
                                " ábrelo y devuélvelo en vez de crear otro."))
     i = Insumo(**datos.model_dump(exclude={"stock_inicial"}), stock=0)
     s.add(i)
@@ -379,7 +379,7 @@ def editar_insumo(insumo_id: int, datos: InsumoIn, s: Session = Depends(get_sess
         raise HTTPException(404, "No existe ese insumo")
     repetido = _insumo_repetido(s, datos.nombre, insumo_id)
     if repetido:
-        raise HTTPException(409, f"Ya hay algo que se llama {repetido.nombre} en la bodega.")
+        raise HTTPException(409, f"Ya hay algo que se llama {repetido.nombre} en el inventario.")
     # El stock NO se toca por acá a propósito: para cambiarlo está el conteo o
     # el ajuste, que dejan una fila en el libro diciendo quién y por qué.
     for campo, valor in datos.model_dump(exclude={"stock_inicial"}).items():
@@ -449,7 +449,7 @@ def registrar_merma(datos: MermaIn, s: Session = Depends(get_session),
 @router.post("/inventario/conteo")
 def conteo_fisico(datos: ConteoIn, s: Session = Depends(get_session),
                   quien: dict = Depends(sesion.exige("inventario_ajustar"))):
-    """Se contó la bodega de verdad. Ajusta lo que no calzaba.
+    """Se contó el inventario de verdad. Ajusta lo que no calzaba.
 
     Igual que el arqueo de caja: se cuenta a ciegas y la diferencia aparece
     recién ahora. Los insumos que calzan no generan ninguna fila — un
@@ -481,7 +481,7 @@ def conteo_fisico(datos: ConteoIn, s: Session = Depends(get_session),
             continue
         esperado = i.stock
         m = anotar(s, i, "ajuste", ajuste,
-                   motivo=datos.nota or "Conteo de la bodega", quien=quien)
+                   motivo=datos.nota or "Conteo del inventario", quien=quien)
         diferencias.append({
             "insumo": i.nombre,
             "esperado": esperado,

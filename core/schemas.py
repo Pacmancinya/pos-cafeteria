@@ -155,7 +155,11 @@ class ProductoIn(BaseModel):
     # lo demuestra: 148 ventas y UN insumo cargado. No es que el inventario no
     # importe — es que entrar costaba más de lo que daba.
     codigo: str = ""                       # el de barras, si lo escaneó
+    # Con `codigos_quitar` los `codigos` solo se agregan o actualizan y se borran
+    # únicamente los nombrados: lo que otro equipo agregó mientras tanto no se pierde.
+    # Sin `codigos_quitar`, `codigos` es la lista completa (compatibilidad).
     codigos: Optional[list[CodigoProductoIn]] = None
+    codigos_quitar: Optional[list[str]] = None
     hay_ahora: Optional[int] = Field(default=None, ge=0, le=2147483647, strict=True)
     stock_esperado: Optional[int] = Field(default=None, strict=True)
     tal_cual: bool = False                 # se compra y se vende igual: es su propio insumo

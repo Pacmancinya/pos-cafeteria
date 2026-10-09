@@ -112,6 +112,39 @@ def test_codigos_atomicos_preservan_pack(cliente, carta):
     assert ficha(cliente, p['id'])['codigos'] == []
 
 
+def test_codigos_por_diferencias_conservan_los_de_otro_equipo(cliente, carta):
+    p = alta(cliente, carta, codigos=[{'codigo': '7801234567894'}])
+    # Otro equipo agrega un código mientras esta ficha seguía abierta con el original.
+    assert cliente.put(f"/api/v1/productos/{p['id']}", json={**p, 'codigos': [
+        {'codigo': '7801234567894'}, {'codigo': '7802345678905'}]}).status_code == 200
+    assert cliente.put(f"/api/v1/productos/{p['id']}", json={**p, 'codigos': [],
+        'codigos_quitar': []}).status_code == 200
+    assert {b['codigo'] for b in ficha(cliente, p['id'])['codigos']} == {'7801234567894', '7802345678905'}
+    assert cliente.put(f"/api/v1/productos/{p['id']}", json={**p, 'codigos': [{'codigo': '036000291452'}],
+        'codigos_quitar': ['7801234567894']}).status_code == 200
+    assert {b['codigo'] for b in ficha(cliente, p['id'])['codigos']} == {'7802345678905', '0036000291452'}
+
+
+def test_inventario_oculta_stock_y_costo_sin_permiso_y_lista_ingredientes(cliente, carta, caja):
+    p = alta(cliente, carta, llevar_cuenta=True, hay_ahora=5, stock_esperado=0, costo=300)
+    i = cliente.post('/api/v1/inventario/insumos', json={'nombre': 'Leche antigua', 'unidad': 'ml',
+        'compra_contenido': 1000, 'compra_costo': 1500, 'stock_inicial': 2000}).json()
+    latte = carta['latte']
+    cliente.put(f"/api/v1/productos/{latte['id']}/receta", json={'lineas': [{'insumo_id': i['id'], 'cantidad': 200}]})
+    d = cliente.get('/api/v1/inventario/productos').json()
+    assert [x['nombre'] for x in d['ingredientes']] == ['Leche antigua'] and d['ingredientes'][0]['stock'] == 2000
+    assert next(x for x in d['productos'] if x['id'] == latte['id'])['costo'] == 300   # 200 ml de leche a $1.500 el litro
+    u = cliente.post('/api/v1/usuarios', json={'nombre': 'Dueño prueba', 'pin': '1234'}).json()
+    cliente.post('/api/v1/sesion/entrar', json={'usuario_id': u['id'], 'pin': '1234'})
+    e = cliente.post('/api/v1/usuarios', json={'nombre': 'Editor prueba', 'pin': '4321',
+        'rol': 'cajero', 'permisos': 'editar_carta'}).json()
+    cliente.post('/api/v1/sesion/entrar', json={'usuario_id': e['id'], 'pin': '4321'})
+    d = cliente.get('/api/v1/inventario/productos').json()
+    fila = next(x for x in d['productos'] if x['id'] == p['id'])
+    assert (fila['stock'], fila['costo'], fila['insumo_id'], fila['minimo']) == (0, None, None, 0)
+    assert d['ingredientes'] == []
+
+
 def test_receta_antigua_sigue_descontando(cliente, carta, caja):
     i = cliente.post('/api/v1/inventario/insumos', json={'nombre': 'Ingrediente antiguo',
         'unidad': 'ml', 'compra_contenido': 1000, 'compra_costo': 1000, 'stock_inicial': 1000}).json()

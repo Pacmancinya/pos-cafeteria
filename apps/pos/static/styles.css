@@ -455,7 +455,6 @@ button{font-family:inherit;cursor:pointer}
 .grupo__flecha{display:inline-block}
 .grupo__plegar[aria-expanded="false"] .grupo__flecha{transform:rotate(-90deg)}
 .grupo[hidden],.grupo__productos[hidden],.fila[hidden]{display:none}
-#buscarCarta::-webkit-search-cancel-button{display:none}
 .grupo__acc{display:flex;gap:8px;flex-wrap:wrap}
 .grupo__editar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
 .grupo__editar>input[type=text]{
@@ -1526,8 +1525,6 @@ html,body{overscroll-behavior:none}
 
 .cantidad-bodega{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .cantidad-bodega input{width:110px;text-align:center}
-#bodegaAvanzada summary{cursor:pointer;color:var(--suave);padding:10px 0}
-#recetasAnteriores{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 
 
 /* ==========================================================

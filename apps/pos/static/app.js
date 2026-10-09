@@ -162,7 +162,9 @@ async function api(ruta, opciones = {}) {
       detalle = detalle.map((d) => String((d && d.msg) || "")
         .replace(/^Value error, /, "")).filter(Boolean).join(" ") || "Hay un dato que no sirve";
     }
-    throw new Error(typeof detalle === "string" ? detalle : JSON.stringify(detalle));
+    const fallo = new Error(typeof detalle === "string" ? detalle : JSON.stringify(detalle));
+    fallo.status = r.status;
+    throw fallo;
   }
   return r.status === 204 ? null : r.json();
 }

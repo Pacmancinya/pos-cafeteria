@@ -17,7 +17,7 @@ from apps.pos.balanza import plu_normalizado
 from apps.pos.db.session import get_session
 from core.codigos import normalizar, por_que_no_sirve
 from core.planilla import sin_tildes
-from core.config import AVISOS, NOMBRE_LOCAL, costo_de, puede
+from core.config import AVISOS, NOMBRE_LOCAL, costo_de, mostrar_cantidad, puede
 from core.schemas import CategoriaIn, ProductoIn
 
 router = APIRouter(prefix="/api/v1", tags=["carta"])
@@ -205,7 +205,7 @@ def _producto_repetido(s: Session, nombre: str, salvo_id: int | None) -> Product
 
 # Lo que ProductoIn trae de más y no es columna de Producto: son las cosas que
 # antes obligaban a ir a la Bodega a escribir todo de nuevo.
-EXTRAS = {"codigo", "codigos", "tal_cual", "costo", "stock_inicial", "minimo",
+EXTRAS = {"codigo", "codigos", "codigos_quitar", "tal_cual", "costo", "stock_inicial", "minimo",
           "llevar_cuenta", "hay_ahora", "stock_esperado"}
 
 
@@ -224,7 +224,11 @@ def productos_inventario(s: Session = Depends(get_session),
     if not any(puede(quien["rol"], permiso, quien.get("permisos", ""))
                for permiso in ("editar_carta", "inventario")):
         raise HTTPException(403, "No tienes permiso para ver Inventario")
-    propios = {i.producto_id: i for i in s.exec(select(Insumo)).all() if i.producto_id}
+    # Stock y costos son del inventario: quien solo edita la carta no los recibe.
+    ve_stock = puede(quien["rol"], "inventario", quien.get("permisos", ""))
+    insumos = s.exec(select(Insumo)).all()
+    por_id = {i.id: i for i in insumos}
+    propios = {i.producto_id: i for i in insumos if i.producto_id}
     recetas = {}
     for r in s.exec(select(Receta)).all():
         recetas.setdefault(r.producto_id, []).append(r)
@@ -239,16 +243,32 @@ def productos_inventario(s: Session = Depends(get_session),
         antigua = bool(lineas) and not (len(lineas) == 1 and lineas[0].cantidad == 1
                                         and i and i.unidad == "un" and lineas[0].insumo_id == i.id)
         cuenta = not antigua and p.llevar_cuenta is not False and bool(i and i.activo)
-        filas.append({**p.model_dump(), "codigos": barras.get(p.id, []),
-                      "receta_antigua": antigua, "cuenta": cuenta,
-                      "insumo_id": i.id if i else None,
-                      "stock": i.stock if i else 0, "contado": bool(i and i.contado),
-                      "minimo": i.minimo if i else 0,
-                      "compra_contenido": i.compra_contenido if i else 1,
-                      "formato": i.formato if i else "Unidad",
-                      "costo": costo_de(1, i.compra_costo, i.compra_contenido)
-                      if i else p.costo_referencia})
-    return {"productos": filas, "recetas_antiguas": any(p["receta_antigua"] for p in filas)}
+        if antigua:   # el costo de una receta antigua se calcula de sus ingredientes
+            costo = sum(costo_de(r.cantidad, por_id[r.insumo_id].compra_costo,
+                                 por_id[r.insumo_id].compra_contenido)
+                        for r in lineas if r.insumo_id in por_id)
+        else:
+            costo = costo_de(1, i.compra_costo, i.compra_contenido) if i else p.costo_referencia
+        fila = {**p.model_dump(), "codigos": barras.get(p.id, []),
+                "receta_antigua": antigua, "cuenta": cuenta,
+                "insumo_id": i.id if i else None,
+                "stock": i.stock if i else 0, "contado": bool(i and i.contado),
+                "minimo": i.minimo if i else 0,
+                "compra_contenido": i.compra_contenido if i else 1,
+                "formato": i.formato if i else "Unidad", "costo": costo}
+        if not ve_stock:
+            fila.update(insumo_id=None, stock=0, contado=False, minimo=0,
+                        compra_contenido=1, formato="Unidad", costo=None)
+        filas.append(fila)
+    # Insumos que no son «el mismo» de un producto: ingredientes de recetas antiguas.
+    ingredientes = [] if not ve_stock else [
+        {"id": i.id, "nombre": i.nombre, "unidad": i.unidad, "stock": i.stock,
+         "muestra": mostrar_cantidad(i.stock, i.unidad), "minimo": i.minimo,
+         "minimo_muestra": mostrar_cantidad(i.minimo, i.unidad)}
+        for i in sorted(insumos, key=lambda x: sin_tildes(x.nombre))
+        if i.activo and (i.producto_id is None or i.unidad != "un")]
+    return {"productos": filas, "ingredientes": ingredientes,
+            "recetas_antiguas": any(p["receta_antigua"] for p in filas)}
 
 
 def _permiso_stock(s: Session, p: Producto | None, datos: ProductoIn, quien: dict):
@@ -275,10 +295,10 @@ def _permiso_stock(s: Session, p: Producto | None, datos: ProductoIn, quien: dic
 
 
 def _guardar_codigos(s: Session, p: Producto, datos: ProductoIn):
-    if datos.codigos is None:
+    if datos.codigos is None and datos.codigos_quitar is None:
         return
     nuevos = {}
-    for b in datos.codigos:
+    for b in datos.codigos or []:
         problema = por_que_no_sirve(b.codigo)
         if problema:
             raise HTTPException(422, problema)
@@ -289,8 +309,11 @@ def _guardar_codigos(s: Session, p: Producto, datos: ProductoIn):
         if ya and ya.producto_id != p.id:
             raise HTTPException(409, "Ese código ya pertenece a otro producto")
         nuevos[limpio] = b
+    quitar = {normalizar(c) for c in datos.codigos_quitar} if datos.codigos_quitar is not None else None
     for b in s.exec(select(CodigoBarra).where(CodigoBarra.producto_id == p.id)).all():
-        if b.codigo not in nuevos:
+        if b.codigo in nuevos:
+            continue
+        if quitar is None or b.codigo in quitar:
             s.delete(b)
     for codigo, b in nuevos.items():
         fila = s.get(CodigoBarra, codigo) or CodigoBarra(codigo=codigo, producto_id=p.id)

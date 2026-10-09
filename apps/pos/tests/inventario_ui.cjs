@@ -51,7 +51,28 @@ function campos(peso = false) {
   await c.invGuardarFicha();
   const antiguo = envios.at(-1)[2];
   assert(!('llevar_cuenta' in antiguo)); assert(!('hay_ahora' in antiguo)); assert(!('costo' in antiguo));
-  assert.equal(antiguo.codigos[0].cuantos, 6);
+  // Solo viaja lo que esta ficha cambió: el pack de 6 no se reenvía ni se pierde.
+  assert.deepEqual(antiguo.codigos, []); assert.deepEqual(antiguo.codigos_quitar, []);
+  const producto7 = `INV.productos = [{id:7,nombre:'Antiguo',categoria_id:1,precio:1500,costo:700,
+    cuenta:true,llevar_cuenta:null,stock:5,contado:true,minimo:2,activo:true,en_tv:false,
+    codigos:[{codigo:'0036000291452',cuantos:6,nota:'Pack'}]}]`;
+  vm.runInContext(producto7, c);
+  await c.abrirFichaProducto(7); campos(); c.invAgregarCodigo('7801234567894');
+  c.invAgregarCodigo('0036000291452'); vm.runInContext('invCodigos.splice(0, 1)', c);
+  await c.invGuardarFicha();
+  const quitado = envios.at(-1)[2];
+  assert.deepEqual(quitado.codigos.map((b) => b.codigo), ['7801234567894']);
+  assert.deepEqual(quitado.codigos_quitar, ['0036000291452']);
+  vm.runInContext(producto7, c); vm.runInContext(`INV.productos[0].cuenta = false; INV.productos[0].llevar_cuenta = false`, c);
+  await c.abrirFichaProducto(7); campos(); nodos.get('#fCuenta').checked = true; valor('invHay', '');
+  const antesHay = envios.length; await c.invGuardarFicha();
+  assert.equal(envios.length, antesHay, 'prender inventario exige escribir cuántos hay');
+  assert(/cuántos hay ahora/.test(avisos.at(-1)[0]));
+  assert(dialogo.html.includes('¿Cuántos hay ahora?') && !/id="invHay"[^>]*value="[^"]/.test(dialogo.html));
+  valor('invHay', 0); await c.invGuardarFicha();
+  assert.equal(envios.at(-1)[2].hay_ahora, 0); assert.equal(envios.at(-1)[2].llevar_cuenta, true);
+  valor('fCategoria', ''); const antesCat = envios.length; await c.invGuardarFicha();
+  assert.equal(envios.length, antesCat, 'sin categoría válida no se guarda');
   vm.runInContext(`INV.productos = [{id:10,nombre:'Sin contar antiguo',categoria_id:1,precio:1500,
     costo:700,llevar_cuenta:null,cuenta:true,stock:-1,contado:false,minimo:0,codigos:[]}]`,c);
   await c.abrirFichaProducto(10); campos(); valor('invHay',-1); nodos.get('#fCuenta').checked=true;
@@ -75,6 +96,18 @@ function campos(peso = false) {
     receta_antigua:true,llevar_cuenta:null,cuenta:false,stock:0,codigos:[]}]`, c);
   await c.abrirFichaProducto(8); assert(!dialogo.html.includes('id="fCuenta"'));
   assert(dialogo.html.includes('receta antigua'));
+  assert(dialogo.html.includes('Costo calculado por receta antigua') && /id="invCosto"[^>]*disabled/.test(dialogo.html));
+  c.api = async (ruta, op) => { if (op) envios.push([ruta, op.method, JSON.parse(op.body)]); return { productos: [], recetas_antiguas: false }; };
+  campos(); await c.invGuardarFicha(); assert(!('costo' in envios.at(-1)[2]), 'el costo de receta antigua no se guarda');
+  vm.runInContext(`INV.productos = [{id:6,nombre:'Sin costo visible',categoria_id:1,precio:900,costo:null,
+    cuenta:false,llevar_cuenta:false,stock:0,codigos:[]}]`, c);
+  await c.abrirFichaProducto(6); assert(/id="invCosto"[^>]*disabled/.test(dialogo.html));
+  campos(); await c.invGuardarFicha(); assert(!('costo' in envios.at(-1)[2]), 'sin permiso no se manda costo');
+  // Ingredientes de recetas antiguas: mismos diálogos, solo esos insumos.
+  vm.runInContext(`INV.ingredientes = [{id:3,nombre:'Leche',unidad:'ml',stock:5000,muestra:'5 L',minimo:0,minimo_muestra:'0'}]`, c);
+  vm.runInContext(`invOperacion = {tipo:'entrada', producto:null, ingredientes:true}`, c);
+  const pool = vm.runInContext('invPool()', c);
+  assert.equal(pool.length, 1); assert.equal(pool[0].insumo_id, 3); assert.equal(pool[0].unidad, 'ml');
   // Ambos TV filtran la misma respuesta y limpian una carta completamente oculta.
   const carpeta = path.join(__dirname, '../static');
   const moderno = fs.readFileSync(path.join(carpeta, 'pantallas.html'), 'utf8');
